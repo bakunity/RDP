@@ -3,7 +3,7 @@
 Публичный сайт проекта находится по адресу:
 
 ```text
-https://rdp.apruxdomain.lol/
+https://hermes-rdp.vercel.app/
 ```
 
 Лендинг является частью того же репозитория, что и server/client code. Он не требует Node.js, package manager или отдельной сборки.
@@ -70,11 +70,11 @@ Install Command: пусто
 После привязки production domain проверить:
 
 ```text
-https://rdp.apruxdomain.lol/
-https://rdp.apruxdomain.lol/robots.txt
-https://rdp.apruxdomain.lol/sitemap.xml
-https://rdp.apruxdomain.lol/github
-https://rdp.apruxdomain.lol/release
+https://hermes-rdp.vercel.app/
+https://hermes-rdp.vercel.app/robots.txt
+https://hermes-rdp.vercel.app/sitemap.xml
+https://hermes-rdp.vercel.app/github
+https://hermes-rdp.vercel.app/release
 ```
 
 ## Контент
