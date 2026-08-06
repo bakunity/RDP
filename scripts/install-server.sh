@@ -238,7 +238,7 @@ cat > /etc/hermes-rdp/config.json <<EOF
   "port_start": $PORT_START,
   "port_end": $PORT_END,
   "telegram_chat_id": "$TELEGRAM_CHAT_ID",
-  "client_installer_url": "https://raw.githubusercontent.com/$REPO/main/scripts/install-client.ps1"
+  "client_installer_url": "https://raw.githubusercontent.com/$REPO/$REF/scripts/install-client.ps1"
 }
 EOF
 chmod 0640 /etc/hermes-rdp/config.json
