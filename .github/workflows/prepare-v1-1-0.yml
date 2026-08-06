@@ -15,20 +15,26 @@ concurrency:
 jobs:
   patch:
     runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: feat/openssh-tunnels-v1-1-0
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Apply OpenSSH release patches
+      - name: Clone branch without marketplace actions
         run: |
-          python .github/prepare_v1_1_0.py
-          python .github/finalize_openssh.py
-      - name: Validate release tree
-        run: bash scripts/check-release.sh
+          set -Eeuo pipefail
+          git clone \
+            --depth=1 \
+            --branch feat/openssh-tunnels-v1-1-0 \
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            repo
+      - name: Apply and validate OpenSSH release patches
+        working-directory: repo
+        run: |
+          set -Eeuo pipefail
+          python3 .github/prepare_v1_1_0.py
+          python3 .github/finalize_openssh.py
+          bash scripts/check-release.sh
       - name: Commit generated patch
+        working-directory: repo
         run: |
           set -Eeuo pipefail
           git config user.name github-actions[bot]
@@ -47,4 +53,4 @@ jobs:
             exit 0
           fi
           git commit -m 'fix: finalize OpenSSH migration and runtime safety'
-          git push
+          git push origin HEAD:feat/openssh-tunnels-v1-1-0
