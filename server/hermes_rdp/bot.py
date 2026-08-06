@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import json
 import logging
 import math
@@ -276,7 +277,7 @@ class TelegramBot:
             "1. Открой PowerShell от администратора на новом ПК.\n"
             "2. Вставь команду ниже.\n"
             "3. Установщик спросит удобное название компьютера.\n\n"
-            f"{command}"
+            f"<pre><code>{html.escape(command)}</code></pre>"
         )
         keyboard = {"inline_keyboard": [[{"text": "⬅️ К СПИСКУ", "callback_data": "home"}]]}
         return text, keyboard
@@ -397,6 +398,7 @@ class TelegramBot:
                             "chat_id": self.config.telegram_chat_id,
                             "message_id": int(message_id),
                             "text": text,
+                            "parse_mode": "HTML",
                             "reply_markup": keyboard,
                         },
                     )
@@ -413,6 +415,7 @@ class TelegramBot:
                 {
                     "chat_id": self.config.telegram_chat_id,
                     "text": text,
+                    "parse_mode": "HTML",
                     "reply_markup": keyboard,
                 },
             )
