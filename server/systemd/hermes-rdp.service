@@ -1,0 +1,35 @@
+[Unit]
+Description=Hermes RDP API and Telegram dashboard
+After=network-online.target frps.service
+Wants=network-online.target frps.service
+
+[Service]
+Type=simple
+User=hermes-rdp
+Group=hermes-rdp
+Environment=PYTHONPATH=/opt/hermes-rdp/app
+ExecStart=/usr/bin/python3 -m hermes_rdp.service
+Restart=always
+RestartSec=5
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+ReadWritePaths=/var/lib/hermes-rdp
+ReadOnlyPaths=/etc/hermes-rdp
+
+[Install]
+WantedBy=multi-user.target

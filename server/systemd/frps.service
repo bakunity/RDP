@@ -1,0 +1,21 @@
+[Unit]
+Description=FRP server for Hermes RDP
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=frp
+Group=frp
+ExecStart=/usr/local/bin/frps -c /etc/frp/frps.toml
+Restart=always
+RestartSec=5
+LimitNOFILE=1048576
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/etc/frp
+
+[Install]
+WantedBy=multi-user.target
