@@ -14,15 +14,14 @@ permissions:
 
 jobs:
   clear:
-    name: Cancel stuck Actions run
-    if: github.event_name == 'push' || github.event.issue.title == 'ci: cancel stuck OpenSSH run'
+    name: Cancel stale Actions runs
+    if: github.event_name == 'push' || github.event.issue.title == 'ci: cancel stale Hermes runs'
     runs-on: windows-2022
     timeout-minutes: 3
     env:
       GH_TOKEN: ${{ github.token }}
-      STALE_RUN_ID: '31121438485'
     steps:
-      - name: Cancel stale workflow run
+      - name: Cancel stale workflow runs
         shell: powershell
         run: |
           $Headers = @{
@@ -30,9 +29,26 @@ jobs:
             Authorization = "Bearer $env:GH_TOKEN"
             'X-GitHub-Api-Version' = '2022-11-28'
           }
-          $Uri = (
-            "https://api.github.com/repos/$env:GITHUB_REPOSITORY/" +
-            "actions/runs/$env:STALE_RUN_ID/cancel"
+          $RunIds = @(
+            '31121438485'
+            '31123489566'
+            '31123634910'
           )
-          Invoke-RestMethod -Method Post -Uri $Uri -Headers $Headers
-          Write-Host "Cancellation requested for stale run $env:STALE_RUN_ID."
+          foreach ($RunId in $RunIds) {
+            $Uri = (
+              "https://api.github.com/repos/$env:GITHUB_REPOSITORY/" +
+              "actions/runs/$RunId/cancel"
+            )
+            try {
+              Invoke-RestMethod -Method Post -Uri $Uri -Headers $Headers
+              Write-Host "Cancellation requested for stale run $RunId."
+            }
+            catch {
+              $Status = [int]$_.Exception.Response.StatusCode
+              if ($Status -in @(404, 409)) {
+                Write-Host "Run $RunId is already finished or unavailable."
+                continue
+              }
+              throw
+            }
+          }
