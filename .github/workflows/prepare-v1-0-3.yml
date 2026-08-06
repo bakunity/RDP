@@ -1,0 +1,161 @@
+name: Prepare v1.0.3 hotfix
+
+on:
+  push:
+    branches:
+      - fix/clean-install-frp-token-v1-0-3
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/clean-install-frp-token-v1-0-3
+
+      - name: Patch clean installation and release metadata
+        shell: python
+        run: |
+          from pathlib import Path
+
+          root = Path('.')
+          old = '1.0.2'
+          new = '1.0.3'
+
+          installer = root / 'scripts/install-server.sh'
+          lines = installer.read_text(encoding='utf-8').splitlines()
+          matches = [
+              index for index, line in enumerate(lines)
+              if 'old_token="$(sed -n ' in line and '/etc/frp/frps.toml' in line
+          ]
+          if len(matches) != 1:
+              raise SystemExit(f'expected one legacy token read, found {len(matches)}')
+          index = matches[0]
+          original = lines[index]
+          indent = original[:len(original) - len(original.lstrip())]
+          lines[index:index + 1] = [
+              indent + 'old_token=""',
+              indent + 'if [[ -s /etc/frp/frps.toml ]]; then',
+              indent + '  ' + original.strip(),
+              indent + 'fi',
+          ]
+          installer.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+
+          excluded = {
+              Path('CHANGELOG.md'),
+              Path('docs/releases/v1.0.0.md'),
+              Path('docs/releases/v1.0.1.md'),
+              Path('docs/releases/v1.0.2.md'),
+              Path('.github/workflows/prepare-v1-0-3.yml'),
+          }
+          allowed = {'.md', '.py', '.toml', '.html', '.xml', '.txt', '.json', '.sh', '.ps1', '.js', '.css'}
+          for path in root.rglob('*'):
+              if not path.is_file() or '.git' in path.parts or path in excluded:
+                  continue
+              if path.name != 'VERSION' and path.suffix.lower() not in allowed:
+                  continue
+              raw = path.read_bytes()
+              has_bom = raw.startswith(b'\xef\xbb\xbf')
+              data = raw.decode('utf-8-sig')
+              updated = data.replace('v' + old, 'v' + new).replace(old, new)
+              if updated != data:
+                  encoded = updated.encode('utf-8')
+                  path.write_bytes((b'\xef\xbb\xbf' if has_bom else b'') + encoded)
+
+          (root / 'VERSION').write_text(new + '\n', encoding='utf-8')
+
+          changelog_path = root / 'CHANGELOG.md'
+          changelog = changelog_path.read_text(encoding='utf-8')
+          marker = '## [1.0.2] — 2026-08-06\n'
+          section = '\n'.join([
+              '## [1.0.3] — 2026-08-06',
+              '',
+              'Hotfix чистой серверной установки после проверки на отдельном Debian-сервере.',
+              '',
+              '### Исправлено',
+              '',
+              '- установщик больше не запускает `sed` по отсутствующему `/etc/frp/frps.toml`;',
+              '- чтение legacy FRP token выполняется только при наличии старого конфигурационного файла;',
+              '- чистая установка больше не завершается с `exit=2` до создания systemd-служб;',
+              '- добавлен regression test структуры clean-install ветки.',
+              '',
+              '### Совместимость',
+              '',
+              '- повторный запуск после частичной установки `v1.0.2` безопасен;',
+              '- существующий сгенерированный FRP token сохраняется;',
+              '- API, SQLite, pairing contract и порты не изменены.',
+              '',
+              '',
+          ])
+          if marker not in changelog:
+              raise SystemExit('CHANGELOG insertion marker missing')
+          changelog = changelog.replace('Пока нет изменений после `v1.0.2`.', 'Пока нет изменений после `v1.0.3`.')
+          changelog = changelog.replace(marker, section + marker, 1)
+          changelog = changelog.replace('[Unreleased]: https://github.com/bakunity/RDP/compare/v1.0.2...HEAD', '[Unreleased]: https://github.com/bakunity/RDP/compare/v1.0.3...HEAD')
+          changelog = changelog.replace('[1.0.2]: https://github.com/bakunity/RDP/releases/tag/v1.0.2', '[1.0.3]: https://github.com/bakunity/RDP/releases/tag/v1.0.3\n[1.0.2]: https://github.com/bakunity/RDP/releases/tag/v1.0.2')
+          changelog_path.write_text(changelog, encoding='utf-8')
+
+          notes = '\n'.join([
+              '# Hermes RDP v1.0.3',
+              '',
+              'Hotfix чистой установки серверной части.',
+              '',
+              '## Исправлено',
+              '',
+              'На чистом сервере `/etc/frp/frps.toml` ещё отсутствует. В `v1.0.2` установщик пытался прочитать из него legacy token без проверки существования файла. При включённом `set -o pipefail` команда `sed` завершалась с кодом `2`, поэтому установка останавливалась после загрузки FRP и до создания systemd-служб.',
+              '',
+              'В `v1.0.3` legacy-конфиг читается только тогда, когда файл действительно существует. При чистой установке создаётся новый случайный FRP token.',
+              '',
+              '## Совместимость',
+              '',
+              '- повторный запуск после частичной установки `v1.0.2` безопасен;',
+              '- уже созданный `/etc/hermes-rdp/frp-token` повторно не генерируется;',
+              '- API, SQLite registry, Windows agent и стандартные порты не изменены.',
+              '',
+              '## Ссылки',
+              '',
+              '- [GitHub Release v1.0.3](https://github.com/bakunity/RDP/releases/tag/v1.0.3)',
+              '- [Тестирование от А до Я](https://github.com/bakunity/RDP/blob/v1.0.3/docs/TESTING_A_TO_Z.md)',
+              '',
+          ])
+          (root / 'docs/releases/v1.0.3.md').write_text(notes, encoding='utf-8')
+
+          test_text = '\n'.join([
+              'from pathlib import Path',
+              'import unittest',
+              '',
+              '',
+              'class CleanInstallTokenMigrationTests(unittest.TestCase):',
+              '    def test_legacy_frp_config_is_guarded(self) -> None:',
+              "        text = Path('scripts/install-server.sh').read_text(encoding='utf-8')",
+              "        guard = 'if [[ -s /etc/frp/frps.toml ]]; then'",
+              "        read = 'old_token=\"$(sed -n '",
+              "        guard_index = text.index(guard)",
+              "        read_index = text.index(read, guard_index)",
+              "        self.assertLess(guard_index, read_index)",
+              "        self.assertIn('old_token=\"\"', text[max(0, guard_index - 80):guard_index])",
+              "        self.assertIn('fi', text[read_index:read_index + 500])",
+              '',
+              '',
+              "if __name__ == '__main__':",
+              '    unittest.main()',
+              '',
+          ])
+          (root / 'tests/test_install_server_clean_state.py').write_text(test_text, encoding='utf-8')
+
+      - name: Validate patched tree
+        run: bash scripts/check-release.sh
+
+      - name: Commit hotfix
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m 'fix: guard missing legacy FRP config on clean install'
+          git push
