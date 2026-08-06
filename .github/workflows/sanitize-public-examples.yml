@@ -26,6 +26,7 @@ jobs:
           import re
           from pathlib import Path
 
+          workflow_path = Path('.github/workflows/sanitize-public-examples.yml')
           replacements = [
               ('::ffff:213.193.241.1', 'CLIENT_IP_ADDRESS'),
               ('31.76.77.87', 'SERVER_IP_OR_DOMAIN'),
@@ -46,7 +47,7 @@ jobs:
           }
           changed = []
           for path in Path('.').rglob('*'):
-              if not path.is_file() or '.git' in path.parts:
+              if not path.is_file() or '.git' in path.parts or path == workflow_path:
                   continue
               if path.suffix.lower() not in text_suffixes and path.name not in {'VERSION'}:
                   continue
@@ -77,7 +78,7 @@ jobs:
           ]
           failures = []
           for path in Path('.').rglob('*'):
-              if not path.is_file() or '.git' in path.parts:
+              if not path.is_file() or '.git' in path.parts or path == workflow_path:
                   continue
               if path.suffix.lower() not in text_suffixes and path.name not in {'VERSION'}:
                   continue
