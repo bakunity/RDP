@@ -1,0 +1,22 @@
+name: Clear stale OpenSSH CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/clear-stale-openssh-ci.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prepare-v1-1-0
+  cancel-in-progress: true
+
+jobs:
+  clear:
+    name: Release stale concurrency slot
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - run: echo 'Stale OpenSSH CI concurrency slot released.'
