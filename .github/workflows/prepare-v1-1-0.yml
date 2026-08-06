@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: prepare-v1-1-0
+  cancel-in-progress: true
+
 jobs:
   patch:
     runs-on: windows-latest
