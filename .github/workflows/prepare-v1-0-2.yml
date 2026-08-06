@@ -55,23 +55,25 @@ jobs:
 
           changelog = (root / 'CHANGELOG.md').read_text(encoding='utf-8')
           marker = '## [1.0.1] — 2026-08-06\n'
-          section = '''## [1.0.2] — 2026-08-06
-
-Hotfix серверного установщика для корректной установки из стабильного Git-тега.
-
-### Исправлено
-
-- загрузка исходников больше не использует `refs/heads/$REF`, из-за чего тег `v1.0.1` ошибочно обрабатывался как ветка и возвращал HTTP 404;
-- архив проекта теперь загружается через универсальный endpoint `codeload.github.com`, работающий и с ветками, и с тегами;
-- release checks блокируют возврат ошибочного URL с `refs/heads/$REF`.
-
-### Совместимость
-
-- API, SQLite registry, pairing contract и Windows agent не изменены;
-- порты `7000`, `7443` и `53389–53420` не изменены;
-- обновление является безопасным PATCH-релизом.
-
-'''
+          section = '\n'.join([
+              '## [1.0.2] — 2026-08-06',
+              '',
+              'Hotfix серверного установщика для корректной установки из стабильного Git-тега.',
+              '',
+              '### Исправлено',
+              '',
+              '- загрузка исходников больше не использует `refs/heads/$REF`, из-за чего тег `v1.0.1` ошибочно обрабатывался как ветка и возвращал HTTP 404;',
+              '- архив проекта теперь загружается через универсальный endpoint `codeload.github.com`, работающий и с ветками, и с тегами;',
+              '- release checks блокируют возврат ошибочного URL с `refs/heads/$REF`.',
+              '',
+              '### Совместимость',
+              '',
+              '- API, SQLite registry, pairing contract и Windows agent не изменены;',
+              '- порты `7000`, `7443` и `53389–53420` не изменены;',
+              '- обновление является безопасным PATCH-релизом.',
+              '',
+              '',
+          ])
           if marker not in changelog:
               raise SystemExit('CHANGELOG insertion marker missing')
           changelog = changelog.replace('Пока нет изменений после `v1.0.1`.', 'Пока нет изменений после `v1.0.2`.')
@@ -80,54 +82,47 @@ Hotfix серверного установщика для корректной �
           changelog = changelog.replace('[1.0.1]: https://github.com/bakunity/RDP/releases/tag/v1.0.1', '[1.0.2]: https://github.com/bakunity/RDP/releases/tag/v1.0.2\n[1.0.1]: https://github.com/bakunity/RDP/releases/tag/v1.0.1')
           (root / 'CHANGELOG.md').write_text(changelog, encoding='utf-8')
 
-          notes = '''# Hermes RDP v1.0.2
-
-Hotfix стабильного серверного установщика.
-
-## Исправлено
-
-В `v1.0.1` скачанный `install-server.sh` пытался получить полный архив проекта по адресу для Git-веток:
-
-```text
-archive/refs/heads/v1.0.1.tar.gz
-```
-
-Поскольку `v1.0.1` является тегом, GitHub возвращал HTTP 404 до создания конфигурации и запуска сервисов.
-
-В `v1.0.2` используется универсальная загрузка через `codeload.github.com`, которая одинаково поддерживает стабильные теги и ветки разработки.
-
-## Совместимость
-
-- серверный API и Windows agent обратно совместимы с `v1.0.1`;
-- схема SQLite и pairing contract не изменены;
-- стандартные порты не изменены;
-- повторный запуск после ранней ошибки `v1.0.1` безопасен на чистом сервере.
-
-## Ссылки
-
-- [GitHub Release v1.0.2](https://github.com/bakunity/RDP/releases/tag/v1.0.2)
-- [Репозиторий](https://github.com/bakunity/RDP)
-- [Тестирование от А до Я](https://github.com/bakunity/RDP/blob/v1.0.2/docs/TESTING_A_TO_Z.md)
-'''
+          notes = '\n'.join([
+              '# Hermes RDP v1.0.2',
+              '',
+              'Hotfix стабильного серверного установщика.',
+              '',
+              '## Исправлено',
+              '',
+              'В `v1.0.1` скачанный `install-server.sh` пытался получить полный архив проекта по адресу для Git-веток:',
+              '',
+              '```text',
+              'archive/refs/heads/v1.0.1.tar.gz',
+              '```',
+              '',
+              'Поскольку `v1.0.1` является тегом, GitHub возвращал HTTP 404 до создания конфигурации и запуска сервисов.',
+              '',
+              'В `v1.0.2` используется универсальная загрузка через `codeload.github.com`, которая одинаково поддерживает стабильные теги и ветки разработки.',
+              '',
+              '## Совместимость',
+              '',
+              '- серверный API и Windows agent обратно совместимы с `v1.0.1`;',
+              '- схема SQLite и pairing contract не изменены;',
+              '- стандартные порты не изменены;',
+              '- повторный запуск после ранней ошибки `v1.0.1` безопасен на чистом сервере.',
+              '',
+              '## Ссылки',
+              '',
+              '- [GitHub Release v1.0.2](https://github.com/bakunity/RDP/releases/tag/v1.0.2)',
+              '- [Репозиторий](https://github.com/bakunity/RDP)',
+              '- [Тестирование от А до Я](https://github.com/bakunity/RDP/blob/v1.0.2/docs/TESTING_A_TO_Z.md)',
+              '',
+          ])
           (root / 'docs/releases/v1.0.2.md').write_text(notes, encoding='utf-8')
 
           checks = root / 'scripts/check-release.sh'
           checks_text = checks.read_text(encoding='utf-8')
           anchor = "echo '== Release metadata =='\n"
-          guard = '''echo '== Installer archive reference =='
-python3 - <<'PY'
-from pathlib import Path
-
-text = Path('scripts/install-server.sh').read_text(encoding='utf-8')
-if 'archive/refs/heads/$REF.tar.gz' in text:
-    raise SystemExit('installer treats release refs as branches')
-required = 'https://codeload.github.com/$REPO/tar.gz/$REF'
-if required not in text:
-    raise SystemExit('installer does not use the branch/tag compatible archive endpoint')
-print('installer-archive-ref=OK')
-PY
-
-'''
+          guard = '\n'.join([
+              "echo '== Installer archive reference =='",
+              "python3 -c \"from pathlib import Path; t=Path('scripts/install-server.sh').read_text(); assert 'archive/refs/heads/\\$REF.tar.gz' not in t, 'installer treats release refs as branches'; assert 'https://codeload.github.com/\\$REPO/tar.gz/\\$REF' in t, 'missing branch/tag compatible archive endpoint'; print('installer-archive-ref=OK')\"",
+              '',
+          ])
           if anchor not in checks_text:
               raise SystemExit('check-release anchor missing')
           checks.write_text(checks_text.replace(anchor, guard + anchor, 1), encoding='utf-8')
