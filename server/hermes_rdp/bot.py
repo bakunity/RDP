@@ -1,0 +1,420 @@
+from __future__ import annotations
+
+import json
+import logging
+import math
+import threading
+import time
+import urllib.error
+import urllib.request
+from datetime import datetime
+from typing import Any
+
+from .config import Config
+from .db import Registry
+
+
+LOG = logging.getLogger("hermes_rdp.bot")
+
+
+def escape(value: Any) -> str:
+    return str(value).replace("<", "‹").replace(">", "›").replace("&", "＆")
+
+
+def bar(percent: float) -> str:
+    value = max(0.0, min(100.0, float(percent)))
+    filled = int(round(value / 10.0))
+    return "▓" * filled + "░" * (10 - filled)
+
+
+def format_bytes(value: Any) -> str:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return "—"
+    units = ["Б", "КБ", "МБ", "ГБ", "ТБ"]
+    index = 0
+    while number >= 1024 and index < len(units) - 1:
+        number /= 1024
+        index += 1
+    return f"{number:.2f} {units[index]}"
+
+
+def format_duration(seconds: Any) -> str:
+    try:
+        seconds = max(0, int(seconds))
+    except (TypeError, ValueError):
+        return "—"
+    days, rem = divmod(seconds, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes, secs = divmod(rem, 60)
+    if days:
+        return f"{days}д {hours:02d}:{minutes:02d}:{secs:02d}"
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+
+class TelegramBot:
+    def __init__(self, config: Config, registry: Registry):
+        self.config = config
+        self.registry = registry
+        self.api = f"https://api.telegram.org/bot{config.telegram_token}"
+        self.stop_event = threading.Event()
+        self.offset = 0
+        self.lock = threading.RLock()
+        self.last_render = 0.0
+
+    def api_call(self, method: str, payload: dict[str, Any] | None = None, timeout: int = 40):
+        request = urllib.request.Request(
+            f"{self.api}/{method}",
+            data=json.dumps(payload or {}, ensure_ascii=False).encode("utf-8"),
+            headers={"Content-Type": "application/json; charset=utf-8"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                result = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(body or str(exc)) from exc
+        if not result.get("ok"):
+            raise RuntimeError(result.get("description", "Telegram API error"))
+        return result.get("result")
+
+    def run(self) -> None:
+        self.api_call("deleteWebhook", {"drop_pending_updates": False})
+        updater = threading.Thread(target=self._live_loop, daemon=True)
+        updater.start()
+        failures = 0
+        while not self.stop_event.is_set():
+            try:
+                updates = self.api_call(
+                    "getUpdates",
+                    {
+                        "offset": self.offset,
+                        "timeout": 30,
+                        "allowed_updates": ["message", "callback_query"],
+                    },
+                    timeout=40,
+                )
+                failures = 0
+                for update in updates:
+                    self.offset = int(update["update_id"]) + 1
+                    self._handle_update(update)
+                self.registry.cleanup()
+            except Exception as exc:
+                failures += 1
+                delay = min(60, 5 * (2 ** min(failures - 1, 4)))
+                LOG.warning("Telegram loop error: %s; retry in %ss", exc, delay)
+                self.stop_event.wait(delay)
+
+    def stop(self) -> None:
+        self.stop_event.set()
+
+    def _authorized(self, update: dict[str, Any]) -> bool:
+        message = update.get("message") or update.get("callback_query", {}).get("message", {})
+        chat_id = str(message.get("chat", {}).get("id", ""))
+        actor_id = str(
+            update.get("callback_query", {}).get("from", {}).get("id", "")
+            or message.get("from", {}).get("id", "")
+        )
+        return chat_id == self.config.telegram_chat_id and actor_id == self.config.telegram_chat_id
+
+    def _handle_update(self, update: dict[str, Any]) -> None:
+        if not self._authorized(update):
+            callback = update.get("callback_query")
+            if callback:
+                self._answer(callback.get("id", ""), "Нет доступа")
+            return
+        if "message" in update:
+            text = str(update["message"].get("text", "")).split("@", 1)[0].lower()
+            if text in {"/start", "/menu", "/status"}:
+                self.registry.set_setting("screen", "home")
+                self.registry.set_setting("selected_device", "")
+                self.render()
+            return
+        callback = update.get("callback_query")
+        if callback:
+            self._handle_callback(callback)
+
+    def _answer(self, callback_id: str, text: str = "") -> None:
+        try:
+            payload = {"callback_query_id": callback_id}
+            if text:
+                payload["text"] = text[:180]
+            self.api_call("answerCallbackQuery", payload, timeout=15)
+        except Exception as exc:
+            LOG.debug("callback answer failed: %s", exc)
+
+    def _handle_callback(self, callback: dict[str, Any]) -> None:
+        data = str(callback.get("data", "home"))
+        callback_id = str(callback.get("id", ""))
+        if data == "home":
+            self.registry.set_setting("screen", "home")
+            self.registry.set_setting("selected_device", "")
+            self._answer(callback_id)
+            self.render()
+            return
+        if data == "add":
+            code = self.registry.create_pair_code(ttl_seconds=self.config.pair_ttl_seconds)
+            self.registry.set_setting("pair_code", code)
+            self.registry.set_setting("screen", "pair")
+            self._answer(callback_id, "Код создан")
+            self.render()
+            return
+        if data == "refresh":
+            self._answer(callback_id, "Обновлено")
+            self.render()
+            return
+        if data == "live":
+            enabled = self.registry.get_setting("live", "1") != "1"
+            self.registry.set_setting("live", "1" if enabled else "0")
+            self._answer(callback_id, "LIVE ON" if enabled else "LIVE OFF")
+            self.render()
+            return
+        if data.startswith("device:"):
+            device_id = data.split(":", 1)[1]
+            try:
+                self.registry.get_device(device_id)
+            except KeyError:
+                self._answer(callback_id, "Устройство не найдено")
+                self.render()
+                return
+            self.registry.set_setting("selected_device", device_id)
+            self.registry.set_setting("screen", "device")
+            self._answer(callback_id)
+            self.render()
+            return
+        if data.startswith("cmd:"):
+            _, action, device_id = data.split(":", 2)
+            try:
+                self.registry.queue_command(device_id, action)
+                self._answer(callback_id, f"Команда {action.upper()} отправлена")
+            except Exception as exc:
+                self._answer(callback_id, str(exc))
+            self.render()
+            return
+        if data.startswith("delete:"):
+            device_id = data.split(":", 1)[1]
+            self.registry.set_setting("selected_device", device_id)
+            self.registry.set_setting("screen", "delete")
+            self._answer(callback_id)
+            self.render()
+            return
+        if data.startswith("delete_yes:"):
+            device_id = data.split(":", 1)[1]
+            self.registry.revoke_device(device_id)
+            self.registry.set_setting("screen", "home")
+            self.registry.set_setting("selected_device", "")
+            self._answer(callback_id, "Устройство удалено")
+            self.render()
+            return
+        self._answer(callback_id)
+
+    def _live_loop(self) -> None:
+        while not self.stop_event.wait(3):
+            try:
+                if self.registry.get_setting("live", "1") != "1":
+                    continue
+                if self.registry.get_setting("screen", "home") not in {"home", "device"}:
+                    continue
+                self.render()
+            except Exception as exc:
+                LOG.debug("live render failed: %s", exc)
+
+    def _online(self, device: dict[str, Any]) -> bool:
+        last_seen = int(device.get("last_seen") or 0)
+        return last_seen > 0 and int(time.time()) - last_seen <= self.config.online_after_seconds
+
+    def _home(self) -> tuple[str, dict[str, Any]]:
+        devices = self.registry.list_devices()
+        online = sum(1 for device in devices if self._online(device))
+        text = (
+            "🖥 HERMES RDP · КОМПЬЮТЕРЫ\n\n"
+            f"Онлайн: {online} из {len(devices)}\n"
+            f"FRP-сервер: постоянно включён\n"
+            f"Диапазон RDP: {self.config.port_start}–{self.config.port_end}\n"
+            f"Обновлено: {datetime.now().strftime('%H:%M:%S')}"
+        )
+        rows = []
+        for device in devices:
+            icon = "🟢" if self._online(device) else "🔴"
+            rows.append(
+                [
+                    {
+                        "text": f"{icon} {device['display_name']} · :{device['rdp_port']}",
+                        "callback_data": f"device:{device['id']}",
+                    }
+                ]
+            )
+        rows.append([{"text": "➕ ДОБАВИТЬ ПК", "callback_data": "add"}])
+        rows.append(
+            [
+                {"text": "🔄 REFRESH", "callback_data": "refresh"},
+                {
+                    "text": "⏸ LIVE 3s"
+                    if self.registry.get_setting("live", "1") == "1"
+                    else "▶️ LIVE 3s",
+                    "callback_data": "live",
+                },
+            ]
+        )
+        return text, {"inline_keyboard": rows}
+
+    def _pair(self) -> tuple[str, dict[str, Any]]:
+        code = self.registry.get_setting("pair_code", "") or ""
+        command = (
+            "$u='" + self.config.client_installer_url + "'; "
+            "& ([scriptblock]::Create((irm $u))) "
+            f"-Server '{self.config.public_host}' "
+            f"-PairCode '{code}' "
+            f"-Fingerprint '{self.config.tls_fingerprint}'"
+        )
+        text = (
+            "➕ ДОБАВЛЕНИЕ WINDOWS-ПК\n\n"
+            f"Код: {code}\n"
+            f"Действует: {self.config.pair_ttl_seconds // 60} минут\n\n"
+            "1. Открой PowerShell от администратора на новом ПК.\n"
+            "2. Вставь команду ниже.\n"
+            "3. Установщик спросит удобное название компьютера.\n\n"
+            f"{command}"
+        )
+        keyboard = {"inline_keyboard": [[{"text": "⬅️ К СПИСКУ", "callback_data": "home"}]]}
+        return text, keyboard
+
+    def _device(self, device: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+        online = self._online(device)
+        telemetry = device.get("telemetry") or {}
+        age = max(0, int(time.time()) - int(device.get("last_seen") or 0)) if device.get("last_seen") else None
+        cpu = float(telemetry.get("cpu_percent", 0) or 0)
+        ram = float(telemetry.get("ram_percent", 0) or 0)
+        disk = float(telemetry.get("disk_percent", 0) or 0)
+        sessions = telemetry.get("sessions") or []
+        user = telemetry.get("interactive_user") or (sessions[0] if sessions else "нет")
+        processes = telemetry.get("top_processes") or []
+        process_lines = []
+        for index, process in enumerate(processes[:5], 1):
+            process_lines.append(
+                f"{index}. {escape(process.get('name', '?'))} · "
+                f"{process.get('cpu_percent', 0)}% · "
+                f"{format_bytes(process.get('memory_bytes', 0))} · "
+                f"PID {process.get('pid', '?')}"
+            )
+        if not process_lines:
+            process_lines.append("—")
+        frpc = telemetry.get("frpc_running", False)
+        endpoint = telemetry.get("endpoint_available", False)
+        text = (
+            f"{'🟢' if online else '🔴'} {escape(device['display_name']).upper()} · "
+            f"{'ONLINE' if online else 'OFFLINE'}\n\n"
+            f"Компьютер: {escape(device['machine_name'])}\n"
+            f"Система: {escape(telemetry.get('os', '—'))}\n"
+            f"Пользователь: {escape(user)}\n"
+            f"Данные: {str(age) + ' сек. назад' if age is not None else 'ещё не поступили'}\n"
+            f"RDP: {self.config.public_host}:{device['rdp_port']}\n\n"
+            f"CPU: {cpu:.1f}%\n{bar(cpu)}\n\n"
+            f"RAM: {ram:.1f}%\n{bar(ram)}\n"
+            f"{format_bytes(telemetry.get('ram_used_bytes'))} / {format_bytes(telemetry.get('ram_total_bytes'))}\n\n"
+            f"Диск C: {disk:.1f}%\n{bar(disk)}\n"
+            f"{format_bytes(telemetry.get('disk_used_bytes'))} / {format_bytes(telemetry.get('disk_total_bytes'))}\n\n"
+            "Сеть после запуска Windows\n"
+            f"⬇️ Получено: {format_bytes(telemetry.get('network_received_bytes'))}\n"
+            f"⬆️ Отправлено: {format_bytes(telemetry.get('network_sent_bytes'))}\n"
+            f"Маршрут: {escape(telemetry.get('route', '—'))}\n\n"
+            f"FRPC: {'работает' if frpc else 'остановлен'}\n"
+            f"Endpoint: {'доступен' if endpoint else 'закрыт'}\n"
+            f"RDP-соединений: {int(telemetry.get('rdp_connections', 0) or 0)}\n"
+            f"Внешние клиенты: {escape(', '.join(telemetry.get('rdp_remote_addresses') or []) or 'нет')}\n"
+            f"Сессии: {escape(', '.join(sessions) or 'нет')}\n"
+            f"Аптайм Windows: {format_duration(telemetry.get('uptime_seconds'))}\n\n"
+            "🔝 Процессы\n" + "\n".join(process_lines) + "\n\n"
+            f"Обновлено: {datetime.now().strftime('%H:%M:%S')}"
+        )
+        keyboard = {
+            "inline_keyboard": [
+                [
+                    {"text": "🟢 ON", "callback_data": f"cmd:on:{device['id']}"},
+                    {"text": "🔴 OFF", "callback_data": f"cmd:off:{device['id']}"},
+                    {"text": "♻️ RESTART", "callback_data": f"cmd:restart:{device['id']}"},
+                ],
+                [
+                    {"text": "🔄 REFRESH", "callback_data": "refresh"},
+                    {
+                        "text": "⏸ LIVE 3s"
+                        if self.registry.get_setting("live", "1") == "1"
+                        else "▶️ LIVE 3s",
+                        "callback_data": "live",
+                    },
+                ],
+                [
+                    {"text": "🗑 УДАЛИТЬ", "callback_data": f"delete:{device['id']}"},
+                    {"text": "⬅️ К СПИСКУ", "callback_data": "home"},
+                ],
+            ]
+        }
+        return text[:4000], keyboard
+
+    def _delete(self, device: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+        text = (
+            "⚠️ УДАЛЕНИЕ УСТРОЙСТВА\n\n"
+            f"Компьютер: {escape(device['display_name'])}\n"
+            f"RDP: {self.config.public_host}:{device['rdp_port']}\n\n"
+            "Доступ к API будет отозван. Локальный клиент нужно удалить отдельным "
+            "скриптом на самом Windows-ПК."
+        )
+        keyboard = {
+            "inline_keyboard": [
+                [
+                    {"text": "✅ УДАЛИТЬ", "callback_data": f"delete_yes:{device['id']}"},
+                    {"text": "❌ ОТМЕНА", "callback_data": f"device:{device['id']}"},
+                ]
+            ]
+        }
+        return text, keyboard
+
+    def _render_content(self) -> tuple[str, dict[str, Any]]:
+        screen = self.registry.get_setting("screen", "home") or "home"
+        if screen == "pair":
+            return self._pair()
+        if screen in {"device", "delete"}:
+            device_id = self.registry.get_setting("selected_device", "") or ""
+            try:
+                device = self.registry.get_device(device_id)
+            except KeyError:
+                self.registry.set_setting("screen", "home")
+                return self._home()
+            return self._delete(device) if screen == "delete" else self._device(device)
+        return self._home()
+
+    def render(self, force_new: bool = False) -> None:
+        with self.lock:
+            text, keyboard = self._render_content()
+            message_id = self.registry.get_setting("dashboard_message_id", "") or ""
+            if message_id and not force_new:
+                try:
+                    self.api_call(
+                        "editMessageText",
+                        {
+                            "chat_id": self.config.telegram_chat_id,
+                            "message_id": int(message_id),
+                            "text": text,
+                            "reply_markup": keyboard,
+                        },
+                    )
+                    self.last_render = time.time()
+                    return
+                except Exception as exc:
+                    value = str(exc).lower()
+                    if "message is not modified" in value:
+                        return
+                    if "message to edit not found" not in value and "message can't be edited" not in value:
+                        raise
+            result = self.api_call(
+                "sendMessage",
+                {
+                    "chat_id": self.config.telegram_chat_id,
+                    "text": text,
+                    "reply_markup": keyboard,
+                },
+            )
+            self.registry.set_setting("dashboard_message_id", str(result["message_id"]))
+            self.last_render = time.time()

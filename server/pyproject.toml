@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hermes-rdp"
+version = "0.1.0"
+description = "Self-hosted multi-PC RDP gateway with Telegram control"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [{name = "Bakunity"}]
+dependencies = []
+
+[project.scripts]
+hermes-rdp = "hermes_rdp.service:main"
+hermes-rdpctl = "hermes_rdp.cli:main"
+
+[tool.setuptools]
+packages = ["hermes_rdp"]
