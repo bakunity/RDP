@@ -15,31 +15,31 @@ permissions:
 
 concurrency:
   group: hermes-rdp-release
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   release:
     name: Tag and publish GitHub Release
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Fetch exact release commit without marketplace actions
+      - name: Fetch release history without marketplace actions
         run: |
           set -Eeuo pipefail
           git init repo
           cd repo
           git remote add origin \
             "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git fetch --depth=1 origin "$GITHUB_SHA"
+          git fetch --depth=100 origin main
           git checkout --detach FETCH_HEAD
 
       - name: Validate release tree
         working-directory: repo
         run: bash scripts/check-release.sh
 
-      - name: Resolve version
+      - name: Resolve version and release commit
         id: version
         working-directory: repo
         shell: bash
@@ -48,10 +48,14 @@ jobs:
           VERSION="$(tr -d '\r\n' < VERSION)"
           TAG="v$VERSION"
           NOTES="docs/releases/$TAG.md"
+          RELEASE_SHA="$(git log -1 --format=%H -- VERSION)"
           test -s "$NOTES"
+          test -n "$RELEASE_SHA"
+          git cat-file -e "$RELEASE_SHA^{commit}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "notes=$NOTES" >> "$GITHUB_OUTPUT"
+          echo "release_sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Create immutable release tag
         working-directory: repo
@@ -59,13 +63,14 @@ jobs:
         run: |
           set -Eeuo pipefail
           TAG='${{ steps.version.outputs.tag }}'
+          RELEASE_SHA='${{ steps.version.outputs.release_sha }}'
           if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already exists; leaving it unchanged."
             exit 0
           fi
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git tag -a "$TAG" -m "Hermes RDP $TAG" "$GITHUB_SHA"
+          git tag -a "$TAG" -m "Hermes RDP $TAG" "$RELEASE_SHA"
           git push origin "$TAG"
 
       - name: Publish GitHub Release
