@@ -1,24 +1,77 @@
 # Миграция с FRP на OpenSSH
 
-`v1.1.0` заменяет FRP полностью. Миграция требует повторного pairing Windows-устройств, потому что у старых записей нет индивидуальных SSH public keys.
+Переход с `v1.0.x` требует повторного pairing каждого Windows-ПК: старые FRP credentials не преобразуются в SSH keys.
+
+## Перед началом
+
+1. Проверьте административный SSH на `22/tcp`.
+2. Создайте backup:
+   - `/etc/hermes-rdp`;
+   - `/etc/frp`;
+   - `/var/lib/hermes-rdp`;
+   - systemd units.
+3. Зафиксируйте текущую версию.
+4. Убедитесь, что знаете рабочий путь rollback.
+
+## Сервер
+
+Запустите актуальный установщик с явным `--migrate`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.1.0/scripts/install-server.sh -o /tmp/install-hermes-rdp.sh
-read -rsp 'Telegram bot token: ' TG_TOKEN; echo
-sudo env HERMES_RDP_REF=v1.1.0 bash /tmp/install-hermes-rdp.sh \
+sudo env HERMES_RDP_REF=REF bash /tmp/install-hermes-rdp.sh \
   --host SERVER_IP_OR_DOMAIN \
   --telegram-token "$TG_TOKEN" \
   --telegram-chat-id TELEGRAM_USER_ID \
   --migrate
-unset TG_TOKEN
 ```
 
-Установщик:
+После миграции проверьте:
 
-- создаёт backup в `/var/backups/hermes-rdp/`;
-- останавливает и удаляет `frps.service`;
-- поднимает `hermes-rdp-sshd.service` на прежнем control-порту;
-- удаляет legacy-записи без SSH-ключей;
-- сохраняет Telegram, API TLS и диапазон RDP-портов.
+```bash
+sudo hermes-rdpctl doctor
+sudo systemctl is-active hermes-rdp-sshd.service hermes-rdp.service
+command -v frps || true
+systemctl is-enabled frps.service 2>/dev/null || true
+```
 
-После миграции добавь каждый Windows-ПК заново через Telegram. Исключения Defender для FRP можно удалить после проверки, что старый `frpc.exe` больше не используется.
+Ожидается:
+
+- два Hermes OpenSSH service active;
+- `frps` binary отсутствует;
+- `frps.service` отсутствует или disabled;
+- база содержит SSH-поля;
+- старые устройства без SSH public key отозваны.
+
+## Windows
+
+Актуальный установщик:
+
+- останавливает старые FRP/WinMon задачи;
+- переносит старый каталог в `HermesRDP-legacy-*`;
+- создаёт новый Ed25519 keypair;
+- регистрирует устройство заново;
+- создаёт новую Scheduled Task;
+- не использует `frpc.exe`.
+
+Каждый ПК нужно добавить через новый pairing-код Telegram.
+
+## Найденная проблема старых ACL
+
+Старый private key мог быть доступен только `SYSTEM`, из-за чего рекурсивный backup завершался `Access denied`.
+
+Правильное поведение нового установщика:
+
+1. остановить старые задачи и процессы;
+2. перенести legacy-каталог целиком;
+3. при необходимости применить `takeown`/`icacls` только к каталогу Hermes;
+4. только после локальной подготовки начинать pairing.
+
+## После миграции
+
+- пройдите внешний RDP-тест;
+- перезагрузите Windows и проверьте reconnect;
+- проверьте `OFF`, `ON`, `RESTART` и `DELETE`;
+- добавьте второй ПК;
+- удаляйте legacy backup только после полного PASS.
+
+Полный список: [TESTING_A_TO_Z.md](TESTING_A_TO_Z.md).
