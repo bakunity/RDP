@@ -56,13 +56,19 @@ class TelegramPairCommandTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp.cleanup()
 
-    def test_pair_command_is_one_html_code_block(self) -> None:
+    def test_pair_command_is_one_compact_multiline_code_block(self) -> None:
         text, _ = self.bot._pair()
         self.assertEqual(text.count("<pre><code>"), 1)
         self.assertEqual(text.count("</code></pre>"), 1)
-        self.assertIn("&amp; ([scriptblock]", text)
+        self.assertIn("$p=@{\n", text)
+        self.assertIn("Server=&#x27;server.example&#x27;", text)
+        self.assertIn("PairCode=&#x27;ABCD1234&#x27;", text)
+        self.assertIn("Fingerprint=&#x27;AA11BB22&#x27;", text)
         self.assertIn("a=1&amp;b=2", text)
-        self.assertNotIn("\n& ([scriptblock]", text)
+        self.assertIn("@p</code></pre>", text)
+        self.assertNotIn("`", text)
+        code = text.split("<pre><code>", 1)[1].split("</code></pre>", 1)[0]
+        self.assertLess(max(map(len, code.splitlines())), 100)
 
     def test_render_requests_html_parse_mode(self) -> None:
         calls = []

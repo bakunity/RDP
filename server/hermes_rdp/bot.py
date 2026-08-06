@@ -264,11 +264,13 @@ class TelegramBot:
     def _pair(self) -> tuple[str, dict[str, Any]]:
         code = self.registry.get_setting("pair_code", "") or ""
         command = (
-            "$u='" + self.config.client_installer_url + "'; "
-            "& ([scriptblock]::Create((irm $u))) "
-            f"-Server '{self.config.public_host}' "
-            f"-PairCode '{code}' "
-            f"-Fingerprint '{self.config.tls_fingerprint}'"
+            "$u='" + self.config.client_installer_url + "'\n"
+            "$p=@{\n"
+            f"  Server='{self.config.public_host}'\n"
+            f"  PairCode='{code}'\n"
+            f"  Fingerprint='{self.config.tls_fingerprint}'\n"
+            "}\n"
+            "& ([scriptblock]::Create((irm $u))) @p"
         )
         text = (
             "➕ ДОБАВЛЕНИЕ WINDOWS-ПК\n\n"

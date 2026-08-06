@@ -1,6 +1,6 @@
 # Миграция существующего Hermes RDP
 
-Этот документ описывает перевод старой схемы `один Windows ПК + отдельный Telegram bot + FRPS ON/OFF` в Hermes RDP v1.0.4.
+Этот документ описывает перевод старой схемы `один Windows ПК + отдельный Telegram bot + FRPS ON/OFF` в Hermes RDP v1.0.5.
 
 ## Цель миграции
 
@@ -42,12 +42,12 @@ Get-ScheduledTask | Where-Object TaskName -like 'Hermes*' | Select-Object TaskNa
 
 Проверь, что текущий RDP работает до миграции.
 
-## 2. Скачать v1.0.4
+## 2. Скачать v1.0.5
 
 На Hermes:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.0.4/scripts/install-server.sh -o /tmp/install-hermes-rdp.sh
+curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.0.5/scripts/install-server.sh -o /tmp/install-hermes-rdp.sh
 ```
 
 ```bash
@@ -57,7 +57,7 @@ read -rsp 'Telegram bot token: ' TG_TOKEN; echo
 ## 3. Запустить миграцию сервера
 
 ```bash
-sudo env HERMES_RDP_REF=v1.0.4 bash /tmp/install-hermes-rdp.sh --host SERVER_IP_OR_DOMAIN --telegram-token "$TG_TOKEN" --telegram-chat-id TELEGRAM_USER_ID --migrate
+sudo env HERMES_RDP_REF=v1.0.5 bash /tmp/install-hermes-rdp.sh --host SERVER_IP_OR_DOMAIN --telegram-token "$TG_TOKEN" --telegram-chat-id TELEGRAM_USER_ID --migrate
 ```
 
 Установщик:
@@ -102,7 +102,7 @@ sudo hermes-rdpctl pair create --name 'Windows-PC-01' --port 53389
 Открой PowerShell от администратора:
 
 ```powershell
-$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.4/scripts/install-client.ps1'; & ([scriptblock]::Create((irm $u))) -Server 'SERVER_IP_OR_DOMAIN' -PairCode 'PAIR_CODE' -Fingerprint 'FINGERPRINT' -Name 'Windows-PC-01' -RepositoryRef 'v1.0.4'
+$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.5/scripts/install-client.ps1'; & ([scriptblock]::Create((irm $u))) -Server 'SERVER_IP_OR_DOMAIN' -PairCode 'PAIR_CODE' -Fingerprint 'FINGERPRINT' -Name 'Windows-PC-01' -RepositoryRef 'v1.0.5'
 ```
 
 Установщик сам остановит и удалит устаревшие задачи:

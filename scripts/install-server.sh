@@ -255,7 +255,8 @@ ufw allow "$API_PORT/tcp" comment 'Hermes RDP API' >/dev/null || true
 ufw allow "$PORT_START:$PORT_END/tcp" comment 'Hermes RDP devices' >/dev/null || true
 
 systemctl daemon-reload
-systemctl enable --now frps.service hermes-rdp.service
+systemctl enable frps.service hermes-rdp.service
+systemctl restart frps.service hermes-rdp.service
 sleep 3
 
 PYTHONPATH=/opt/hermes-rdp/app python3 -m compileall -q /opt/hermes-rdp/app/hermes_rdp

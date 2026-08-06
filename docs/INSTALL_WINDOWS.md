@@ -32,13 +32,13 @@ Windows Home не поддерживает штатный входящий RDP �
 Открой **Windows PowerShell от имени администратора**.
 
 ```powershell
-$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.4/scripts/install-client.ps1'; & ([scriptblock]::Create((irm $u))) -Server 'SERVER_IP_OR_DOMAIN' -PairCode 'PAIR_CODE' -Fingerprint 'FINGERPRINT' -Name 'Название ПК' -RepositoryRef 'v1.0.4'
+$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.5/scripts/install-client.ps1'; & ([scriptblock]::Create((irm $u))) -Server 'SERVER_IP_OR_DOMAIN' -PairCode 'PAIR_CODE' -Fingerprint 'FINGERPRINT' -Name 'Название ПК' -RepositoryRef 'v1.0.5'
 ```
 
 Для текущего домашнего компьютера:
 
 ```powershell
-$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.4/scripts/install-client.ps1'; & ([scriptblock]::Create((irm $u))) -Server 'SERVER_IP_OR_DOMAIN' -PairCode 'PAIR_CODE' -Fingerprint 'FINGERPRINT' -Name 'Windows-PC-01' -RepositoryRef 'v1.0.4'
+$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.5/scripts/install-client.ps1'; & ([scriptblock]::Create((irm $u))) -Server 'SERVER_IP_OR_DOMAIN' -PairCode 'PAIR_CODE' -Fingerprint 'FINGERPRINT' -Name 'Windows-PC-01' -RepositoryRef 'v1.0.5'
 ```
 
 Параметр `-Name` можно не указывать: установщик спросит название или использует имя Windows-компьютера.
@@ -51,7 +51,7 @@ $u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.4/scripts/install-client
 -Fingerprint    SHA-256 fingerprint HTTPS API
 -Name           название в Telegram
 -ApiPort        порт API, по умолчанию 7443
--RepositoryRef  тег или ветка агента, для продакшена v1.0.4
+-RepositoryRef  тег или ветка агента, для продакшена v1.0.5
 ```
 
 ## Что делает установщик
@@ -168,7 +168,7 @@ Test-NetConnection SERVER_IP_OR_DOMAIN -Port 7443
 ## Обновление
 
 ```powershell
-$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.4/scripts/update-client.ps1'; & ([scriptblock]::Create((irm $u))) -RepositoryRef 'v1.0.4'
+$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.5/scripts/update-client.ps1'; & ([scriptblock]::Create((irm $u))) -RepositoryRef 'v1.0.5'
 ```
 
 Скрипт сохраняет backup текущего `HermesRdpAgent.ps1`, проверяет синтаксис новой версии и только потом запускает задачу.
@@ -184,7 +184,7 @@ sudo hermes-rdpctl devices delete DEVICE_ID
 Затем на Windows:
 
 ```powershell
-$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.4/scripts/uninstall-client.ps1'; & ([scriptblock]::Create((irm $u)))
+$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.5/scripts/uninstall-client.ps1'; & ([scriptblock]::Create((irm $u)))
 ```
 
 Удаление локального клиента не удаляет Windows-пользователей и не меняет пароль RDP.

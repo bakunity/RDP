@@ -4,7 +4,25 @@
 
 ## [Unreleased]
 
-Пока нет изменений после `v1.0.4`.
+Пока нет изменений после `v1.0.5`.
+
+## [1.0.5] — 2026-08-06
+
+UX-патч компактной команды Telegram и исправление обновления активного сервиса.
+
+### Изменено
+
+- команда Windows-установщика остаётся одним копируемым блоком, но разбита на короткие строки через PowerShell splatting;
+- убрана чрезмерная ширина Telegram code block;
+- команда не использует хрупкие символы продолжения строки PowerShell;
+- повторный запуск серверного установщика явно перезапускает уже активные `frps` и `hermes-rdp`;
+- `update-server.sh` корректно загружает как ветки, так и release-теги;
+- добавлены regression tests Telegram-разметки и поведения обновления.
+
+### Совместимость
+
+- pairing contract, API, SQLite, FRP-протокол и Windows agent не изменены;
+- стандартные порты не изменены.
 
 ## [1.0.4] — 2026-08-06
 
@@ -124,7 +142,8 @@ Hotfix серверного установщика для корректной �
 - удаление устройства отзывает API-доступ, но для полного отзыва скомпрометированного FRP token требуется его ротация и переподключение доверенных ПК;
 - Windows-клиент рассчитан на 64-битные Windows Pro, Enterprise или Education с поддержкой входящего RDP.
 
-[Unreleased]: https://github.com/bakunity/RDP/compare/v1.0.4...HEAD
+[Unreleased]: https://github.com/bakunity/RDP/compare/v1.0.5...HEAD
+[1.0.5]: https://github.com/bakunity/RDP/releases/tag/v1.0.5
 [1.0.4]: https://github.com/bakunity/RDP/releases/tag/v1.0.4
 [1.0.3]: https://github.com/bakunity/RDP/releases/tag/v1.0.3
 [1.0.2]: https://github.com/bakunity/RDP/releases/tag/v1.0.2
