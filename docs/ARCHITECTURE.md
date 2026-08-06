@@ -1,42 +1,101 @@
-# Архитектура Hermes RDP v1.1
+# Архитектура Hermes RDP
 
-## Поток подключения
-
-Windows запускает встроенный `ssh.exe` с удалённым forwarding:
+## Общая схема
 
 ```text
--R 0.0.0.0:<RDP_PORT>:127.0.0.1:3389
+Remote RDP client
+        |
+        | TCP SERVER:RDP_PORT
+        v
+Linux listener created by dedicated sshd
+        |
+        | reverse forwarding
+        v
+Windows 127.0.0.1:3389
 ```
 
-Отдельный daemon `hermes-rdp-sshd` принимает только ключи пользователя `hermes-tunnel`. Интерактивные сессии выключены. Внешний клиент подключается к `SERVER:<RDP_PORT>`, а OpenSSH передаёт TCP-поток на локальный RDP Windows.
+Windows всегда инициирует исходящее SSH-соединение. Проброс портов на домашнем или офисном роутере Windows-ПК не требуется.
 
-## Pairing
+## Сервер
 
-1. Telegram создаёт одноразовый код.
-2. Windows проверяет TLS fingerprint API.
-3. Windows генерирует Ed25519 keypair.
-4. В API отправляется только public key.
-5. Сервер атомарно потребляет код, назначает порт и сохраняет устройство.
-6. API возвращает SSH host public key и параметры туннеля.
-7. Клиент записывает отдельный `known_hosts` и запускает агент.
+### `hermes-rdp-sshd.service`
 
-## Авторизация SSH
+Отдельный экземпляр OpenSSH на `7000/tcp`. Он не заменяет административный SSH сервера и использует собственные config, pid file и host key.
 
-`AuthorizedKeysCommand` получает username, тип и blob предъявленного ключа. Контроллер ищет активное устройство в SQLite и возвращает строку вида:
+Ограничения tunnel-user:
 
-```text
-no-agent-forwarding,no-X11-forwarding,no-pty,no-user-rc,permitlisten="0.0.0.0:53389" ssh-ed25519 AAAA...
-```
+- только public-key authentication;
+- нет shell, PTY и SFTP;
+- нет X11 и agent forwarding;
+- нет local forwarding;
+- remote forwarding ограничен назначенным endpoint;
+- `AuthorizedKeysCommand` получает актуальный ключ из SQLite;
+- `permitlisten` разрешает только конкретный RDP-порт.
 
-Ключ одного устройства не может занять порт другого устройства.
+### `hermes-rdp.service`
 
-## Управление
+Запускает:
 
-- `ON`: разрешает ключ и даёт агенту поднять туннель;
-- `OFF`: запрещает ключ, завершает текущий SSH listener и сохраняет устройство;
-- `RESTART`: агент перезапускает только свой SSH-процесс;
-- `DELETE`: удаляет устройство из registry, отзывает API-токен и SSH-ключ, освобождает порт.
+- HTTPS API;
+- Telegram controller;
+- SQLite registry;
+- pairing;
+- telemetry и heartbeat;
+- очередь команд устройствам.
 
-## Данные
+### SQLite
 
-SQLite хранит public key, hash API-токена, порт, состояние, телеметрию и команды. Приватные SSH-ключи существуют только в `C:\ProgramData\HermesRDP` соответствующего Windows-ПК.
+Хранит:
+
+- устройства и назначенные порты;
+- хэши API-token;
+- SSH public keys;
+- pairing-коды;
+- команды;
+- настройки Telegram;
+- последнюю телеметрию.
+
+## Windows
+
+`HermesRdpAgent.ps1` работает через Scheduled Task от имени `SYSTEM` и поддерживает:
+
+- `ssh.exe -N -R`;
+- reconnect и backoff;
+- heartbeat и telemetry;
+- команды `ON`, `OFF`, `RESTART`;
+- проверку endpoint status.
+
+Приватный Ed25519-ключ остаётся в `C:\ProgramData\HermesRDP` с ACL только для `SYSTEM` и Administrators.
+
+## Trust chain
+
+1. Пользователь получает API fingerprint через доверенный канал установки.
+2. Установщик закрепляет SHA-256 сертификата HTTPS API.
+3. Через закреплённый API клиент получает SSH host key.
+4. SSH использует отдельный `known_hosts` и `StrictHostKeyChecking=yes`.
+5. Сервер принимает public key только для назначенного порта.
+
+## Жизненный цикл устройства
+
+1. Telegram создаёт одноразовый pairing-код.
+2. Windows локально генерирует keypair.
+3. API проверяет код и public key.
+4. Registry выдаёт постоянный RDP-порт и device token.
+5. Agent запускает reverse SSH.
+6. Устройство появляется ONLINE после heartbeat.
+
+## Удаление устройства
+
+DELETE:
+
+- отзывает API-token;
+- отзывает SSH public key;
+- закрывает listener;
+- освобождает порт;
+- не удаляет локальные файлы Windows автоматически.
+
+Локальная очистка выполняется отдельным uninstall-скриптом.
+
+## Масштабирование
+
+Стандартный пул `53389–53420` даёт 32 одновременных endpoint. Диапазон можно расширить, но нужно учитывать firewall, мониторинг, лимиты сервера и модель доступа к открытым RDP-портам.

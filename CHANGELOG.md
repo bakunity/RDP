@@ -4,9 +4,18 @@
 
 ## [Unreleased]
 
-Пока нет изменений после `v1.1.0`.
+### Документация и сайт
+
+- публичная страница полностью переведена с устаревшего описания FRP на текущую OpenSSH-архитектуру;
+- добавлен блок реально подтверждённых сценариев: чистая установка, Windows pairing и внешний RDP через мобильную сеть;
+- README, quickstart, установка, архитектура, эксплуатация, диагностика, безопасность и миграция переписаны по результатам живого теста;
+- acceptance checklist теперь отдельно показывает уже пройденные и ещё не закрытые проверки;
+- добавлены regression tests, запрещающие возврат `v1.0.7`, `FRPC` и `FRPS` на публичную страницу;
+- release-check стал совместим с системным Python 3.10 без внешнего `tomllib`.
 
 ## [1.1.0] — 2026-08-06
+
+Релиз: https://github.com/bakunity/RDP/releases/tag/v1.1.0
 
 Крупный релиз: транспорт Hermes RDP переведён с FRP на системный OpenSSH.
 
@@ -119,100 +128,40 @@ Hotfix чистой серверной установки после прове�
 
 ### Совместимость
 
-- повторный запуск после частичной установки `v1.0.2` безопасен;
-- существующий сгенерированный FRP token сохраняется;
-- API, SQLite, pairing contract и порты не изменены.
+- публичные команды и стандартные порты не изменены;
+- исправление затрагивает только ветку чистой серверной установки.
 
 ## [1.0.2] — 2026-08-06
 
-Hotfix серверного установщика для корректной установки из стабильного Git-тега.
+Hotfix загрузки FRP Windows-клиентом при ложном срабатывании Microsoft Defender.
 
 ### Исправлено
 
-- загрузка исходников больше не использует `refs/heads/$REF`, из-за чего тег `v1.0.1` ошибочно обрабатывался как ветка и возвращал HTTP 404;
-- архив проекта теперь загружается через универсальный endpoint `codeload.github.com`, работающий и с ветками, и с тегами;
-- release checks блокируют возврат ошибочного URL с `refs/heads/$REF`.
+- добавлена явная диагностика Defender quarantine по событиям 1116/1117;
+- FRP-загрузка выполняется до расходования pairing-кода;
+- cleanup временных файлов не перекрывает исходную ошибку установки;
+- при обнаружении quarantine показывается понятное сообщение без автоматического ослабления Defender.
 
-### Совместимость
+## [1.0.1] — 2026-08-05
 
-- API, SQLite registry, pairing contract и Windows agent не изменены;
-- порты `7000`, `7443` и `53389–53420` не изменены;
-- обновление является безопасным PATCH-релизом.
+Hotfix bootstrap Windows-установщика.
 
-## [1.0.1] — 2026-08-06
+### Исправлено
 
-Документационный и privacy-патч для безопасного публичного тестирования проекта.
+- Telegram-команда загружает PowerShell-установщик без сохранения во временный файл;
+- сохранена проверка TLS fingerprint;
+- исправлена совместимость PowerShell 5.1.
 
-### Добавлено
+## [1.0.0] — 2026-08-05
 
-- пошаговый сценарий [тестирования от А до Я](docs/TESTING_A_TO_Z.md) на отдельном сервере, новом Telegram-боте и новом Windows-ПК;
-- acceptance checklist для server install, Telegram dashboard, telemetry, RDP, ON/OFF/RESTART, reboot и Multi-PC;
-- готовые диагностические команды для Linux и Windows;
-- постоянный CI-сканер `scripts/check-public-examples.py`, блокирующий случайно добавленные публичные IP-адреса;
-- privacy scan в `scripts/check-release.sh`.
-
-### Изменено
-
-- реальные IP-адреса, machine names, usernames и client addresses заменены на нейтральные переменные;
-- примеры используют `SERVER_IP_OR_DOMAIN`, `WINDOWS-PC-01`, `WINDOWS_USER` и `CLIENT_IP_ADDRESS`;
-- пользовательские команды обновлены до стабильного тега `v1.0.1`;
-- описание релиза `v1.0.0` также очищено от project-specific примеров;
-- первый Windows-ПК в документации больше не связан с конкретным владельцем или инфраструктурой.
-
-### Совместимость
-
-- серверный API и Windows agent остаются обратно совместимыми с `v1.0.0`;
-- стандартные порты `7000`, `7443` и `53389–53420` не изменены;
-- формат SQLite и pairing contract не изменены;
-- обновление является безопасным PATCH-релизом.
-
-## [1.0.0] — 2026-08-06
-
-Первый стабильный проектный релиз Hermes RDP.
+Первый публичный релиз Hermes RDP.
 
 ### Добавлено
 
-- единый Linux-сервер Hermes как управляющий узел;
-- одинаковый Windows-клиент для основного и дополнительных ПК;
-- автоматическая регистрация устройств по одноразовому восьмисимвольному коду;
-- автоматическое распределение постоянных RDP-портов;
-- возможность сохранить `53389` за первым Windows-ПК при миграции;
-- отдельные `device_id`, API tokens, FRP proxy names и очереди команд;
-- Telegram Multi-PC dashboard в одном редактируемом сообщении;
-- ONLINE/OFFLINE, ON/OFF/RESTART и LIVE-обновление каждые 3 секунды;
-- CPU, RAM, диск, сеть, аптайм, пользователь, процессы и RDP-сессии Windows;
-- серверный CLI `hermes-rdpctl`;
-- HTTPS API с TLS fingerprint pinning;
-- FRP `0.70.1` с принудительным TLS и проверкой SHA-256 архивов;
-- автоматические резервные копии при установке и обновлении;
-- установщики, обновление и удаление для Linux и Windows;
-- CI для Python, Bash и Windows PowerShell 5.1;
-- полная документация для пользователей, администраторов и разработчиков;
-- автоматическая публикация GitHub Release из `VERSION` и release notes.
-
-### Безопасность
-
-- Telegram доступен только заданному числовому user ID;
-- pairing code одноразовый и по умолчанию действует 15 минут;
-- у каждого устройства отдельный случайный API token;
-- сервер хранит только SHA-256 device token;
-- Windows secrets закрыты ACL для `SYSTEM` и Administrators;
-- API принимает TLS 1.2+;
-- FRP-клиенты проверяют собственную CA сервера.
-
-### Известные ограничения
-
-- FRP token общий для всех подключённых устройств;
-- удаление устройства отзывает API-доступ, но для полного отзыва скомпрометированного FRP token требуется его ротация и переподключение доверенных ПК;
-- Windows-клиент рассчитан на 64-битные Windows Pro, Enterprise или Education с поддержкой входящего RDP.
-
-[Unreleased]: https://github.com/bakunity/RDP/compare/v1.1.0...HEAD
-[1.1.0]: https://github.com/bakunity/RDP/releases/tag/v1.1.0
-[1.0.7]: https://github.com/bakunity/RDP/releases/tag/v1.0.7
-[1.0.6]: https://github.com/bakunity/RDP/releases/tag/v1.0.6
-[1.0.5]: https://github.com/bakunity/RDP/releases/tag/v1.0.5
-[1.0.4]: https://github.com/bakunity/RDP/releases/tag/v1.0.4
-[1.0.3]: https://github.com/bakunity/RDP/releases/tag/v1.0.3
-[1.0.2]: https://github.com/bakunity/RDP/releases/tag/v1.0.2
-[1.0.1]: https://github.com/bakunity/RDP/releases/tag/v1.0.1
-[1.0.0]: https://github.com/bakunity/RDP/releases/tag/v1.0.0
+- Linux controller и FRP gateway;
+- Windows agent и FRPC client;
+- Telegram dashboard;
+- SQLite registry;
+- HTTPS API с TLS pinning;
+- multi-PC support;
+- диагностика и release automation.

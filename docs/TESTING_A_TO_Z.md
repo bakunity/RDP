@@ -1,61 +1,91 @@
-# Тестирование Hermes RDP v1.1.0 от А до Я
+# Тестирование Hermes RDP от А до Я
 
-## 1. Сервер
+Этот checklist предназначен для тестового сервера перед постоянной эксплуатацией.
 
-```bash
-sudo hermes-rdpctl doctor
-sudo systemctl is-active hermes-rdp-sshd.service hermes-rdp.service
-sudo /usr/sbin/sshd -t -f /etc/hermes-rdp/sshd_config
-```
+## A. Сервер
 
-Ожидается: API `1.1.0`, tunnel `openssh`, порты `7000` и `7443` слушаются.
+- [ ] `hermes-rdpctl doctor` без ошибок.
+- [ ] `hermes-rdp-sshd.service` active/enabled.
+- [ ] `hermes-rdp.service` active/enabled.
+- [ ] `7000/tcp` и `7443/tcp` слушаются.
+- [ ] RDP-пул закрыт до подключения устройств.
+- [ ] `/usr/sbin/sshd -t -f /etc/hermes-rdp/sshd_config` проходит.
+- [ ] FRP service и binary отсутствуют в OpenSSH-установке.
 
-## 2. Внешняя сеть
+## B. Telegram
 
-```powershell
-Test-NetConnection SERVER -Port 7000
-Test-NetConnection SERVER -Port 7443
-```
+- [ ] `/start` показывает OpenSSH и список устройств.
+- [ ] **➕ ДОБАВИТЬ ПК** создаёт новый одноразовый код.
+- [ ] Команда копируется одним блоком.
+- [ ] Команда содержит BOM-normalization перед `ScriptBlock.Create`.
+- [ ] Посторонний Telegram ID не получает доступ.
 
-До установки клиента первый RDP-порт должен быть закрыт.
+## C. Windows install
 
-## 3. Pairing
+- [ ] PowerShell запущен администратором.
+- [ ] Редакция Windows поддерживает RDP host.
+- [ ] OpenSSH Client найден или установлен.
+- [ ] Legacy Hermes-каталог не блокирует установку.
+- [ ] `=== ГОТОВО ===` отображается.
+- [ ] Созданы `device.json`, `known_hosts` и Ed25519 keypair.
+- [ ] ACL secrets доступны только `SYSTEM` и Administrators.
+- [ ] Scheduled Task `Hermes RDP Agent` активна.
 
-Создай код в Telegram и выполни команду в PowerShell администратора. Не публикуй pairing-код, private key или fingerprint.
+## D. Туннель
 
-## 4. Windows после установки
+- [ ] `ssh.exe` запущен.
+- [ ] Назначенный порт слушается на сервере.
+- [ ] Другой порт из пула не занят этим ключом.
+- [ ] Telegram показывает ONLINE и LIVE-метрики.
+- [ ] В `agent.log` нет постоянного reconnect-loop.
 
-```powershell
-Get-ScheduledTask -TaskName 'Hermes RDP Agent'
-Get-Process ssh -ErrorAction SilentlyContinue
-Get-Service TermService
-Get-NetTCPConnection -LocalPort 3389 -State Listen
-Get-Content 'C:\ProgramData\HermesRDP\agent.log' -Tail 50
-```
+## E. RDP
 
-## 5. RDP
+- [ ] Подключение работает из другой сети.
+- [ ] Проверен вход с телефона через мобильные данные или иной внешний канал.
+- [ ] Используется сильный Windows-пароль.
+- [ ] NLA включена.
+- [ ] Windows обновлена.
 
-```powershell
-Test-NetConnection SERVER -Port 53389
-mstsc.exe /v:SERVER:53389
-```
+## F. Управление
 
-## 6. Telegram
+- [ ] `OFF` закрывает listener.
+- [ ] `ON` восстанавливает listener.
+- [ ] `RESTART` пересоздаёт SSH-процесс.
+- [ ] `DELETE` отзывает key и token.
+- [ ] После DELETE порт освобождён.
 
-Проверь ONLINE, телеметрию, OFF, ON, RESTART и DELETE. OFF должен закрыть внешний порт, ON — восстановить. DELETE должен отозвать ключ и освободить порт.
+## G. Recovery
 
-## 7. Несколько устройств
+- [ ] После перезагрузки Windows туннель возвращается за 30–90 секунд.
+- [ ] После перезагрузки сервера оба systemd service возвращаются.
+- [ ] Краткий обрыв интернета приводит к reconnect.
+- [ ] Перезапуск controller не ломает активный sshd.
 
-Добавь второй ПК. Он должен получить другой порт и отдельный SSH key. Отключение первого ПК не должно влиять на второй.
+## H. Несколько устройств
 
-## 8. Перезагрузки
+- [ ] Второй ПК получает следующий свободный порт.
+- [ ] У второго ПК отдельный Ed25519 public key.
+- [ ] Ключ первого ПК не может занять порт второго.
+- [ ] Удаление одного устройства не влияет на остальные.
+- [ ] Освобождённый порт можно безопасно выдать новому устройству.
 
-Перезагрузи Windows и сервер. Scheduled Task и systemd должны восстановить туннели автоматически.
+## I. Обновление и rollback
 
-## 9. Security regression
+- [ ] Перед update создан backup.
+- [ ] Используется фиксированный tag или commit.
+- [ ] После update `doctor` проходит.
+- [ ] Существующее устройство снова подключается.
+- [ ] Документирован путь rollback.
 
-- неверный API fingerprint отклоняется;
-- неверный SSH host key отклоняется;
-- ключ одного устройства не может открыть порт другого;
-- удалённый ключ не авторизуется;
-- Windows-установщик не скачивает FRP и не добавляет Defender exclusions.
+## Критерий PASS
+
+Релиз считается полностью проверенным после:
+
+1. успешного внешнего RDP;
+2. recovery после перезагрузки Windows;
+3. проверки минимум двух устройств;
+4. успешных `OFF/ON/RESTART/DELETE`;
+5. повторного использования освобождённого порта.
+
+Текущий фактический прогресс фиксируется в [VALIDATED_SCENARIOS.md](VALIDATED_SCENARIOS.md).

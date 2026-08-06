@@ -46,8 +46,7 @@
         entry.target.classList.add('visible');
         observer.unobserve(entry.target);
       });
-    }, { threshold: 0.12, rootMargin: '0px 0px -40px' });
-
+    }, { threshold: 0.1, rootMargin: '0px 0px -32px' });
     revealItems.forEach((item) => observer.observe(item));
   } else {
     revealItems.forEach((item) => item.classList.add('visible'));
@@ -55,7 +54,7 @@
 
   const titles = {
     server: 'SERVER · BASH',
-    pair: 'SERVER · HERMES CLI',
+    pair: 'TELEGRAM · PAIRING',
     windows: 'WINDOWS · POWERSHELL',
     check: 'REMOTE CLIENT · POWERSHELL'
   };
