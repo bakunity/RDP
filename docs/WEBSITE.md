@@ -91,7 +91,7 @@ https://hermes-rdp.vercel.app/release
 Проверка:
 
 ```bash
-grep -R "v1.0.1" index.html docs/WEBSITE.md
+grep -R "v1.0.2" index.html docs/WEBSITE.md
 ```
 
 ## Social preview

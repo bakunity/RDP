@@ -4,7 +4,23 @@
 
 ## [Unreleased]
 
-Пока нет изменений после `v1.0.1`.
+Пока нет изменений после `v1.0.2`.
+
+## [1.0.2] — 2026-08-06
+
+Hotfix серверного установщика для корректной установки из стабильного Git-тега.
+
+### Исправлено
+
+- загрузка исходников больше не использует `refs/heads/$REF`, из-за чего тег `v1.0.1` ошибочно обрабатывался как ветка и возвращал HTTP 404;
+- архив проекта теперь загружается через универсальный endpoint `codeload.github.com`, работающий и с ветками, и с тегами;
+- release checks блокируют возврат ошибочного URL с `refs/heads/$REF`.
+
+### Совместимость
+
+- API, SQLite registry, pairing contract и Windows agent не изменены;
+- порты `7000`, `7443` и `53389–53420` не изменены;
+- обновление является безопасным PATCH-релизом.
 
 ## [1.0.1] — 2026-08-06
 
@@ -73,6 +89,7 @@
 - удаление устройства отзывает API-доступ, но для полного отзыва скомпрометированного FRP token требуется его ротация и переподключение доверенных ПК;
 - Windows-клиент рассчитан на 64-битные Windows Pro, Enterprise или Education с поддержкой входящего RDP.
 
-[Unreleased]: https://github.com/bakunity/RDP/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/bakunity/RDP/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/bakunity/RDP/releases/tag/v1.0.2
 [1.0.1]: https://github.com/bakunity/RDP/releases/tag/v1.0.1
 [1.0.0]: https://github.com/bakunity/RDP/releases/tag/v1.0.0

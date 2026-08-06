@@ -123,34 +123,34 @@ Get-NetTCPConnection -LocalPort 3389 -State Listen -ErrorAction SilentlyContinue
 mstsc.exe /v:SERVER_IP_OR_DOMAIN:53389
 ```
 
-## Stable install v1.0.1
+## Stable install v1.0.2
 
 Server:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.0.1/scripts/install-server.sh -o /tmp/install-hermes-rdp.sh
+curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.0.2/scripts/install-server.sh -o /tmp/install-hermes-rdp.sh
 ```
 
 Windows:
 
 ```powershell
-$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.1/scripts/install-client.ps1'; & ([scriptblock]::Create((irm $u))) -Server 'SERVER' -PairCode 'CODE' -Fingerprint 'FINGERPRINT' -Name 'PC NAME' -RepositoryRef 'v1.0.1'
+$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.2/scripts/install-client.ps1'; & ([scriptblock]::Create((irm $u))) -Server 'SERVER' -PairCode 'CODE' -Fingerprint 'FINGERPRINT' -Name 'PC NAME' -RepositoryRef 'v1.0.2'
 ```
 
-## Stable update v1.0.1
+## Stable update v1.0.2
 
 Server:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.0.1/scripts/update-server.sh -o /tmp/update-hermes-rdp.sh
-sudo env HERMES_RDP_REF=v1.0.1 bash /tmp/update-hermes-rdp.sh
+curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.0.2/scripts/update-server.sh -o /tmp/update-hermes-rdp.sh
+sudo env HERMES_RDP_REF=v1.0.2 bash /tmp/update-hermes-rdp.sh
 rm -f /tmp/update-hermes-rdp.sh
 ```
 
 Windows:
 
 ```powershell
-$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.1/scripts/update-client.ps1'; & ([scriptblock]::Create((irm $u))) -RepositoryRef 'v1.0.1'
+$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.2/scripts/update-client.ps1'; & ([scriptblock]::Create((irm $u))) -RepositoryRef 'v1.0.2'
 ```
 
 ## Uninstall
@@ -158,13 +158,13 @@ $u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.1/scripts/update-client.
 Windows:
 
 ```powershell
-$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.1/scripts/uninstall-client.ps1'; & ([scriptblock]::Create((irm $u)))
+$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.2/scripts/uninstall-client.ps1'; & ([scriptblock]::Create((irm $u)))
 ```
 
 Server, только после backup:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.0.1/scripts/uninstall-server.sh -o /tmp/uninstall-hermes-rdp.sh
+curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.0.2/scripts/uninstall-server.sh -o /tmp/uninstall-hermes-rdp.sh
 sudo bash /tmp/uninstall-hermes-rdp.sh
 ```
 
@@ -172,5 +172,5 @@ sudo bash /tmp/uninstall-hermes-rdp.sh
 
 ```text
 Latest: https://github.com/bakunity/RDP/releases/latest
-v1.0.1: https://github.com/bakunity/RDP/releases/tag/v1.0.1
+v1.0.2: https://github.com/bakunity/RDP/releases/tag/v1.0.2
 ```

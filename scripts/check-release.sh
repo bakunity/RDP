@@ -16,6 +16,8 @@ PYTHONPATH=server python3 -m unittest discover -s tests -v
 echo '== Public example privacy =='
 python3 scripts/check-public-examples.py
 
+echo '== Installer archive reference =='
+python3 -c "from pathlib import Path; t=Path('scripts/install-server.sh').read_text(); assert 'archive/refs/heads/\$REF.tar.gz' not in t, 'installer treats release refs as branches'; assert 'https://codeload.github.com/\$REPO/tar.gz/\$REF' in t, 'missing branch/tag compatible archive endpoint'; print('installer-archive-ref=OK')"
 echo '== Release metadata =='
 python3 - <<'PY'
 from __future__ import annotations
