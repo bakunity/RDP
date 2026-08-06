@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import hashlib
 import json
 import secrets
 import sqlite3
-import string
+import struct
 import time
 import uuid
 from pathlib import Path
@@ -31,7 +33,9 @@ CREATE TABLE IF NOT EXISTS devices (
     command_seq INTEGER NOT NULL DEFAULT 0,
     pending_command TEXT,
     pending_created_at INTEGER,
-    last_result_json TEXT
+    last_result_json TEXT,
+    ssh_key_type TEXT,
+    ssh_public_key TEXT
 );
 
 CREATE TABLE IF NOT EXISTS pair_codes (
@@ -47,6 +51,10 @@ CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_devices_active_ssh_key
+ON devices(ssh_public_key)
+WHERE revoked=0 AND ssh_public_key IS NOT NULL AND ssh_public_key<>'';
 """
 
 
@@ -56,6 +64,32 @@ def now() -> int:
 
 def hash_secret(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _read_ssh_string(blob: bytes, offset: int) -> tuple[bytes, int]:
+    if offset + 4 > len(blob):
+        raise ValueError("invalid SSH public key")
+    length = struct.unpack(">I", blob[offset : offset + 4])[0]
+    start = offset + 4
+    end = start + length
+    if end > len(blob):
+        raise ValueError("invalid SSH public key")
+    return blob[start:end], end
+
+
+def normalize_ssh_public_key(value: str) -> str:
+    parts = str(value).strip().split()
+    if len(parts) < 2 or parts[0] != "ssh-ed25519":
+        raise ValueError("only ssh-ed25519 public keys are supported")
+    try:
+        blob = base64.b64decode(parts[1].encode("ascii"), validate=True)
+    except (UnicodeEncodeError, binascii.Error) as exc:
+        raise ValueError("invalid SSH public key") from exc
+    algorithm, offset = _read_ssh_string(blob, 0)
+    key_bytes, offset = _read_ssh_string(blob, offset)
+    if algorithm != b"ssh-ed25519" or len(key_bytes) != 32 or offset != len(blob):
+        raise ValueError("invalid SSH Ed25519 public key")
+    return f"ssh-ed25519 {parts[1]}"
 
 
 class Registry:
@@ -75,6 +109,19 @@ class Registry:
     def init_schema(self) -> None:
         with self.connect() as conn:
             conn.executescript(SCHEMA)
+            columns = {
+                str(row["name"])
+                for row in conn.execute("PRAGMA table_info(devices)").fetchall()
+            }
+            if "ssh_key_type" not in columns:
+                conn.execute("ALTER TABLE devices ADD COLUMN ssh_key_type TEXT")
+            if "ssh_public_key" not in columns:
+                conn.execute("ALTER TABLE devices ADD COLUMN ssh_public_key TEXT")
+            conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_devices_active_ssh_key "
+                "ON devices(ssh_public_key) "
+                "WHERE revoked=0 AND ssh_public_key IS NOT NULL AND ssh_public_key<>''"
+            )
 
     def get_setting(self, key: str, default: str | None = None) -> str | None:
         with self.connect() as conn:
@@ -125,19 +172,23 @@ class Registry:
         code_hash = hash_secret(code.strip().upper())
         with self.connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
-            row = conn.execute(
-                "SELECT * FROM pair_codes WHERE code_hash=?", (code_hash,)
-            ).fetchone()
-            if not row:
-                raise ValueError("invalid pair code")
-            if row["used_at"] is not None:
-                raise ValueError("pair code was already used")
-            if int(row["expires_at"]) < now():
-                raise ValueError("pair code expired")
+            row = self._load_pair(conn, code_hash)
             conn.execute(
                 "UPDATE pair_codes SET used_at=? WHERE code_hash=?", (now(), code_hash)
             )
         return dict(row)
+
+    def _load_pair(self, conn: sqlite3.Connection, code_hash: str) -> sqlite3.Row:
+        row = conn.execute(
+            "SELECT * FROM pair_codes WHERE code_hash=?", (code_hash,)
+        ).fetchone()
+        if not row:
+            raise ValueError("invalid pair code")
+        if row["used_at"] is not None:
+            raise ValueError("pair code was already used")
+        if int(row["expires_at"]) < now():
+            raise ValueError("pair code expired")
+        return row
 
     def _validate_port(self, port: int) -> None:
         if not self.port_start <= int(port) <= self.port_end:
@@ -152,23 +203,85 @@ class Registry:
             ).fetchone()
         return bool(row)
 
-    def allocate_port(self, preferred_port: int | None = None) -> int:
+    def _allocate_port_in_connection(
+        self,
+        conn: sqlite3.Connection,
+        preferred_port: int | None = None,
+    ) -> int:
         if preferred_port is not None:
             self._validate_port(preferred_port)
-            if self.port_in_use(preferred_port):
+            row = conn.execute(
+                "SELECT 1 FROM devices WHERE rdp_port=? AND revoked=0",
+                (int(preferred_port),),
+            ).fetchone()
+            if row:
                 raise ValueError(f"port {preferred_port} is already assigned")
             return int(preferred_port)
-        with self.connect() as conn:
-            used = {
-                int(row["rdp_port"])
-                for row in conn.execute(
-                    "SELECT rdp_port FROM devices WHERE revoked=0"
-                ).fetchall()
-            }
+        used = {
+            int(row["rdp_port"])
+            for row in conn.execute(
+                "SELECT rdp_port FROM devices WHERE revoked=0"
+            ).fetchall()
+        }
         for port in range(self.port_start, self.port_end + 1):
             if port not in used:
                 return port
         raise RuntimeError("no free RDP ports")
+
+    def allocate_port(self, preferred_port: int | None = None) -> int:
+        with self.connect() as conn:
+            return self._allocate_port_in_connection(conn, preferred_port)
+
+    def pair_device(
+        self,
+        *,
+        code: str,
+        display_name: str,
+        machine_name: str,
+        fingerprint: str,
+        ssh_public_key: str,
+    ) -> tuple[dict[str, Any], str]:
+        normalized_key = normalize_ssh_public_key(ssh_public_key)
+        key_type = normalized_key.split(" ", 1)[0]
+        code_hash = hash_secret(code.strip().upper())
+        device_id = uuid.uuid4().hex
+        token = secrets.token_urlsafe(40)
+        timestamp = now()
+        with self.connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            pair = self._load_pair(conn, code_hash)
+            port = self._allocate_port_in_connection(
+                conn, pair["preferred_port"]
+            )
+            name = (pair["display_name"] or display_name or machine_name).strip()
+            name = name[:64] or machine_name[:64] or "Windows PC"
+            clean_machine_name = machine_name.strip()[:128] or "unknown"
+            try:
+                conn.execute(
+                    "INSERT INTO devices("
+                    "id,display_name,machine_name,fingerprint,token_hash,rdp_port,"
+                    "created_at,updated_at,ssh_key_type,ssh_public_key"
+                    ") VALUES(?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        device_id,
+                        name,
+                        clean_machine_name,
+                        fingerprint[:256],
+                        hash_secret(token),
+                        port,
+                        timestamp,
+                        timestamp,
+                        key_type,
+                        normalized_key,
+                    ),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise ValueError("SSH key or RDP port is already assigned") from exc
+            conn.execute(
+                "UPDATE pair_codes SET used_at=? WHERE code_hash=?",
+                (timestamp, code_hash),
+            )
+        return self.get_device(device_id), token
 
     def register_device(
         self,
@@ -177,7 +290,9 @@ class Registry:
         display_name: str,
         machine_name: str,
         fingerprint: str,
+        ssh_public_key: str = "",
     ) -> tuple[dict[str, Any], str]:
+        normalized_key = normalize_ssh_public_key(ssh_public_key)
         device_id = uuid.uuid4().hex
         token = secrets.token_urlsafe(40)
         port = self.allocate_port(pair.get("preferred_port"))
@@ -187,8 +302,10 @@ class Registry:
         timestamp = now()
         with self.connect() as conn:
             conn.execute(
-                "INSERT INTO devices(id,display_name,machine_name,fingerprint,token_hash,rdp_port,"
-                "created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)",
+                "INSERT INTO devices("
+                "id,display_name,machine_name,fingerprint,token_hash,rdp_port,"
+                "created_at,updated_at,ssh_key_type,ssh_public_key"
+                ") VALUES(?,?,?,?,?,?,?,?,?,?)",
                 (
                     device_id,
                     name,
@@ -198,6 +315,8 @@ class Registry:
                     port,
                     timestamp,
                     timestamp,
+                    normalized_key.split(" ", 1)[0],
+                    normalized_key,
                 ),
             )
         return self.get_device(device_id), token
@@ -210,6 +329,21 @@ class Registry:
         if not row or not secrets.compare_digest(str(row["token_hash"]), hash_secret(token)):
             return None
         return self._device_row(row)
+
+    def authorize_ssh_key(
+        self, key_type: str, key_blob: str
+    ) -> dict[str, Any] | None:
+        try:
+            normalized = normalize_ssh_public_key(f"{key_type} {key_blob}")
+        except ValueError:
+            return None
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM devices "
+                "WHERE ssh_public_key=? AND enabled=1 AND revoked=0",
+                (normalized,),
+            ).fetchone()
+        return self._device_row(row) if row else None
 
     def _device_row(self, row: sqlite3.Row) -> dict[str, Any]:
         data = dict(row)
@@ -325,12 +459,21 @@ class Registry:
                 (clean, now(), device_id),
             )
 
-    def revoke_device(self, device_id: str) -> None:
+    def set_enabled(self, device_id: str, enabled: bool) -> None:
         with self.connect() as conn:
-            conn.execute(
-                "UPDATE devices SET revoked=1,pending_command=NULL,updated_at=? WHERE id=?",
-                (now(), device_id),
+            cursor = conn.execute(
+                "UPDATE devices SET enabled=?,updated_at=? WHERE id=? AND revoked=0",
+                (1 if enabled else 0, now(), device_id),
             )
+            if cursor.rowcount == 0:
+                raise KeyError(device_id)
+
+    def revoke_device(self, device_id: str) -> None:
+        # Hard revoke: API token and SSH key disappear and the port is reusable.
+        with self.connect() as conn:
+            cursor = conn.execute("DELETE FROM devices WHERE id=?", (device_id,))
+            if cursor.rowcount == 0:
+                raise KeyError(device_id)
 
     def cleanup(self) -> None:
         cutoff = now() - 86400
