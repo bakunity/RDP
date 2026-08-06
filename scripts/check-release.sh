@@ -18,13 +18,29 @@ python3 scripts/check-public-examples.py
 
 echo '== Installer archive reference =='
 python3 -c "from pathlib import Path; t=Path('scripts/install-server.sh').read_text(); assert 'archive/refs/heads/\$REF.tar.gz' not in t, 'installer treats release refs as branches'; assert 'https://codeload.github.com/\$REPO/tar.gz/\$REF' in t, 'missing branch/tag compatible archive endpoint'; print('installer-archive-ref=OK')"
+
 echo '== Release metadata =='
 python3 - <<'PY'
 from __future__ import annotations
 
 import re
-import tomllib
 from pathlib import Path
+
+
+def read_project_version(path: Path) -> str:
+    in_project = False
+    for raw_line in path.read_text(encoding='utf-8').splitlines():
+        line = raw_line.strip()
+        if line.startswith('[') and line.endswith(']'):
+            in_project = line == '[project]'
+            continue
+        if not in_project:
+            continue
+        match = re.fullmatch(r'version\s*=\s*"([^"]+)"', line)
+        if match:
+            return match.group(1)
+    raise SystemExit(f'project.version not found in {path}')
+
 
 root = Path.cwd()
 version = (root / 'VERSION').read_text(encoding='utf-8').strip()
@@ -36,8 +52,7 @@ match = re.search(r'__version__\s*=\s*"([^"]+)"', init_text)
 if not match or match.group(1) != version:
     raise SystemExit('__version__ does not match VERSION')
 
-with (root / 'server/pyproject.toml').open('rb') as handle:
-    package_version = tomllib.load(handle)['project']['version']
+package_version = read_project_version(root / 'server/pyproject.toml')
 if package_version != version:
     raise SystemExit('pyproject version does not match VERSION')
 
