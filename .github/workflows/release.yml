@@ -20,21 +20,27 @@ concurrency:
 jobs:
   release:
     name: Tag and publish GitHub Release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+      - name: Fetch exact release commit without marketplace actions
+        run: |
+          set -Eeuo pipefail
+          git init repo
+          cd repo
+          git remote add origin \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 origin "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
 
       - name: Validate release tree
+        working-directory: repo
         run: bash scripts/check-release.sh
 
       - name: Resolve version
         id: version
+        working-directory: repo
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -47,6 +53,7 @@ jobs:
           echo "notes=$NOTES" >> "$GITHUB_OUTPUT"
 
       - name: Create immutable release tag
+        working-directory: repo
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -61,8 +68,7 @@ jobs:
           git push origin "$TAG"
 
       - name: Publish GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
+        working-directory: repo
         shell: bash
         run: |
           set -Eeuo pipefail

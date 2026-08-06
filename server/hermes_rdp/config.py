@@ -12,7 +12,8 @@ DEFAULT_CONFIG = Path("/etc/hermes-rdp/config.json")
 class Config:
     public_host: str
     api_port: int
-    frp_bind_port: int
+    ssh_bind_port: int
+    ssh_user: str
     port_start: int
     port_end: int
     data_dir: Path
@@ -22,9 +23,10 @@ class Config:
     tls_cert_file: Path
     tls_key_file: Path
     tls_fingerprint_file: Path
-    frp_token_file: Path
-    frp_ca_file: Path
+    ssh_host_key_file: Path
     client_installer_url: str
+    repository_ref: str
+    close_tunnel_helper: Path
     online_after_seconds: int = 15
     pair_ttl_seconds: int = 900
 
@@ -40,12 +42,15 @@ class Config:
         return self.read_secret(self.telegram_token_file)
 
     @property
-    def frp_token(self) -> str:
-        return self.read_secret(self.frp_token_file)
-
-    @property
     def tls_fingerprint(self) -> str:
         return self.read_secret(self.tls_fingerprint_file).upper()
+
+    @property
+    def ssh_host_key(self) -> str:
+        parts = self.read_secret(self.ssh_host_key_file).split()
+        if len(parts) < 2:
+            raise ValueError("invalid SSH host public key")
+        return f"{parts[0]} {parts[1]}"
 
 
 def load_config(path: str | Path = DEFAULT_CONFIG) -> Config:
@@ -55,7 +60,8 @@ def load_config(path: str | Path = DEFAULT_CONFIG) -> Config:
     return Config(
         public_host=str(data["public_host"]),
         api_port=int(data.get("api_port", 7443)),
-        frp_bind_port=int(data.get("frp_bind_port", 7000)),
+        ssh_bind_port=int(data.get("ssh_bind_port", data.get("frp_bind_port", 7000))),
+        ssh_user=str(data.get("ssh_user", "hermes-tunnel")),
         port_start=int(data.get("port_start", 53389)),
         port_end=int(data.get("port_end", 53420)),
         data_dir=data_dir,
@@ -69,12 +75,20 @@ def load_config(path: str | Path = DEFAULT_CONFIG) -> Config:
         tls_fingerprint_file=Path(
             data.get("tls_fingerprint_file", "/etc/hermes-rdp/tls/api.sha256")
         ),
-        frp_token_file=Path(data.get("frp_token_file", "/etc/hermes-rdp/frp-token")),
-        frp_ca_file=Path(data.get("frp_ca_file", "/etc/hermes-rdp/frp-ca.crt")),
+        ssh_host_key_file=Path(
+            data.get("ssh_host_key_file", "/etc/hermes-rdp/ssh-host-key.pub")
+        ),
         client_installer_url=str(
             data.get(
                 "client_installer_url",
                 "https://raw.githubusercontent.com/bakunity/RDP/main/scripts/install-client.ps1",
+            )
+        ),
+        repository_ref=str(data.get("repository_ref", "main")),
+        close_tunnel_helper=Path(
+            data.get(
+                "close_tunnel_helper",
+                "/usr/local/sbin/hermes-rdp-close-tunnel",
             )
         ),
         online_after_seconds=int(data.get("online_after_seconds", 15)),

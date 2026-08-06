@@ -2,15 +2,15 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import socket
 import ssl
-import sys
+import subprocess
 import time
 import urllib.request
 
 from .config import load_config
 from .db import Registry
+from .tunnel import close_tunnel
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -37,6 +37,11 @@ def build_parser() -> argparse.ArgumentParser:
     dashboard_sub = dashboard.add_subparsers(dest="dashboard_command", required=True)
     dashboard_sub.add_parser("reset")
 
+    auth = sub.add_parser("authorized-key")
+    auth.add_argument("username")
+    auth.add_argument("key_type")
+    auth.add_argument("key_blob")
+
     sub.add_parser("doctor")
     return parser
 
@@ -60,15 +65,25 @@ def main() -> None:
 
     if args.command == "devices" and args.devices_command == "list":
         for device in registry.list_devices():
-            age = "never" if not device.get("last_seen") else str(int(time.time()) - int(device["last_seen"]))
+            age = (
+                "never"
+                if not device.get("last_seen")
+                else str(int(time.time()) - int(device["last_seen"]))
+            )
+            key_state = "ssh-key=yes" if device.get("ssh_public_key") else "ssh-key=no"
             print(
                 f"{device['id']}\t{device['display_name']}\t{device['machine_name']}\t"
-                f"{device['rdp_port']}\tlast_seen={age}s"
+                f"{device['rdp_port']}\t{key_state}\tlast_seen={age}s"
             )
         return
 
     if args.command == "devices" and args.devices_command == "delete":
+        device = registry.get_device(args.device_id)
         registry.revoke_device(args.device_id)
+        try:
+            close_tunnel(config, int(device["rdp_port"]))
+        except Exception as exc:
+            print(f"WARNING: tunnel close failed: {exc}")
         print("OK")
         return
 
@@ -84,6 +99,20 @@ def main() -> None:
         print("Dashboard state reset. Send /start to the bot.")
         return
 
+    if args.command == "authorized-key":
+        device = registry.authorize_ssh_key(args.key_type, args.key_blob)
+        if device and args.username == config.ssh_user:
+            port = int(device["rdp_port"])
+            options = (
+                "no-agent-forwarding,no-X11-forwarding,no-pty,no-user-rc,"
+                f'permitlisten="0.0.0.0:{port}"'
+            )
+            print(
+                f"{options} {device['ssh_public_key']} "
+                f"hermes-rdp-{device['id']}"
+            )
+        return
+
     if args.command == "doctor":
         errors = 0
         print(f"config: OK ({config.public_host})")
@@ -96,12 +125,12 @@ def main() -> None:
                 timeout=5,
             ) as response:
                 payload = json.loads(response.read().decode("utf-8"))
-            print(f"api: OK ({payload.get('version')})")
+            print(f"api: OK ({payload.get('version')}, {payload.get('tunnel')})")
         except Exception as exc:
             errors += 1
             print(f"api: FAIL ({exc})")
         for port, name in [
-            (config.frp_bind_port, "frp-control"),
+            (config.ssh_bind_port, "ssh-tunnel"),
             (config.api_port, "api"),
         ]:
             sock = socket.socket()
@@ -114,6 +143,20 @@ def main() -> None:
                 print(f"{name}: FAIL {port} ({exc})")
             finally:
                 sock.close()
+        try:
+            completed = subprocess.run(
+                ["/usr/sbin/sshd", "-t", "-f", "/etc/hermes-rdp/sshd_config"],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if completed.returncode:
+                raise RuntimeError((completed.stderr or completed.stdout).strip())
+            print("ssh-config: OK")
+        except Exception as exc:
+            errors += 1
+            print(f"ssh-config: FAIL ({exc})")
         if errors:
             raise SystemExit(1)
         return

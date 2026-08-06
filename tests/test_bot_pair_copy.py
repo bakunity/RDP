@@ -29,15 +29,16 @@ class TelegramPairCommandTests(unittest.TestCase):
         root = Path(self.temp.name)
         token = root / "telegram-token"
         fingerprint = root / "api.sha256"
-        frp_token = root / "frp-token"
+        host_key = root / "ssh-host-key.pub"
         token.write_text("test-token", encoding="utf-8")
         fingerprint.write_text("AA11BB22", encoding="utf-8")
-        frp_token.write_text("frp-token", encoding="utf-8")
+        host_key.write_text("ssh-ed25519 AAAATEST", encoding="utf-8")
         self.registry = FakeRegistry()
         self.config = Config(
             public_host="server.example",
             api_port=7443,
-            frp_bind_port=7000,
+            ssh_bind_port=7000,
+            ssh_user="hermes-tunnel",
             port_start=53389,
             port_end=53420,
             data_dir=root,
@@ -47,9 +48,10 @@ class TelegramPairCommandTests(unittest.TestCase):
             tls_cert_file=root / "api.crt",
             tls_key_file=root / "api.key",
             tls_fingerprint_file=fingerprint,
-            frp_token_file=frp_token,
-            frp_ca_file=root / "frp-ca.crt",
+            ssh_host_key_file=host_key,
             client_installer_url="https://example.test/install-client.ps1?a=1&b=2",
+            repository_ref="v1.1.0",
+            close_tunnel_helper=root / "close-tunnel",
         )
         self.bot = TelegramBot(self.config, self.registry)
 
@@ -65,6 +67,7 @@ class TelegramPairCommandTests(unittest.TestCase):
         self.assertIn("Server=&#x27;server.example&#x27;", text)
         self.assertIn("PairCode=&#x27;ABCD1234&#x27;", text)
         self.assertIn("Fingerprint=&#x27;AA11BB22&#x27;", text)
+        self.assertIn("RepositoryRef=&#x27;v1.1.0&#x27;", text)
         self.assertIn("a=1&amp;b=2", text)
         self.assertIn("&amp; ([scriptblock]::Create($s)) @p</code></pre>", text)
         self.assertNotIn("Create((irm $u))", text)

@@ -5,11 +5,71 @@ $BaseDir = 'C:\ProgramData\HermesRDP'
 $ConfigPath = Join-Path $BaseDir 'device.json'
 $StatePath = Join-Path $BaseDir 'agent-state.json'
 $LogPath = Join-Path $BaseDir 'agent.log'
-$FrpcPath = Join-Path $BaseDir 'frpc.exe'
-$FrpcConfig = Join-Path $BaseDir 'frpc.toml'
+$SshErrorLog = Join-Path $BaseDir 'ssh-error.log'
 $PollSeconds = 3
-$script:ExpectedFingerprint = ''
 $script:Http = $null
+
+$PinnedHttpClientSource = @'
+using System;
+using System.Net.Http;
+using System.Net.Security;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
+
+namespace HermesRdp
+{
+    public static class AgentPinnedHttpClientFactory
+    {
+        private static string Normalize(string value)
+        {
+            var result = new StringBuilder();
+            if (value == null) return String.Empty;
+            foreach (char character in value)
+            {
+                if (Uri.IsHexDigit(character))
+                    result.Append(Char.ToUpperInvariant(character));
+            }
+            return result.ToString();
+        }
+
+        public static HttpClient Create(string fingerprint)
+        {
+            string expected = Normalize(fingerprint);
+            var handler = new HttpClientHandler();
+            handler.ServerCertificateCustomValidationCallback = delegate(
+                HttpRequestMessage request,
+                X509Certificate2 certificate,
+                X509Chain chain,
+                SslPolicyErrors errors)
+            {
+                if (certificate == null || expected.Length != 64) return false;
+                using (SHA256 sha = SHA256.Create())
+                {
+                    string actual = BitConverter.ToString(
+                        sha.ComputeHash(certificate.RawData)
+                    ).Replace("-", String.Empty);
+                    return String.Equals(
+                        actual,
+                        expected,
+                        StringComparison.OrdinalIgnoreCase
+                    );
+                }
+            };
+            var client = new HttpClient(handler);
+            client.Timeout = TimeSpan.FromSeconds(20);
+            return client;
+        }
+    }
+}
+'@
+
+if (-not ('HermesRdp.AgentPinnedHttpClientFactory' -as [type])) {
+    Add-Type `
+        -TypeDefinition $PinnedHttpClientSource `
+        -Language CSharp `
+        -ReferencedAssemblies 'System.Net.Http.dll'
+}
 
 function Write-AgentLog {
     param([string]$Message)
@@ -55,33 +115,6 @@ function Get-AgentState {
     return $State
 }
 
-function New-PinnedHttpClient {
-    param([string]$Fingerprint)
-    $script:ExpectedFingerprint = ($Fingerprint -replace '[^0-9A-Fa-f]', '').ToUpperInvariant()
-    $Handler = New-Object System.Net.Http.HttpClientHandler
-    $Handler.ServerCertificateCustomValidationCallback = {
-        param($Request, $Certificate, $Chain, $SslPolicyErrors)
-        try {
-            $Sha = [Security.Cryptography.SHA256]::Create()
-            try {
-                $Actual = ([BitConverter]::ToString(
-                    $Sha.ComputeHash($Certificate.GetRawCertData())
-                )).Replace('-', '').ToUpperInvariant()
-            }
-            finally {
-                $Sha.Dispose()
-            }
-            return $Actual -eq $script:ExpectedFingerprint
-        }
-        catch {
-            return $false
-        }
-    }
-    $Client = New-Object System.Net.Http.HttpClient($Handler)
-    $Client.Timeout = [TimeSpan]::FromSeconds(20)
-    return $Client
-}
-
 function Invoke-ApiPost {
     param(
         [string]$Url,
@@ -99,10 +132,11 @@ function Invoke-ApiPost {
         'application/json'
     )
     if ($Token) {
-        $Request.Headers.Authorization = New-Object System.Net.Http.Headers.AuthenticationHeaderValue(
-            'Bearer',
-            $Token
-        )
+        $Request.Headers.Authorization =
+            New-Object System.Net.Http.Headers.AuthenticationHeaderValue(
+                'Bearer',
+                $Token
+            )
     }
     try {
         $Response = $script:Http.SendAsync($Request).GetAwaiter().GetResult()
@@ -125,43 +159,97 @@ function Invoke-ApiPost {
     }
 }
 
-function Get-FrpcProcesses {
-    return Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
-        Where-Object {
-            $_.ExecutablePath -eq $FrpcPath -or
-            ($_.Name -eq 'frpc.exe' -and $_.CommandLine -like "*$FrpcConfig*")
-        }
+function Get-SshProcesses {
+    return @(
+        Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+            Where-Object {
+                $_.Name -eq 'ssh.exe' -and
+                $_.CommandLine -and
+                $_.CommandLine.Contains([string]$Config.ssh_key_path) -and
+                $_.CommandLine.Contains(
+                    "0.0.0.0:$($Config.rdp_port):127.0.0.1:3389"
+                )
+            }
+    )
 }
 
-function Start-Frpc {
-    $Existing = @(Get-FrpcProcesses)
-    if ($Existing.Count -gt 0) {
-        return 'FRPC уже запущен'
+function Start-SshTunnel {
+    if ((Get-SshProcesses).Count -gt 0) {
+        return 'SSH-туннель уже запущен'
     }
-    $Process = Start-Process -FilePath $FrpcPath `
-        -ArgumentList @('-c', $FrpcConfig) `
+
+    if (-not (Test-Path -LiteralPath $Config.ssh_path)) {
+        throw "Не найден ssh.exe: $($Config.ssh_path)"
+    }
+
+    $Arguments = @(
+        '-N'
+        '-T'
+        '-p'
+        [string]$Config.ssh_port
+        '-i'
+        [string]$Config.ssh_key_path
+        '-o'
+        'BatchMode=yes'
+        '-o'
+        'ExitOnForwardFailure=yes'
+        '-o'
+        'ServerAliveInterval=30'
+        '-o'
+        'ServerAliveCountMax=3'
+        '-o'
+        'ConnectTimeout=15'
+        '-o'
+        'StrictHostKeyChecking=yes'
+        '-o'
+        "UserKnownHostsFile=$($Config.known_hosts_path)"
+        '-o'
+        'GlobalKnownHostsFile=NUL'
+        '-o'
+        'LogLevel=ERROR'
+        '-R'
+        "0.0.0.0:$($Config.rdp_port):127.0.0.1:3389"
+        "$($Config.ssh_user)@$($Config.server)"
+    )
+
+    if (Test-Path -LiteralPath $SshErrorLog) {
+        Remove-Item -LiteralPath $SshErrorLog -Force -ErrorAction SilentlyContinue
+    }
+
+    $Process = Start-Process `
+        -FilePath $Config.ssh_path `
+        -ArgumentList $Arguments `
         -WorkingDirectory $BaseDir `
         -WindowStyle Hidden `
+        -RedirectStandardError $SshErrorLog `
         -PassThru
-    Start-Sleep -Seconds 2
+
+    Start-Sleep -Seconds 3
     if ($Process.HasExited) {
-        throw "FRPC завершился с кодом $($Process.ExitCode)"
+        $Detail = ''
+        if (Test-Path -LiteralPath $SshErrorLog) {
+            $Detail = (
+                Get-Content -LiteralPath $SshErrorLog -Tail 20 |
+                    Out-String
+            ).Trim()
+        }
+        throw "SSH завершился с кодом $($Process.ExitCode): $Detail"
     }
-    return "FRPC запущен, PID $($Process.Id)"
+    return "SSH-туннель запущен, PID $($Process.Id)"
 }
 
-function Stop-Frpc {
-    $Processes = @(Get-FrpcProcesses)
+function Stop-SshTunnel {
+    $Processes = @(Get-SshProcesses)
     foreach ($Process in $Processes) {
         Stop-Process -Id $Process.ProcessId -Force -ErrorAction SilentlyContinue
     }
-    return "FRPC остановлен ($($Processes.Count) процессов)"
+    return "SSH-туннель остановлен ($($Processes.Count) процессов)"
 }
 
-function Restart-Frpc {
-    [void](Stop-Frpc)
+function Restart-SshTunnel {
+    [void](Stop-SshTunnel)
     Start-Sleep -Seconds 1
-    return Start-Frpc
+    return Start-SshTunnel
 }
 
 function Get-CpuPercent {
@@ -255,7 +343,9 @@ function Get-RouteName {
             Sort-Object RouteMetric, InterfaceMetric |
             Select-Object -First 1
         if ($Route) {
-            $Adapter = Get-NetAdapter -InterfaceIndex $Route.InterfaceIndex -ErrorAction SilentlyContinue
+            $Adapter = Get-NetAdapter `
+                -InterfaceIndex $Route.InterfaceIndex `
+                -ErrorAction SilentlyContinue
             if ($Adapter) {
                 return $Adapter.Name
             }
@@ -281,9 +371,20 @@ function Get-TopProcesses {
     $Rows = @()
     foreach ($Process in Get-Process -ErrorAction SilentlyContinue) {
         try {
-            $Before = if ($First.ContainsKey($Process.Id)) { $First[$Process.Id] } else { [double]$Process.CPU }
-            $Delta = [math]::Max(0.0, [double]$Process.CPU - $Before)
-            $Percent = [math]::Round(($Delta / $Elapsed / $Logical) * 100, 1)
+            $Before = if ($First.ContainsKey($Process.Id)) {
+                $First[$Process.Id]
+            }
+            else {
+                [double]$Process.CPU
+            }
+            $Delta = [math]::Max(
+                0.0,
+                [double]$Process.CPU - $Before
+            )
+            $Percent = [math]::Round(
+                ($Delta / $Elapsed / $Logical) * 100,
+                1
+            )
             $Rows += [pscustomobject]@{
                 name = $Process.ProcessName
                 pid = $Process.Id
@@ -294,7 +395,11 @@ function Get-TopProcesses {
         catch {
         }
     }
-    return @($Rows | Sort-Object cpu_percent, memory_bytes -Descending | Select-Object -First 5)
+    return @(
+        $Rows |
+            Sort-Object cpu_percent, memory_bytes -Descending |
+            Select-Object -First 5
+    )
 }
 
 function Get-Telemetry {
@@ -302,15 +407,16 @@ function Get-Telemetry {
     $Disk = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'"
     $RamTotal = [int64]$Os.TotalVisibleMemorySize * 1KB
     $RamFree = [int64]$Os.FreePhysicalMemory * 1KB
-    $RamUsed = [int64]($RamTotal - $RamFree)
-    if ($RamUsed -lt 0) { $RamUsed = 0 }
+    $RamUsed = [math]::Max(0, [int64]($RamTotal - $RamFree))
     $DiskTotal = [int64]$Disk.Size
     $DiskFree = [int64]$Disk.FreeSpace
-    $DiskUsed = [int64]($DiskTotal - $DiskFree)
-    if ($DiskUsed -lt 0) { $DiskUsed = 0 }
+    $DiskUsed = [math]::Max(0, [int64]($DiskTotal - $DiskFree))
     $Network = Get-NetworkTotals
     $RdpConnections = @(
-        Get-NetTCPConnection -LocalPort 3389 -State Established -ErrorAction SilentlyContinue
+        Get-NetTCPConnection `
+            -LocalPort 3389 `
+            -State Established `
+            -ErrorAction SilentlyContinue
     )
     $RemoteAddresses = @(
         $RdpConnections |
@@ -327,11 +433,12 @@ function Get-Telemetry {
         )
     }
     $Uptime = [int]((Get-Date) - $Boot).TotalSeconds
-    $FrpcRunning = @(Get-FrpcProcesses).Count -gt 0
+    $TunnelRunning = (Get-SshProcesses).Count -gt 0
     $EndpointAvailable = Test-TcpPort `
         -HostName $Config.server `
         -Port ([int]$Config.rdp_port) `
         -TimeoutMs 1500
+
     return [ordered]@{
         captured_at = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
         computer_name = $env:COMPUTERNAME
@@ -341,14 +448,20 @@ function Get-Telemetry {
         cpu_percent = Get-CpuPercent
         ram_total_bytes = $RamTotal
         ram_used_bytes = $RamUsed
-        ram_percent = if ($RamTotal -gt 0) { [math]::Round(($RamUsed / $RamTotal) * 100, 1) } else { 0 }
+        ram_percent = if ($RamTotal -gt 0) {
+            [math]::Round(($RamUsed / $RamTotal) * 100, 1)
+        }
+        else { 0 }
         disk_total_bytes = $DiskTotal
         disk_used_bytes = $DiskUsed
-        disk_percent = if ($DiskTotal -gt 0) { [math]::Round(($DiskUsed / $DiskTotal) * 100, 1) } else { 0 }
+        disk_percent = if ($DiskTotal -gt 0) {
+            [math]::Round(($DiskUsed / $DiskTotal) * 100, 1)
+        }
+        else { 0 }
         network_received_bytes = [int64]$Network[0]
         network_sent_bytes = [int64]$Network[1]
         route = Get-RouteName
-        frpc_running = $FrpcRunning
+        ssh_tunnel_running = $TunnelRunning
         endpoint_available = [bool]$EndpointAvailable
         rdp_connections = $RdpConnections.Count
         rdp_remote_addresses = $RemoteAddresses
@@ -368,18 +481,18 @@ function Invoke-CommandAction {
         }
         else {
             switch ([string]$Command.action) {
-            'on' {
-                $State.enabled = $true
-                $Message = Start-Frpc
-            }
-            'off' {
-                $State.enabled = $false
-                $Message = Stop-Frpc
-            }
-            'restart' {
-                $State.enabled = $true
-                $Message = Restart-Frpc
-            }
+                'on' {
+                    $State.enabled = $true
+                    $Message = Start-SshTunnel
+                }
+                'off' {
+                    $State.enabled = $false
+                    $Message = Stop-SshTunnel
+                }
+                'restart' {
+                    $State.enabled = $true
+                    $Message = Restart-SshTunnel
+                }
                 default {
                     throw "Неизвестная команда: $($Command.action)"
                 }
@@ -410,32 +523,44 @@ function Invoke-CommandAction {
 if (-not (Test-Path -LiteralPath $ConfigPath)) {
     throw "Не найден конфиг: $ConfigPath"
 }
+
 $Config = Read-JsonFile -Path $ConfigPath
-$script:Http = New-PinnedHttpClient -Fingerprint $Config.api_fingerprint
+$script:Http = [HermesRdp.AgentPinnedHttpClientFactory]::Create(
+    [string]$Config.api_fingerprint
+)
 $State = Get-AgentState
+
 if ($State.enabled) {
-    try { [void](Start-Frpc) } catch { Write-AgentLog $_.Exception.Message }
+    try {
+        [void](Start-SshTunnel)
+    }
+    catch {
+        Write-AgentLog $_.Exception.Message
+    }
 }
 else {
-    [void](Stop-Frpc)
+    [void](Stop-SshTunnel)
 }
-Write-AgentLog 'Hermes RDP Agent started'
+
+Write-AgentLog 'Hermes RDP OpenSSH Agent started'
 
 while ($true) {
     $Cycle = [Diagnostics.Stopwatch]::StartNew()
     try {
         $State = Get-AgentState
-        if ($State.enabled -and @(Get-FrpcProcesses).Count -eq 0) {
-            [void](Start-Frpc)
+        if ($State.enabled -and (Get-SshProcesses).Count -eq 0) {
+            [void](Start-SshTunnel)
         }
-        if (-not $State.enabled -and @(Get-FrpcProcesses).Count -gt 0) {
-            [void](Stop-Frpc)
+        if (-not $State.enabled -and (Get-SshProcesses).Count -gt 0) {
+            [void](Stop-SshTunnel)
         }
+
         $Telemetry = Get-Telemetry
         $Response = Invoke-ApiPost `
             -Url "$($Config.api_base_url)/v1/devices/$($Config.device_id)/telemetry" `
             -Token $Config.device_token `
             -Body @{ telemetry = $Telemetry }
+
         if ($Response.command) {
             Invoke-CommandAction -Command $Response.command
         }
@@ -446,6 +571,10 @@ while ($true) {
     finally {
         $Cycle.Stop()
     }
-    $SleepMs = [math]::Max(250, [int](($PollSeconds * 1000) - $Cycle.ElapsedMilliseconds))
+
+    $SleepMs = [math]::Max(
+        250,
+        [int](($PollSeconds * 1000) - $Cycle.ElapsedMilliseconds)
+    )
     Start-Sleep -Milliseconds $SleepMs
 }

@@ -1,7 +1,7 @@
 [Unit]
 Description=Hermes RDP API and Telegram dashboard
-After=network-online.target frps.service
-Wants=network-online.target frps.service
+After=network-online.target hermes-rdp-sshd.service
+Wants=network-online.target hermes-rdp-sshd.service
 
 [Service]
 Type=simple
@@ -12,7 +12,6 @@ ExecStart=/usr/bin/python3 -m hermes_rdp.service
 Restart=always
 RestartSec=5
 UMask=0027
-NoNewPrivileges=true
 PrivateTmp=true
 PrivateDevices=true
 ProtectSystem=strict

@@ -1,0 +1,16 @@
+[Unit]
+Description=Hermes RDP isolated OpenSSH tunnel daemon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStartPre=/usr/sbin/sshd -t -f /etc/hermes-rdp/sshd_config
+ExecStart=/usr/sbin/sshd -D -e -f /etc/hermes-rdp/sshd_config
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=3
+KillMode=control-group
+
+[Install]
+WantedBy=multi-user.target

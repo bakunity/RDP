@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 from . import __version__
 from .config import Config
 from .db import Registry
+from .tunnel import close_tunnel
 
 
 LOG = logging.getLogger("hermes_rdp.api")
@@ -75,6 +76,8 @@ class ApiHandler(BaseHTTPRequestHandler):
                     "service": "hermes-rdp",
                     "version": __version__,
                     "fingerprint": self.server.config.tls_fingerprint,
+                    "tunnel": "openssh",
+                    "ssh_port": self.server.config.ssh_bind_port,
                 },
             )
             return
@@ -95,6 +98,9 @@ class ApiHandler(BaseHTTPRequestHandler):
                 if action == "command-result":
                     self._command_result(device_id)
                     return
+                if action == "revoke-self":
+                    self._revoke_self(device_id)
+                    return
             self._json(HTTPStatus.NOT_FOUND, {"ok": False, "error": "not found"})
         except json.JSONDecodeError:
             self._json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "invalid JSON"})
@@ -112,14 +118,15 @@ class ApiHandler(BaseHTTPRequestHandler):
         code = str(body.get("code", "")).strip().upper()
         if len(code) != 8:
             raise ValueError("invalid pair code")
-        pair = self.server.registry.consume_pair_code(code)
-        device, device_token = self.server.registry.register_device(
-            pair=pair,
+        # Validate/read server identity before consuming the one-time code.
+        ssh_host_key = self.server.config.ssh_host_key
+        device, device_token = self.server.registry.pair_device(
+            code=code,
             display_name=str(body.get("display_name", "")),
             machine_name=str(body.get("machine_name", "")),
             fingerprint=str(body.get("fingerprint", "")),
+            ssh_public_key=str(body.get("ssh_public_key", "")),
         )
-        ca_pem = self.server.config.frp_ca_file.read_text(encoding="utf-8")
         self._json(
             HTTPStatus.CREATED,
             {
@@ -134,11 +141,12 @@ class ApiHandler(BaseHTTPRequestHandler):
                     "base_url": self.server.config.api_base_url,
                     "fingerprint": self.server.config.tls_fingerprint,
                 },
-                "frp": {
-                    "server_addr": self.server.config.public_host,
-                    "server_port": self.server.config.frp_bind_port,
-                    "token": self.server.config.frp_token,
-                    "ca_pem": ca_pem,
+                "ssh": {
+                    "host": self.server.config.public_host,
+                    "port": self.server.config.ssh_bind_port,
+                    "user": self.server.config.ssh_user,
+                    "host_key": ssh_host_key,
+                    "remote_bind": "0.0.0.0",
                 },
             },
         )
@@ -165,6 +173,18 @@ class ApiHandler(BaseHTTPRequestHandler):
             bool(body.get("ok", False)),
             str(body.get("message", "")),
         )
+        self._json(HTTPStatus.OK, {"ok": True})
+
+    def _revoke_self(self, device_id: str) -> None:
+        device = self._device_auth(device_id)
+        if not device:
+            self._json(HTTPStatus.UNAUTHORIZED, {"ok": False, "error": "unauthorized"})
+            return
+        self.server.registry.revoke_device(device_id)
+        try:
+            close_tunnel(self.server.config, int(device["rdp_port"]))
+        except Exception as exc:
+            LOG.warning("self-revoke tunnel close failed: %s", exc)
         self._json(HTTPStatus.OK, {"ok": True})
 
 

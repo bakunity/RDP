@@ -8,25 +8,49 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   linux:
     name: Linux validation
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+      - name: Clone tested branch without marketplace actions
+        run: |
+          set -Eeuo pipefail
+          BRANCH="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          git clone \
+            --depth=1 \
+            --branch "$BRANCH" \
+            "https://github.com/${GITHUB_REPOSITORY}.git" \
+            repo
       - name: Full release checks
+        working-directory: repo
         run: bash scripts/check-release.sh
 
   windows:
     name: Windows PowerShell 5.1 validation
-    runs-on: windows-latest
+    runs-on: windows-2022
     steps:
-      - uses: actions/checkout@v4
+      - name: Clone tested branch without marketplace actions
+        shell: powershell
+        run: |
+          $Branch = if ($env:GITHUB_HEAD_REF) {
+            $env:GITHUB_HEAD_REF
+          }
+          else {
+            $env:GITHUB_REF_NAME
+          }
+          git clone `
+            --depth=1 `
+            --branch $Branch `
+            "https://github.com/$env:GITHUB_REPOSITORY.git" `
+            repo
       - name: Parse all PowerShell files
         shell: powershell
+        working-directory: repo
         run: |
           $Failed = $false
           Get-ChildItem -Recurse -Filter *.ps1 | ForEach-Object {
@@ -46,4 +70,5 @@ jobs:
           if ($Failed) { exit 1 }
       - name: Execute static certificate pinning test
         shell: powershell
+        working-directory: repo
         run: .\tests\Test-PinnedHttpClient.ps1
