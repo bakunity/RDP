@@ -4,7 +4,34 @@
 
 ## [Unreleased]
 
-Пока нет изменений после `v1.0.0`.
+Пока нет изменений после `v1.0.1`.
+
+## [1.0.1] — 2026-08-06
+
+Документационный и privacy-патч для безопасного публичного тестирования проекта.
+
+### Добавлено
+
+- пошаговый сценарий [тестирования от А до Я](docs/TESTING_A_TO_Z.md) на отдельном сервере, новом Telegram-боте и новом Windows-ПК;
+- acceptance checklist для server install, Telegram dashboard, telemetry, RDP, ON/OFF/RESTART, reboot и Multi-PC;
+- готовые диагностические команды для Linux и Windows;
+- постоянный CI-сканер `scripts/check-public-examples.py`, блокирующий случайно добавленные публичные IP-адреса;
+- privacy scan в `scripts/check-release.sh`.
+
+### Изменено
+
+- реальные IP-адреса, machine names, usernames и client addresses заменены на нейтральные переменные;
+- примеры используют `SERVER_IP_OR_DOMAIN`, `WINDOWS-PC-01`, `WINDOWS_USER` и `CLIENT_IP_ADDRESS`;
+- пользовательские команды обновлены до стабильного тега `v1.0.1`;
+- описание релиза `v1.0.0` также очищено от project-specific примеров;
+- первый Windows-ПК в документации больше не связан с конкретным владельцем или инфраструктурой.
+
+### Совместимость
+
+- серверный API и Windows agent остаются обратно совместимыми с `v1.0.0`;
+- стандартные порты `7000`, `7443` и `53389–53420` не изменены;
+- формат SQLite и pairing contract не изменены;
+- обновление является безопасным PATCH-релизом.
 
 ## [1.0.0] — 2026-08-06
 
@@ -16,7 +43,7 @@
 - одинаковый Windows-клиент для основного и дополнительных ПК;
 - автоматическая регистрация устройств по одноразовому восьмисимвольному коду;
 - автоматическое распределение постоянных RDP-портов;
-- возможность сохранить `53389` за текущим «Домашним ПК» при миграции;
+- возможность сохранить `53389` за первым Windows-ПК при миграции;
 - отдельные `device_id`, API tokens, FRP proxy names и очереди команд;
 - Telegram Multi-PC dashboard в одном редактируемом сообщении;
 - ONLINE/OFFLINE, ON/OFF/RESTART и LIVE-обновление каждые 3 секунды;
@@ -46,5 +73,6 @@
 - удаление устройства отзывает API-доступ, но для полного отзыва скомпрометированного FRP token требуется его ротация и переподключение доверенных ПК;
 - Windows-клиент рассчитан на 64-битные Windows Pro, Enterprise или Education с поддержкой входящего RDP.
 
-[Unreleased]: https://github.com/bakunity/RDP/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/bakunity/RDP/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/bakunity/RDP/releases/tag/v1.0.1
 [1.0.0]: https://github.com/bakunity/RDP/releases/tag/v1.0.0
