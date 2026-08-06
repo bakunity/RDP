@@ -35,7 +35,7 @@
     "name": "Hermes RDP",
     "applicationCategory": "DeveloperApplication",
     "operatingSystem": "Linux server, Windows 10/11 client",
-    "softwareVersion": "1.0.1",
+    "softwareVersion": "1.0.2",
     "url": "https://hermes-rdp.vercel.app/",
     "downloadUrl": "https://github.com/bakunity/RDP/releases/latest",
     "codeRepository": "https://github.com/bakunity/RDP",
@@ -83,9 +83,9 @@
 
       <div class="container hero-layout">
         <div class="hero-copy reveal">
-          <a class="release-pill" href="https://github.com/bakunity/RDP/releases/tag/v1.0.1" target="_blank" rel="noreferrer">
+          <a class="release-pill" href="https://github.com/bakunity/RDP/releases/tag/v1.0.2" target="_blank" rel="noreferrer">
             <span class="status-dot"></span>
-            Стабильный релиз v1.0.1
+            Стабильный релиз v1.0.2
             <span aria-hidden="true">→</span>
           </a>
 
@@ -348,11 +348,11 @@
               <div class="code-block">
                 <button class="copy-button" type="button" data-copy="#code-server">Копировать</button>
                 <pre id="code-server"><code><span class="comment"># Скачать стабильный установщик</span>
-curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.0.1/scripts/install-server.sh \
+curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.0.2/scripts/install-server.sh \
   -o /tmp/install-hermes-rdp.sh
 
 <span class="comment"># Запустить установку</span>
-sudo env HERMES_RDP_REF=v1.0.1 bash /tmp/install-hermes-rdp.sh \
+sudo env HERMES_RDP_REF=v1.0.2 bash /tmp/install-hermes-rdp.sh \
   --host SERVER_IP_OR_DOMAIN \
   --telegram-token "$TG_TOKEN" \
   --telegram-chat-id TELEGRAM_USER_ID</code></pre>
@@ -377,13 +377,13 @@ FINGERPRINT=SHA256_HEX</span></code></pre>
               <div class="code-block">
                 <button class="copy-button" type="button" data-copy="#code-windows">Копировать</button>
                 <pre id="code-windows"><code><span class="comment"># PowerShell от имени администратора</span>
-$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.1/scripts/install-client.ps1'
+$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.2/scripts/install-client.ps1'
 & ([scriptblock]::Create((irm $u))) \
   -Server 'SERVER_IP_OR_DOMAIN' \
   -PairCode 'PAIR_CODE' \
   -Fingerprint 'SHA256_HEX' \
   -Name 'Windows-PC-01' \
-  -RepositoryRef 'v1.0.1'</code></pre>
+  -RepositoryRef 'v1.0.2'</code></pre>
               </div>
             </div>
 
@@ -401,9 +401,9 @@ mstsc.exe /v:SERVER_IP_OR_DOMAIN:53389</code></pre>
         </div>
 
         <div class="install-links reveal">
-          <a href="https://github.com/bakunity/RDP/blob/v1.0.1/docs/QUICKSTART.md" target="_blank" rel="noreferrer"><strong>Быстрый старт</strong><span>Основной сценарий установки →</span></a>
-          <a href="https://github.com/bakunity/RDP/blob/v1.0.1/docs/TESTING_A_TO_Z.md" target="_blank" rel="noreferrer"><strong>Тестирование от А до Я</strong><span>Полный acceptance test →</span></a>
-          <a href="https://github.com/bakunity/RDP/blob/v1.0.1/docs/TROUBLESHOOTING.md" target="_blank" rel="noreferrer"><strong>Диагностика</strong><span>Проблемы и решения →</span></a>
+          <a href="https://github.com/bakunity/RDP/blob/v1.0.2/docs/QUICKSTART.md" target="_blank" rel="noreferrer"><strong>Быстрый старт</strong><span>Основной сценарий установки →</span></a>
+          <a href="https://github.com/bakunity/RDP/blob/v1.0.2/docs/TESTING_A_TO_Z.md" target="_blank" rel="noreferrer"><strong>Тестирование от А до Я</strong><span>Полный acceptance test →</span></a>
+          <a href="https://github.com/bakunity/RDP/blob/v1.0.2/docs/TROUBLESHOOTING.md" target="_blank" rel="noreferrer"><strong>Диагностика</strong><span>Проблемы и решения →</span></a>
         </div>
       </div>
     </section>
@@ -454,7 +454,7 @@ mstsc.exe /v:SERVER_IP_OR_DOMAIN:53389</code></pre>
           </details>
           <details>
             <summary>Проект подходит для production?<span>＋</span></summary>
-            <p>Версия 1.0.1 является стабильной, но перед production-развёртыванием рекомендуется пройти полный гайд тестирования и изучить документ безопасности.</p>
+            <p>Версия 1.0.2 является стабильной, но перед production-развёртыванием рекомендуется пройти полный гайд тестирования и изучить документ безопасности.</p>
           </details>
         </div>
       </div>
@@ -469,7 +469,7 @@ mstsc.exe /v:SERVER_IP_OR_DOMAIN:53389</code></pre>
         </div>
         <div class="cta-actions">
           <a class="button button-primary" href="https://github.com/bakunity/RDP/releases/latest" target="_blank" rel="noreferrer">Скачать последний релиз</a>
-          <a class="button button-secondary" href="https://github.com/bakunity/RDP/blob/v1.0.1/docs/TESTING_A_TO_Z.md" target="_blank" rel="noreferrer">Открыть тестовый гайд</a>
+          <a class="button button-secondary" href="https://github.com/bakunity/RDP/blob/v1.0.2/docs/TESTING_A_TO_Z.md" target="_blank" rel="noreferrer">Открыть тестовый гайд</a>
         </div>
       </div>
     </section>

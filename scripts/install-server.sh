@@ -75,7 +75,7 @@ if [[ -n "$SCRIPT_DIR" && -f "$SCRIPT_DIR/../server/pyproject.toml" ]]; then
   SOURCE_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 else
   ARCHIVE="$WORK_DIR/source.tar.gz"
-  curl -fsSL "https://github.com/$REPO/archive/refs/heads/$REF.tar.gz" -o "$ARCHIVE"
+  curl -fsSL "https://codeload.github.com/$REPO/tar.gz/$REF" -o "$ARCHIVE"
   tar -xzf "$ARCHIVE" -C "$WORK_DIR"
   SOURCE_ROOT="$(find "$WORK_DIR" -maxdepth 1 -mindepth 1 -type d -name 'RDP-*' | head -n1)"
 fi

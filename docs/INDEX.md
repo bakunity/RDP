@@ -28,8 +28,8 @@
 ## Релизы
 
 - [Последний GitHub Release](https://github.com/bakunity/RDP/releases/latest)
-- [v1.0.1](https://github.com/bakunity/RDP/releases/tag/v1.0.1)
-- [Release notes v1.0.1](releases/v1.0.1.md)
+- [v1.0.2](https://github.com/bakunity/RDP/releases/tag/v1.0.2)
+- [Release notes v1.0.2](releases/v1.0.2.md)
 - [Changelog](../CHANGELOG.md)
 
 ## Важное правило архитектуры
