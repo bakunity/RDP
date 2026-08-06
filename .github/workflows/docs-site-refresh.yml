@@ -1,0 +1,1064 @@
+name: Build OpenSSH docs and website refresh
+
+on:
+  push:
+    branches: [feat/docs-site-openssh-refresh]
+    paths:
+      - '.github/docs-site-refresh.trigger'
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BRANCH: feat/docs-site-openssh-refresh
+    steps:
+      - name: Fetch branch
+        run: |
+          git init repo
+          cd repo
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 origin "$BRANCH"
+          git checkout -B "$BRANCH" FETCH_HEAD
+
+      - name: Refresh website and documentation
+        run: |
+          cd repo
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import re
+          from pathlib import Path
+
+          root = Path.cwd()
+          version = (root / "VERSION").read_text(encoding="utf-8").strip()
+          tag = f"v{version}"
+
+          index_path = root / "index.html"
+          index = index_path.read_text(encoding="utf-8")
+          index = index.replace("RDP, FRP, Windows", "RDP, OpenSSH, Windows")
+          index = index.replace('"softwareVersion": "1.0.7"', f'"softwareVersion": "{version}"')
+          index = index.replace("v1.0.7", tag)
+          index = index.replace("Стабильный релиз v1.0.7", f"OpenSSH-релиз {tag}")
+          index = index.replace("<span>FRPS</span><strong>ACTIVE</strong>", "<span>SSHD</span><strong>ACTIVE</strong>")
+          index = index.replace("FRPC + RDP Agent", "OpenSSH + Hermes Agent")
+          index = index.replace(
+              "Агент собирает метрики, получает команды и поднимает персональный FRP-туннель.",
+              "Агент собирает метрики, получает команды и поддерживает reverse SSH-туннель системным ssh.exe.",
+          )
+          index = index.replace(
+              "FRPS, HTTPS API, SQLite registry и Telegram controller работают как единый управляющий узел.",
+              "Изолированный sshd, HTTPS API, SQLite registry и Telegram controller работают как единый управляющий узел.",
+          )
+          index = index.replace("<div class=\"flow-arrow\"><span>TLS</span>", "<div class=\"flow-arrow\"><span>SSH</span>", 1)
+          index = index.replace(
+              "<strong>TLS 1.2+</strong><small>HTTPS API и принудительный TLS для FRP.</small>",
+              "<strong>Два закреплённых канала</strong><small>SHA-256 pinning HTTPS API и отдельный SSH host key.</small>",
+          )
+          index = index.replace(
+              "Контроллер, FRP-сервер, API и реестр устройств работают на вашем Linux-сервере.",
+              "Контроллер, изолированный OpenSSH daemon, API и реестр устройств работают на вашем Linux-сервере.",
+          )
+          index = index.replace(
+              "Версия 1.0.7 является стабильной, но перед production-развёртыванием рекомендуется пройти полный гайд тестирования и изучить документ безопасности.",
+              f"Ветка {tag} прошла чистую установку, pairing и внешний RDP-тест. Перед постоянной эксплуатацией всё равно пройдите acceptance checklist и настройте сильные Windows-пароли.",
+          )
+          index = index.replace(
+              "<a href=\"#install\">Установка</a>",
+              "<a href=\"#install\">Установка</a>\n        <a href=\"#docs\">Документация</a>",
+          )
+          index = index.replace(
+              "<span><i></i> Self-hosted</span>",
+              "<span><i></i> System OpenSSH</span>",
+          )
+          index = index.replace(
+              "<button type=\"button\">⚙ Settings</button>",
+              "<button type=\"button\">⏸ LIVE 3s</button>",
+          )
+
+          server_code = f'''<pre id="code-server"><code><span class="comment"># Скачать установщик фиксированного релиза</span>
+curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/{tag}/scripts/install-server.sh \\
+  -o /tmp/install-hermes-rdp.sh
+
+<span class="comment"># Токен не выводится в историю команд</span>
+read -rsp 'Telegram bot token: ' TG_TOKEN; echo
+sudo env HERMES_RDP_REF={tag} bash /tmp/install-hermes-rdp.sh \\
+  --host SERVER_IP_OR_DOMAIN \\
+  --telegram-token "$TG_TOKEN" \\
+  --telegram-chat-id TELEGRAM_USER_ID
+unset TG_TOKEN</code></pre>'''
+          index, count = re.subn(
+              r'<pre id="code-server">.*?</pre>',
+              server_code,
+              index,
+              count=1,
+              flags=re.S,
+          )
+          if count != 1:
+              raise SystemExit("server code block not found")
+
+          pair_code = '''<pre id="code-pair"><code><span class="comment"># В Telegram-боте</span>
+/start
+
+<span class="output">Нажмите: ➕ ДОБАВИТЬ ПК
+Бот создаст одноразовый код и готовую PowerShell-команду.</span></code></pre>'''
+          index, count = re.subn(
+              r'<pre id="code-pair">.*?</pre>',
+              pair_code,
+              index,
+              count=1,
+              flags=re.S,
+          )
+          if count != 1:
+              raise SystemExit("pair code block not found")
+
+          windows_code = '''<pre id="code-windows"><code><span class="comment"># PowerShell от имени администратора</span>
+<span class="comment"># Скопируйте готовый блок из Telegram целиком</span>
+$u='URL_ИЗ_TELEGRAM'
+$s=(irm $u).TrimStart([char]0xFEFF)
+$p=@{
+  Server='SERVER_IP_OR_DOMAIN'
+  PairCode='ОДНОРАЗОВЫЙ_КОД'
+  Fingerprint='SHA256_HEX'
+  RepositoryRef='RELEASE_TAG'
+}
+&amp; ([scriptblock]::Create($s)) @p</code></pre>'''
+          index, count = re.subn(
+              r'<pre id="code-windows">.*?</pre>',
+              windows_code,
+              index,
+              count=1,
+              flags=re.S,
+          )
+          if count != 1:
+              raise SystemExit("Windows code block not found")
+
+          validation = '''    <section class="section section-validated" id="validated">
+      <div class="container">
+        <div class="section-heading reveal">
+          <span class="eyebrow">REAL-WORLD VALIDATION</span>
+          <h2>Проверено не только тестами</h2>
+          <p>OpenSSH-версия прошла полный путь на отдельном Debian-сервере и Windows-ПК: от чистой установки до внешнего RDP-подключения.</p>
+        </div>
+
+        <div class="validation-grid">
+          <article class="validation-card reveal">
+            <span class="validation-status">PASS</span>
+            <strong>Чистый сервер</strong>
+            <p>Новая SQLite-база, отдельный sshd, HTTPS API и Telegram-панель без FRP-зависимостей.</p>
+          </article>
+          <article class="validation-card reveal">
+            <span class="validation-status">PASS</span>
+            <strong>Windows pairing</strong>
+            <p>Ed25519-ключ создан локально, Scheduled Task запущена, наружу передан только public key.</p>
+          </article>
+          <article class="validation-card reveal">
+            <span class="validation-status">PASS</span>
+            <strong>Внешняя сеть</strong>
+            <p>RDP-подключение подтверждено с телефона через мобильные данные, вне локальной сети компьютера.</p>
+          </article>
+          <article class="validation-card validation-warning reveal">
+            <span class="validation-status">ВАЖНО</span>
+            <strong>Защитите Windows-вход</strong>
+            <p>Используйте сильный пароль, обновления Windows и ограничение источников в firewall там, где это возможно.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+'''
+          docs_marker = '    <section class="section" id="docs">'
+          if docs_marker not in index:
+              raise SystemExit("docs section marker not found")
+          index = index.replace(docs_marker, validation + docs_marker, 1)
+
+          index = index.replace(
+              "Проект разворачивается на вашей инфраструктуре. Устройства регистрируются отдельно, секреты не публикуются в репозитории, а доступ к панели ограничен выбранным Telegram ID.",
+              "Проект разворачивается на вашей инфраструктуре. Каждый ПК получает отдельный API-token, SSH-ключ и разрешение только на свой RDP-порт. Доступ к Telegram-панели ограничен выбранным ID.",
+          )
+          index = index.replace(
+              "Self-hosted multi-PC RDP gateway with Telegram control.",
+              "Self-hosted multi-PC RDP gateway powered by system OpenSSH and Telegram control.",
+          )
+          index = index.replace(
+              "Built for predictable remote access.",
+              "OpenSSH transport · predictable remote access.",
+          )
+
+          stale = ["FRPC", "FRPS", "FRP-сервер", "v1.0.7"]
+          for token in stale:
+              if token in index:
+                  raise SystemExit(f"stale website token remains: {token}")
+          index_path.write_text(index, encoding="utf-8")
+
+          css_path = root / "assets/styles.css"
+          css = css_path.read_text(encoding="utf-8")
+          marker = "/* OpenSSH validation refresh */"
+          if marker not in css:
+              css += r'''
+
+/* OpenSSH validation refresh */
+.section-validated {
+  position: relative;
+  overflow: hidden;
+  border-block: 1px solid rgba(118, 255, 210, .09);
+  background:
+    radial-gradient(circle at 12% 12%, rgba(34, 197, 142, .13), transparent 30rem),
+    linear-gradient(180deg, rgba(7, 18, 16, .4), rgba(5, 13, 12, .9));
+}
+.validation-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+}
+.validation-card {
+  min-height: 210px;
+  padding: 1.4rem;
+  border: 1px solid rgba(118, 255, 210, .13);
+  border-radius: 1.3rem;
+  background: linear-gradient(145deg, rgba(16, 37, 32, .82), rgba(7, 18, 16, .92));
+  box-shadow: inset 0 1px rgba(255,255,255,.025), 0 22px 60px rgba(0,0,0,.16);
+}
+.validation-card strong {
+  display: block;
+  margin: 1rem 0 .65rem;
+  font-size: 1.08rem;
+}
+.validation-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.65;
+}
+.validation-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.8rem;
+  padding: 0 .7rem;
+  border: 1px solid rgba(87, 255, 191, .24);
+  border-radius: 999px;
+  color: #72ffc6;
+  background: rgba(24, 156, 111, .12);
+  font: 700 .72rem/1 var(--font-mono);
+  letter-spacing: .1em;
+}
+.validation-warning {
+  border-color: rgba(255, 196, 94, .2);
+  background: linear-gradient(145deg, rgba(52, 38, 17, .64), rgba(16, 20, 17, .92));
+}
+.validation-warning .validation-status {
+  color: #ffd486;
+  border-color: rgba(255, 196, 94, .28);
+  background: rgba(255, 173, 51, .09);
+}
+@media (max-width: 980px) {
+  .validation-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 620px) {
+  .validation-grid { grid-template-columns: 1fr; }
+  .validation-card { min-height: auto; }
+}
+'''
+          css_path.write_text(css, encoding="utf-8")
+
+          docs = {
+              "README.md": f'''# Hermes RDP
+
+**Hermes RDP** — self-hosted шлюз для доступа к нескольким Windows-компьютерам через один Linux-сервер. Начиная с `v1.1.0`, транспорт построен на системном OpenSSH: Windows использует встроенный `ssh.exe`, а сервер запускает отдельный изолированный `sshd`.
+
+[Сайт](https://hermes-rdp.vercel.app/) · [Последний релиз](https://github.com/bakunity/RDP/releases/latest) · [Документация](docs/INDEX.md) · [Безопасность](docs/SECURITY.md)
+
+## Что уже проверено
+
+- чистая установка на Debian;
+- Telegram pairing;
+- регистрация Windows и генерация Ed25519-ключа;
+- reverse SSH-туннель;
+- внешний RDP-доступ через мобильную сеть;
+- работа без `frpc.exe` и Defender exclusions.
+
+Подробности: [VALIDATED_SCENARIOS.md](docs/VALIDATED_SCENARIOS.md).
+
+## Схема
+
+```text
+Windows PC 1 -- ssh -R --> SERVER:53389 --> 127.0.0.1:3389
+Windows PC 2 -- ssh -R --> SERVER:53390 --> 127.0.0.1:3389
+Windows PC 3 -- ssh -R --> SERVER:53391 --> 127.0.0.1:3389
+```
+
+Каждый компьютер получает отдельные:
+
+- Ed25519-ключ, создаваемый локально;
+- постоянный RDP-порт;
+- API-token;
+- запись и управление в Telegram;
+- задачу `Hermes RDP Agent` от имени `SYSTEM`.
+
+Приватный ключ не передаётся серверу. Сервер хранит public key и разрешает ему слушать только назначенный порт через `permitlisten`.
+
+## Компоненты
+
+| Компонент | Назначение |
+|---|---|
+| `hermes-rdp-sshd.service` | отдельный OpenSSH daemon для reverse-туннелей |
+| `hermes-rdp.service` | HTTPS API, Telegram bot и registry |
+| SQLite | pairing-коды, устройства, команды и телеметрия |
+| Windows OpenSSH Client | `ssh.exe` и `ssh-keygen.exe` |
+| `HermesRdpAgent.ps1` | туннель, heartbeat, команды и LIVE-метрики |
+
+## Порты по умолчанию
+
+| Порт | Назначение |
+|---:|---|
+| `7000/tcp` | OpenSSH-туннели |
+| `7443/tcp` | HTTPS API |
+| `53389–53420/tcp` | внешние RDP endpoints |
+
+Стандартный пул рассчитан на 32 устройства и расширяется параметрами установщика.
+
+## Быстрый старт
+
+### 1. Сервер
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/{tag}/scripts/install-server.sh -o /tmp/install-hermes-rdp.sh
+read -rsp 'Telegram bot token: ' TG_TOKEN; echo
+sudo env HERMES_RDP_REF={tag} bash /tmp/install-hermes-rdp.sh \\
+  --host SERVER_IP_OR_DOMAIN \\
+  --telegram-token "$TG_TOKEN" \\
+  --telegram-chat-id TELEGRAM_USER_ID
+unset TG_TOKEN
+rm -f /tmp/install-hermes-rdp.sh
+```
+
+### 2. Проверка
+
+```bash
+sudo hermes-rdpctl doctor
+sudo systemctl status hermes-rdp-sshd.service hermes-rdp.service --no-pager
+```
+
+### 3. Windows
+
+Отправьте `/start` Telegram-боту, нажмите **➕ ДОБАВИТЬ ПК**, затем выполните готовую команду в PowerShell администратора. Успех подтверждается строкой `=== ГОТОВО ===`.
+
+### 4. RDP
+
+```powershell
+mstsc.exe /v:SERVER_IP_OR_DOMAIN:53389
+```
+
+## Важная граница безопасности
+
+Hermes защищает регистрацию, ключи и туннель, но конечный endpoint остаётся RDP-портом Windows. Используйте сильные уникальные пароли, обновляйте Windows, включайте NLA и ограничивайте источники через firewall там, где это возможно.
+
+## Документация
+
+- [Индекс по ролям](docs/INDEX.md)
+- [Быстрый старт](docs/QUICKSTART.md)
+- [Установка сервера](docs/INSTALL_SERVER.md)
+- [Установка Windows](docs/INSTALL_WINDOWS.md)
+- [Архитектура](docs/ARCHITECTURE.md)
+- [Эксплуатация](docs/OPERATIONS.md)
+- [Диагностика](docs/TROUBLESHOOTING.md)
+- [Тестирование от А до Я](docs/TESTING_A_TO_Z.md)
+- [Модель безопасности](docs/SECURITY.md)
+- [Миграция с FRP](docs/MIGRATION.md)
+
+## Релизы
+
+- [Последний релиз](https://github.com/bakunity/RDP/releases/latest)
+- [Hermes RDP {tag}](https://github.com/bakunity/RDP/releases/tag/{tag})
+- [Release notes {tag}](docs/releases/{tag}.md)
+
+Лицензия: [MIT](LICENSE).
+''',
+              "docs/INDEX.md": '''# Документация Hermes RDP
+
+Документация разделена по задачам, чтобы не читать всё подряд.
+
+## Пользователю
+
+1. [Быстрый старт](QUICKSTART.md) — минимальный путь до первого подключения.
+2. [Установка Windows](INSTALL_WINDOWS.md) — pairing, требования и проверка клиента.
+3. [Диагностика](TROUBLESHOOTING.md) — симптомы, команды и решения.
+
+## Администратору сервера
+
+1. [Установка сервера](INSTALL_SERVER.md) — чистая установка и проверка.
+2. [Эксплуатация](OPERATIONS.md) — сервисы, логи, backup, update и restore.
+3. [Миграция](MIGRATION.md) — переход с `v1.0.x`/FRP на OpenSSH.
+4. [Тестирование от А до Я](TESTING_A_TO_Z.md) — acceptance checklist.
+5. [Проверенные сценарии](VALIDATED_SCENARIOS.md) — что подтверждено на реальной инфраструктуре.
+
+## Разработчику
+
+- [Архитектура](ARCHITECTURE.md)
+- [API](API.md)
+- [Разработка](DEVELOPMENT.md)
+- [Команды](COMMANDS.md)
+- [Релизный процесс](RELEASE.md)
+- [Roadmap](ROADMAP.md)
+- [Maintainers](MAINTAINERS.md)
+
+## Безопасность
+
+- [Модель безопасности](SECURITY.md)
+- [Политика раскрытия](../SECURITY.md)
+
+Начинать новую установку лучше с [QUICKSTART.md](QUICKSTART.md), а перед постоянной эксплуатацией пройти [TESTING_A_TO_Z.md](TESTING_A_TO_Z.md).
+''',
+              "docs/QUICKSTART.md": f'''# Быстрый старт Hermes RDP
+
+Этот путь рассчитан на чистый Debian/Ubuntu-сервер и Windows 10/11 Pro, Enterprise или Education.
+
+## 1. Что понадобится
+
+- Linux-сервер с публичным IPv4 или доменом;
+- root/sudo и systemd;
+- свободные TCP-порты `7000`, `7443` и диапазон RDP;
+- Telegram bot token и ваш числовой Telegram ID;
+- Windows x64 с правами администратора.
+
+Windows Home не является штатным RDP-host и не поддерживается.
+
+## 2. Установка сервера
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/{tag}/scripts/install-server.sh -o /tmp/install-hermes-rdp.sh
+read -rsp 'Telegram bot token: ' TG_TOKEN; echo
+sudo env HERMES_RDP_REF={tag} bash /tmp/install-hermes-rdp.sh \\
+  --host SERVER_IP_OR_DOMAIN \\
+  --telegram-token "$TG_TOKEN" \\
+  --telegram-chat-id TELEGRAM_USER_ID
+unset TG_TOKEN
+rm -f /tmp/install-hermes-rdp.sh
+```
+
+Не публикуйте bot token, pairing-код, API fingerprint или приватные ключи.
+
+## 3. Проверка сервера
+
+```bash
+sudo hermes-rdpctl doctor
+sudo systemctl is-active hermes-rdp-sshd.service hermes-rdp.service
+sudo ss -ltnp | grep -E ':(7000|7443)\\b'
+```
+
+Ожидается `api: OK`, `ssh-tunnel: LISTEN 7000` и два активных сервиса.
+
+## 4. Добавление ПК
+
+1. Отправьте `/start` Telegram-боту.
+2. Нажмите **➕ ДОБАВИТЬ ПК**.
+3. Откройте PowerShell от имени администратора.
+4. Вставьте готовую команду из Telegram целиком.
+5. Введите понятное название компьютера.
+6. Дождитесь `=== ГОТОВО ===`.
+
+Установщик создаёт локальный Ed25519-ключ, проверяет API certificate fingerprint и SSH host key, включает RDP и регистрирует Scheduled Task.
+
+## 5. Подключение
+
+```powershell
+mstsc.exe /v:SERVER_IP_OR_DOMAIN:53389
+```
+
+Первый ПК обычно получает `53389`, следующий — `53390` и так далее.
+
+## 6. Финальная проверка
+
+- устройство отображается онлайн в Telegram;
+- `ssh.exe` работает на Windows;
+- внешний порт слушается на сервере;
+- RDP открывается из другой сети;
+- после перезагрузки Windows туннель восстанавливается автоматически.
+
+Полная процедура: [TESTING_A_TO_Z.md](TESTING_A_TO_Z.md).
+''',
+              "docs/INSTALL_SERVER.md": f'''# Установка сервера
+
+## Поддерживаемая среда
+
+Debian/Ubuntu, root или sudo, systemd, OpenSSH Server, UFW и Python 3.11+.
+
+## Порты
+
+- `22/tcp` — ваш административный SSH, установщик его не меняет;
+- `7000/tcp` — отдельный Hermes OpenSSH daemon;
+- `7443/tcp` — HTTPS API;
+- `53389–53420/tcp` — RDP endpoints.
+
+## Чистая установка
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/{tag}/scripts/install-server.sh -o /tmp/install-hermes-rdp.sh
+read -rsp 'Telegram bot token: ' TG_TOKEN; echo
+sudo env HERMES_RDP_REF={tag} bash /tmp/install-hermes-rdp.sh \\
+  --host SERVER_IP_OR_DOMAIN \\
+  --telegram-token "$TG_TOKEN" \\
+  --telegram-chat-id TELEGRAM_USER_ID \\
+  --api-port 7443 \\
+  --ssh-port 7000 \\
+  --port-start 53389 \\
+  --port-end 53420
+unset TG_TOKEN
+rm -f /tmp/install-hermes-rdp.sh
+```
+
+## Что создаётся
+
+- `/opt/hermes-rdp/app`;
+- `/etc/hermes-rdp/config.json`;
+- `/etc/hermes-rdp/tls/`;
+- отдельный SSH host key;
+- `/var/lib/hermes-rdp/state.sqlite3`;
+- `hermes-rdp.service`;
+- `hermes-rdp-sshd.service`;
+- системные пользователи `hermes-rdp` и `hermes-tunnel`.
+
+## Проверка
+
+```bash
+sudo hermes-rdpctl doctor
+sudo systemctl status hermes-rdp-sshd.service hermes-rdp.service --no-pager
+sudo /usr/sbin/sshd -t -f /etc/hermes-rdp/sshd_config
+```
+
+До подключения первого ПК RDP-порты должны быть закрыты. Порт появляется только после успешного reverse-туннеля.
+
+## Повторная установка
+
+Установщик создаёт backup в `/var/backups/hermes-rdp/`. Переход с FRP требует явного `--migrate`; чистой OpenSSH-установке этот флаг не нужен.
+''',
+              "docs/INSTALL_WINDOWS.md": '''# Установка Windows-клиента
+
+## Требования
+
+- Windows 10/11 Pro, Enterprise или Education x64;
+- PowerShell 5.1+;
+- права локального администратора;
+- встроенный OpenSSH Client или возможность установить Windows Capability;
+- доступ к серверу на `7000/tcp` и `7443/tcp`.
+
+Windows Home не поддерживает входящие RDP-сессии штатными средствами.
+
+## Установка
+
+1. В Telegram отправьте `/start`.
+2. Нажмите **➕ ДОБАВИТЬ ПК**.
+3. Откройте PowerShell от имени администратора.
+4. Скопируйте команду из Telegram целиком.
+5. Введите название компьютера.
+
+Не публикуйте pairing-код и fingerprint. Pairing-код одноразовый и ограничен по времени.
+
+## Что делает установщик
+
+- проверяет редакцию и архитектуру Windows;
+- находит или устанавливает OpenSSH Client;
+- останавливает старые Hermes/FRP задачи;
+- сохраняет legacy-установку отдельно;
+- создаёт Ed25519 keypair локально;
+- отправляет серверу только public key;
+- проверяет HTTPS certificate fingerprint;
+- получает и закрепляет SSH host key;
+- включает RDP и Windows Firewall rules;
+- создаёт `Hermes RDP Agent` от имени `SYSTEM`;
+- запускает reverse SSH-туннель.
+
+## Успешный результат
+
+```text
+=== ГОТОВО ===
+Компьютер: office-pc
+RDP: SERVER:53389
+Туннель: OpenSSH
+Задача: Hermes RDP Agent
+```
+
+## Проверка
+
+```powershell
+Get-ScheduledTask -TaskName 'Hermes RDP Agent'
+Get-Process ssh -ErrorAction SilentlyContinue
+Get-Content 'C:\ProgramData\HermesRDP\agent.log' -Tail 50
+```
+
+## Повторная установка поверх старой версии
+
+Legacy-каталог переносится в `C:\ProgramData\HermesRDP-legacy-*`. Установщик не должен читать защищённые старые private keys пофайлово. Не удаляйте backup до успешного теста новой установки.
+''',
+              "docs/ARCHITECTURE.md": '''# Архитектура Hermes RDP
+
+## Общая схема
+
+```text
+Remote RDP client
+        |
+        | TCP SERVER:RDP_PORT
+        v
+Linux server listener created by sshd
+        |
+        | reverse forwarding
+        v
+Windows 127.0.0.1:3389
+```
+
+Windows всегда инициирует исходящее SSH-соединение. Проброс портов на домашнем роутере Windows-ПК не требуется.
+
+## Сервер
+
+### `hermes-rdp-sshd.service`
+
+Отдельный экземпляр OpenSSH на `7000/tcp`. Он не заменяет административный SSH сервера и использует собственный config, pid file и host key.
+
+Ограничения:
+
+- только пользователь `hermes-tunnel`;
+- только public-key authentication;
+- нет shell, PTY, SFTP, X11, agent forwarding и local forwarding;
+- `AuthorizedKeysCommand` получает ключ из SQLite;
+- `permitlisten` разрешает только назначенный RDP-порт.
+
+### `hermes-rdp.service`
+
+Запускает:
+
+- HTTPS API;
+- Telegram controller;
+- SQLite registry;
+- обработку pairing, telemetry и команд.
+
+### SQLite
+
+Хранит устройства, хэши API-token, SSH public keys, назначенные порты, pairing-коды, команды, настройки Telegram и последнюю телеметрию.
+
+## Windows
+
+`HermesRdpAgent.ps1` работает через Scheduled Task от имени `SYSTEM` и поддерживает:
+
+- `ssh.exe -N -R`;
+- reconnect/backoff;
+- heartbeat и telemetry;
+- команды ON/OFF/RESTART;
+- endpoint status.
+
+Приватный Ed25519-ключ остаётся в `C:\ProgramData\HermesRDP` с ACL только для `SYSTEM` и Administrators.
+
+## Trust chain
+
+1. Пользователь получает API fingerprint из доверенного Telegram/серверного вывода.
+2. Установщик закрепляет SHA-256 сертификата HTTPS API.
+3. Через закреплённый API клиент получает SSH host key.
+4. SSH использует `StrictHostKeyChecking=yes` и отдельный `known_hosts`.
+5. Сервер принимает public key только для назначенного порта.
+
+## Удаление устройства
+
+DELETE отзывает API-token и SSH public key, закрывает listener и освобождает порт. Локальные файлы Windows удаляются отдельным uninstall-скриптом.
+''',
+              "docs/OPERATIONS.md": '''# Эксплуатация
+
+## Состояние
+
+```bash
+sudo hermes-rdpctl doctor
+sudo systemctl status hermes-rdp-sshd.service hermes-rdp.service --no-pager
+sudo ss -ltnp | grep -E ':(7000|7443|5338[9]|5339[0-9])\\b'
+```
+
+## Логи
+
+```bash
+sudo journalctl -u hermes-rdp-sshd.service -n 100 --no-pager
+sudo journalctl -u hermes-rdp.service -n 100 --no-pager
+```
+
+Логи могут содержать адреса и идентификаторы. Перед публикацией удаляйте секреты, pairing-коды, tokens и fingerprints.
+
+## Перезапуск
+
+```bash
+sudo systemctl restart hermes-rdp-sshd.service hermes-rdp.service
+```
+
+## Backup
+
+Сохраняйте:
+
+- `/etc/hermes-rdp`;
+- `/var/lib/hermes-rdp/state.sqlite3`;
+- systemd units;
+- текущий repository ref.
+
+```bash
+sudo tar -C / -czf /var/backups/hermes-rdp/manual-$(date -u +%Y%m%dT%H%M%SZ).tar.gz \\
+  etc/hermes-rdp var/lib/hermes-rdp \\
+  etc/systemd/system/hermes-rdp.service \\
+  etc/systemd/system/hermes-rdp-sshd.service
+```
+
+## Обновление
+
+Используйте фиксированный release tag и `scripts/update-server.sh`. Перед обновлением проверьте release notes и наличие backup.
+
+## Отзыв устройства
+
+Удаление в Telegram отзывает credentials и закрывает listener. После удаления проверьте, что внешний порт больше не слушается.
+
+## После перезагрузки
+
+Оба server service должны стартовать автоматически. Windows Scheduled Task запускается с задержкой и восстанавливает туннель без входа пользователя.
+''',
+              "docs/TROUBLESHOOTING.md": '''# Диагностика
+
+## Сервер не проходит doctor
+
+```bash
+sudo hermes-rdpctl doctor
+sudo systemctl status hermes-rdp-sshd.service hermes-rdp.service --no-pager
+sudo journalctl -u hermes-rdp.service -n 100 --no-pager
+```
+
+## Порт 7000 не слушается
+
+```bash
+sudo /usr/sbin/sshd -t -f /etc/hermes-rdp/sshd_config
+sudo journalctl -u hermes-rdp-sshd.service -n 100 --no-pager
+sudo ss -ltnp 'sport = :7000'
+```
+
+## Windows installer: Access denied в старом `winmon`/ключе
+
+Используйте актуальный установщик. Он переносит legacy-каталог целиком и при необходимости исправляет ACL только внутри `C:\ProgramData\HermesRDP`.
+
+## Установка завершилась, но `ssh.exe` не работает
+
+```powershell
+Get-ScheduledTaskInfo -TaskName 'Hermes RDP Agent'
+Get-Content 'C:\ProgramData\HermesRDP\agent.log' -Tail 100
+Get-Process ssh -ErrorAction SilentlyContinue
+Test-NetConnection SERVER -Port 7000
+```
+
+## ПК offline в Telegram
+
+Проверьте время последнего heartbeat, Scheduled Task, доступ к `7443/tcp` и лог агента.
+
+## RDP-порт закрыт
+
+Это нормально до поднятия reverse-туннеля. После подключения Windows:
+
+```bash
+sudo ss -ltnp 'sport = :53389'
+```
+
+## RDP-порт открыт, но вход не проходит
+
+Проверьте Windows edition, `TermService`, NLA, firewall и корректные Windows credentials. Hermes не обходит парольную политику Windows.
+
+## Устройство удалено, но локальный агент остался
+
+Сервер уже не примет отозванный ключ. Для локальной очистки запустите `scripts/uninstall-client.ps1` от администратора.
+''',
+              "docs/TESTING_A_TO_Z.md": '''# Тестирование Hermes RDP от А до Я
+
+## A. Сервер
+
+- [ ] `hermes-rdpctl doctor` без ошибок.
+- [ ] `hermes-rdp-sshd.service` active/enabled.
+- [ ] `hermes-rdp.service` active/enabled.
+- [ ] `7000/tcp` и `7443/tcp` слушаются.
+- [ ] RDP-пул закрыт до подключения устройств.
+- [ ] `/usr/sbin/sshd -t -f /etc/hermes-rdp/sshd_config` проходит.
+
+## B. Telegram
+
+- [ ] `/start` показывает OpenSSH и пустой список.
+- [ ] **➕ ДОБАВИТЬ ПК** создаёт новый код.
+- [ ] Команда копируется одним блоком.
+- [ ] Посторонний Telegram ID не получает доступ.
+
+## C. Windows install
+
+- [ ] PowerShell запущен администратором.
+- [ ] OpenSSH Client найден или установлен.
+- [ ] Legacy Hermes-каталог не блокирует установку.
+- [ ] `=== ГОТОВО ===` отображается.
+- [ ] Создан `device.json`, `known_hosts`, Ed25519 keypair.
+- [ ] ACL secrets доступны только SYSTEM и Administrators.
+- [ ] Scheduled Task активна.
+
+## D. Туннель
+
+- [ ] `ssh.exe` запущен.
+- [ ] Назначенный порт слушается на сервере.
+- [ ] Другой порт из пула не занят этим ключом.
+- [ ] Telegram показывает ONLINE и LIVE-метрики.
+
+## E. RDP
+
+- [ ] Подключение работает из другой сети.
+- [ ] Проверен вход с телефона через мобильные данные или иной внешний канал.
+- [ ] Используется сильный Windows-пароль и NLA.
+
+## F. Управление
+
+- [ ] OFF закрывает listener.
+- [ ] ON восстанавливает listener.
+- [ ] RESTART пересоздаёт SSH-процесс.
+- [ ] DELETE отзывает ключ и освобождает порт.
+
+## G. Recovery
+
+- [ ] После перезагрузки Windows туннель возвращается за 30–90 секунд.
+- [ ] После перезагрузки сервера оба systemd service возвращаются.
+- [ ] Краткий обрыв интернета приводит к reconnect.
+
+## H. Несколько устройств
+
+- [ ] Второй ПК получает следующий свободный порт.
+- [ ] Ключ первого ПК не может занять порт второго.
+- [ ] Удаление одного устройства не влияет на остальные.
+
+## Критерий PASS
+
+Релиз считается проверенным только после успешного внешнего RDP, recovery после перезагрузки и теста минимум двух устройств.
+''',
+              "docs/SECURITY.md": '''# Модель безопасности Hermes RDP
+
+## Защищаемые активы
+
+- Telegram bot token;
+- API certificate private key;
+- Windows Ed25519 private keys;
+- device API-tokens;
+- pairing-коды;
+- Windows credentials;
+- SQLite registry.
+
+## Серверные границы
+
+Hermes использует отдельный `sshd`, не изменяя административный SSH на порту 22. Tunnel-user не получает shell, PTY, SFTP, local forwarding, agent forwarding или произвольный remote port.
+
+`AuthorizedKeysCommand` выдаёт ключ вместе с `restrict` и `permitlisten` только для назначенного endpoint.
+
+## Клиентская trust chain
+
+- HTTPS API проверяется по SHA-256 fingerprint;
+- SSH host key приходит через уже закреплённый API;
+- `StrictHostKeyChecking` запрещает незаметную замену сервера;
+- private key остаётся на Windows;
+- secret files получают ACL только SYSTEM и Administrators.
+
+## Pairing
+
+Код одноразовый и ограничен по времени. Device создаётся атомарно после проверки public key. При ошибке после pairing установщик пытается отозвать созданное устройство.
+
+## Telegram
+
+Контроллер сверяет chat ID и actor ID. Bot token хранится в root-owned файле и не должен попадать в команды, логи, скриншоты или git.
+
+## RDP boundary
+
+Hermes защищает путь до Windows, но не заменяет безопасность RDP-сессии. Внешний endpoint доступен как TCP-порт сервера. Обязательны:
+
+- сильный уникальный Windows-пароль;
+- NLA;
+- актуальные обновления Windows;
+- минимальное число администраторов;
+- ограничение source IP или дополнительный сетевой контроль, когда сценарий это допускает;
+- мониторинг неудачных входов.
+
+## Отзыв
+
+DELETE отзывает API-token и SSH public key, завершает listener и освобождает порт. Украденный старый ключ после отзыва не должен аутентифицироваться.
+
+## Что не публиковать
+
+Не публикуйте bot token, pairing-код, TLS fingerprint вместе с командой установки, private key, `device.json`, полный agent log и реальные IP/Telegram IDs из production.
+''',
+              "docs/MIGRATION.md": f'''# Миграция с FRP на OpenSSH
+
+Переход с `v1.0.x` требует повторного pairing каждого Windows-ПК: старые FRP credentials не преобразуются в SSH keys.
+
+## Сервер
+
+1. Создайте backup `/etc/hermes-rdp`, `/etc/frp`, `/var/lib/hermes-rdp` и systemd units.
+2. Проверьте доступ по административному SSH на `22/tcp`.
+3. Запустите установщик `{tag}` с `--migrate`.
+4. Убедитесь, что `frps.service` и binary удалены.
+5. Проверьте `hermes-rdp-sshd.service` и `hermes-rdp.service`.
+
+```bash
+sudo env HERMES_RDP_REF={tag} bash /tmp/install-hermes-rdp.sh \\
+  --host SERVER_IP_OR_DOMAIN \\
+  --telegram-token "$TG_TOKEN" \\
+  --telegram-chat-id TELEGRAM_USER_ID \\
+  --migrate
+```
+
+## Windows
+
+Актуальный установщик:
+
+- останавливает старые FRP/WinMon задачи;
+- переносит старый каталог в `HermesRDP-legacy-*`;
+- создаёт новый Ed25519 keypair;
+- регистрирует устройство заново;
+- удаляет старые `frpc.exe`, config и CA из нового рабочего каталога.
+
+## После миграции
+
+- пройдите внешний RDP-тест;
+- перезагрузите Windows и проверьте reconnect;
+- проверьте OFF/ON/RESTART и DELETE;
+- удаляйте legacy backup только после полного PASS.
+''',
+              "docs/VALIDATED_SCENARIOS.md": '''# Проверенные сценарии
+
+Этот документ фиксирует фактически выполненные проверки без публикации секретов и реальных production-идентификаторов.
+
+## Подтверждено
+
+### Чистая серверная установка
+
+- Debian x86_64;
+- OpenSSH Server установлен;
+- отдельные `hermes-rdp-sshd.service` и `hermes-rdp.service` active/enabled;
+- `doctor` подтвердил API `1.1.0` и OpenSSH transport;
+- FRP service и binary отсутствуют;
+- база создана с SSH-полями;
+- RDP-пул закрыт до подключения устройства.
+
+### Windows pairing
+
+- установщик запущен в PowerShell администратора;
+- создан Ed25519 keypair;
+- зарегистрирован Scheduled Task;
+- reverse SSH-туннель запущен;
+- первый endpoint назначен из стандартного пула.
+
+### Внешнее подключение
+
+- Remote Desktop подключился с телефона;
+- телефон использовал мобильные данные, а не локальную сеть Windows-ПК;
+- тем самым подтверждён полный внешний путь `mobile network → Linux server → reverse SSH → Windows RDP`.
+
+## Найденный дефект
+
+Повторная установка поверх старого WinMon/FRP-каталога могла завершиться `Access denied` при рекурсивном копировании защищённого private key. Исправление: переносить legacy-каталог целиком и применять ACL fallback только к каталогу Hermes.
+
+## Ещё требуется
+
+- второй Windows-ПК;
+- восстановление после перезагрузки Windows;
+- OFF/ON/RESTART;
+- DELETE и повторное использование освобождённого порта;
+- recovery после перезагрузки сервера.
+''',
+          }
+
+          for relative, content in docs.items():
+              path = root / relative
+              path.parent.mkdir(parents=True, exist_ok=True)
+              path.write_text(content.strip() + "\n", encoding="utf-8")
+
+          changelog_path = root / "CHANGELOG.md"
+          changelog = changelog_path.read_text(encoding="utf-8")
+          marker = "## [Unreleased]\n"
+          note = "\n### Документация и сайт\n\n- сайт полностью переведён с устаревшего FRP-описания на OpenSSH-архитектуру;\n- добавлен блок реально подтверждённых сценариев и честная граница безопасности RDP;\n- быстрый старт, установка, эксплуатация, диагностика и acceptance checklist переписаны по результатам живого теста;\n- добавлены regression tests, запрещающие возврат `v1.0.7` и FRP-текста на публичную страницу.\n"
+          if note.strip() not in changelog:
+              if marker not in changelog:
+                  raise SystemExit("CHANGELOG Unreleased marker missing")
+              changelog = changelog.replace(marker, marker + note, 1)
+          changelog_path.write_text(changelog, encoding="utf-8")
+
+          manifest_path = root / "site.webmanifest"
+          manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+          manifest["description"] = "Self-hosted multi-PC RDP gateway powered by system OpenSSH and Telegram control."
+          manifest_path.write_text(
+              json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+
+          sitemap_path = root / "sitemap.xml"
+          sitemap = sitemap_path.read_text(encoding="utf-8")
+          sitemap = re.sub(r"<lastmod>[^<]+</lastmod>", "<lastmod>2026-08-07</lastmod>", sitemap)
+          sitemap_path.write_text(sitemap, encoding="utf-8")
+
+          og_path = root / "assets/og-card.svg"
+          og = og_path.read_text(encoding="utf-8")
+          og = og.replace("FRP", "OpenSSH")
+          og = og.replace("v1.0.7", tag)
+          og_path.write_text(og, encoding="utf-8")
+
+          test_path = root / "tests/test_site_openssh_content.py"
+          test_path.write_text(
+              '''from __future__ import annotations
+
+import unittest
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class WebsiteOpenSshContentTests(unittest.TestCase):
+    def test_public_site_describes_current_architecture(self) -> None:
+        text = (ROOT / "index.html").read_text(encoding="utf-8")
+        self.assertIn("OpenSSH", text)
+        self.assertIn("REAL-WORLD VALIDATION", text)
+        self.assertIn("мобильные данные", text)
+        self.assertIn("permitlisten", (ROOT / "README.md").read_text(encoding="utf-8"))
+        for stale in ["v1.0.7", "FRPC", "FRPS", "FRP-сервер"]:
+            self.assertNotIn(stale, text)
+
+    def test_documentation_has_real_acceptance_path(self) -> None:
+        testing = (ROOT / "docs/TESTING_A_TO_Z.md").read_text(encoding="utf-8")
+        validated = (ROOT / "docs/VALIDATED_SCENARIOS.md").read_text(encoding="utf-8")
+        self.assertIn("внешнего RDP", testing)
+        self.assertIn("второй Windows-ПК", validated)
+        self.assertIn("перезагрузки Windows", testing)
+
+
+if __name__ == "__main__":
+    unittest.main()
+''',
+              encoding="utf-8",
+          )
+
+          (root / ".github/workflows/docs-site-refresh.yml").unlink()
+          (root / ".github/docs-site-refresh.trigger").unlink()
+          PY
+
+      - name: Validate
+        run: |
+          cd repo
+          python3 -m unittest discover -s tests -v
+          bash scripts/check-release.sh
+          python3 - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+
+          class Parser(HTMLParser):
+              pass
+
+          Parser().feed(Path('index.html').read_text(encoding='utf-8'))
+          print('html-parse=OK')
+          PY
+
+      - name: Commit result
+        run: |
+          cd repo
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "docs: refresh OpenSSH website and operator guides"
+          git push origin HEAD:"$BRANCH"
