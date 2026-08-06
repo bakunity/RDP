@@ -5,10 +5,10 @@ import logging
 import ssl
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from . import __version__
 from .config import Config
 from .db import Registry
 
@@ -73,7 +73,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                 {
                     "ok": True,
                     "service": "hermes-rdp",
-                    "version": "0.1.0",
+                    "version": __version__,
                     "fingerprint": self.server.config.tls_fingerprint,
                 },
             )
