@@ -4,7 +4,25 @@
 
 ## [Unreleased]
 
-Пока нет изменений после `v1.0.3`.
+Пока нет изменений после `v1.0.4`.
+
+## [1.0.4] — 2026-08-06
+
+UX-патч Telegram-экрана добавления Windows-ПК.
+
+### Изменено
+
+- команда установки выводится единым моноширинным блоком Telegram;
+- всю PowerShell-команду можно скопировать одним нажатием;
+- включён HTML parse mode для отправки и редактирования панели;
+- команда HTML-экранируется, поэтому `&`, ссылки и другие специальные символы не ломают сообщение;
+- добавлены regression tests формата команды и Telegram payload.
+
+### Совместимость
+
+- API, SQLite registry, pairing contract, FRP и Windows agent не изменены;
+- обновление затрагивает только отображение Telegram-панели;
+- стандартные порты не изменены.
 
 ## [1.0.3] — 2026-08-06
 
@@ -106,7 +124,8 @@ Hotfix серверного установщика для корректной �
 - удаление устройства отзывает API-доступ, но для полного отзыва скомпрометированного FRP token требуется его ротация и переподключение доверенных ПК;
 - Windows-клиент рассчитан на 64-битные Windows Pro, Enterprise или Education с поддержкой входящего RDP.
 
-[Unreleased]: https://github.com/bakunity/RDP/compare/v1.0.3...HEAD
+[Unreleased]: https://github.com/bakunity/RDP/compare/v1.0.4...HEAD
+[1.0.4]: https://github.com/bakunity/RDP/releases/tag/v1.0.4
 [1.0.3]: https://github.com/bakunity/RDP/releases/tag/v1.0.3
 [1.0.2]: https://github.com/bakunity/RDP/releases/tag/v1.0.2
 [1.0.1]: https://github.com/bakunity/RDP/releases/tag/v1.0.1
