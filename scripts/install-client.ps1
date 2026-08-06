@@ -31,27 +31,93 @@ if (-not $CurrentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Adm
     throw 'Открой PowerShell от имени администратора.'
 }
 
-function New-PinnedHttpClient {
-    $Handler = New-Object System.Net.Http.HttpClientHandler
-    $Handler.ServerCertificateCustomValidationCallback = {
-        param($Request, $Certificate, $Chain, $SslPolicyErrors)
-        try {
-            $Sha = [Security.Cryptography.SHA256]::Create()
-            try {
-                $Actual = ([BitConverter]::ToString(
-                    $Sha.ComputeHash($Certificate.GetRawCertData())
-                )).Replace('-', '').ToUpperInvariant()
+$PinnedHttpClientSource = @'
+using System;
+using System.Net.Http;
+using System.Net.Security;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
+
+namespace HermesRdp
+{
+    public static class PinnedHttpClientFactory
+    {
+        private static string NormalizeFingerprint(string value)
+        {
+            var result = new StringBuilder();
+            if (value == null)
+            {
+                return String.Empty;
             }
-            finally {
-                $Sha.Dispose()
+
+            foreach (char character in value)
+            {
+                if (Uri.IsHexDigit(character))
+                {
+                    result.Append(Char.ToUpperInvariant(character));
+                }
             }
-            return $Actual -eq $script:ExpectedFingerprint
+
+            return result.ToString();
         }
-        catch { return $false }
+
+        public static bool ValidateCertificate(
+            X509Certificate2 certificate,
+            string expectedFingerprint)
+        {
+            string expected = NormalizeFingerprint(expectedFingerprint);
+            if (certificate == null || expected.Length != 64)
+            {
+                return false;
+            }
+
+            using (SHA256 sha = SHA256.Create())
+            {
+                string actual = BitConverter.ToString(
+                    sha.ComputeHash(certificate.RawData)
+                ).Replace("-", String.Empty);
+
+                return String.Equals(
+                    actual,
+                    expected,
+                    StringComparison.OrdinalIgnoreCase
+                );
+            }
+        }
+
+        public static HttpClient Create(string expectedFingerprint)
+        {
+            string expected = NormalizeFingerprint(expectedFingerprint);
+            var handler = new HttpClientHandler();
+            handler.ServerCertificateCustomValidationCallback = delegate(
+                HttpRequestMessage request,
+                X509Certificate2 certificate,
+                X509Chain chain,
+                SslPolicyErrors errors)
+            {
+                return ValidateCertificate(certificate, expected);
+            };
+
+            var client = new HttpClient(handler);
+            client.Timeout = TimeSpan.FromSeconds(30);
+            return client;
+        }
     }
-    $Client = New-Object System.Net.Http.HttpClient($Handler)
-    $Client.Timeout = [TimeSpan]::FromSeconds(30)
-    return $Client
+}
+'@
+
+if (-not ('HermesRdp.PinnedHttpClientFactory' -as [type])) {
+    Add-Type `
+        -TypeDefinition $PinnedHttpClientSource `
+        -Language CSharp `
+        -ReferencedAssemblies 'System.Net.Http.dll'
+}
+
+function New-PinnedHttpClient {
+    return [HermesRdp.PinnedHttpClientFactory]::Create(
+        $script:ExpectedFingerprint
+    )
 }
 
 function Invoke-PinnedPost {
