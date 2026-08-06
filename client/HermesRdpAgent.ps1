@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Net.Http
 
 $BaseDir = 'C:\ProgramData\HermesRDP'
