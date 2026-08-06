@@ -1,12 +1,26 @@
 from __future__ import annotations
 
 import re
-import tomllib
 import unittest
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def read_project_version(path: Path) -> str:
+    in_project = False
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if line.startswith("[") and line.endswith("]"):
+            in_project = line == "[project]"
+            continue
+        if not in_project:
+            continue
+        match = re.fullmatch(r'version\s*=\s*"([^"]+)"', line)
+        if match:
+            return match.group(1)
+    raise AssertionError(f"project.version not found in {path}")
 
 
 class VersionConsistencyTests(unittest.TestCase):
@@ -21,8 +35,7 @@ class VersionConsistencyTests(unittest.TestCase):
         self.assertIsNotNone(match)
         self.assertEqual(version, match.group(1))
 
-        with (ROOT / "server/pyproject.toml").open("rb") as handle:
-            project_version = tomllib.load(handle)["project"]["version"]
+        project_version = read_project_version(ROOT / "server/pyproject.toml")
         self.assertEqual(version, project_version)
 
         release_notes = ROOT / "docs/releases" / f"v{version}.md"
