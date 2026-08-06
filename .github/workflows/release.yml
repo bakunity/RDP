@@ -21,6 +21,7 @@ jobs:
   release:
     name: Tag and publish GitHub Release
     runs-on: ubuntu-22.04
+    timeout-minutes: 15
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
