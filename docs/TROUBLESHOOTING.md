@@ -91,7 +91,7 @@ Get-Content 'C:\ProgramData\HermesRDP\agent.log' -Tail 100
 Проверить API port:
 
 ```powershell
-Test-NetConnection 31.76.77.87 -Port 7443
+Test-NetConnection SERVER_IP_OR_DOMAIN -Port 7443
 ```
 
 На сервере:
@@ -150,7 +150,7 @@ Get-Process frpc -ErrorAction SilentlyContinue
 ## FRPC не подключается к Hermes
 
 ```powershell
-Test-NetConnection 31.76.77.87 -Port 7000
+Test-NetConnection SERVER_IP_OR_DOMAIN -Port 7000
 ```
 
 На Hermes:
@@ -203,7 +203,7 @@ sudo hermes-rdpctl devices list
 Проверить с внешнего компьютера:
 
 ```powershell
-Test-NetConnection 31.76.77.87 -Port 53389
+Test-NetConnection SERVER_IP_OR_DOMAIN -Port 53389
 ```
 
 На Windows target:

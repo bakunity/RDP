@@ -54,8 +54,8 @@ Windows installer сравнивает `fingerprint` с ожидаемым зн�
 ```json
 {
   "code": "ABCDEFGH",
-  "display_name": "Домашний ПК",
-  "machine_name": "MS-7D98",
+  "display_name": "Windows-PC-01",
+  "machine_name": "WINDOWS-PC-01",
   "fingerprint": "WINDOWS_MACHINE_UUID"
 }
 ```
@@ -76,16 +76,16 @@ Windows installer сравнивает `fingerprint` с ожидаемым зн�
   "ok": true,
   "device": {
     "id": "UUID_HEX",
-    "name": "Домашний ПК",
+    "name": "Windows-PC-01",
     "rdp_port": 53389,
     "token": "DEVICE_API_TOKEN"
   },
   "api": {
-    "base_url": "https://31.76.77.87:7443",
+    "base_url": "https://SERVER_IP_OR_DOMAIN:7443",
     "fingerprint": "SHA256_HEX"
   },
   "frp": {
-    "server_addr": "31.76.77.87",
+    "server_addr": "SERVER_IP_OR_DOMAIN",
     "server_port": 7000,
     "token": "SHARED_FRP_TOKEN",
     "ca_pem": "-----BEGIN CERTIFICATE-----..."
@@ -121,10 +121,10 @@ Authorization: Bearer DEVICE_API_TOKEN
 {
   "telemetry": {
     "captured_at": 1785980000,
-    "computer_name": "MS-7D98",
+    "computer_name": "WINDOWS-PC-01",
     "os": "Microsoft Windows 11 Pro",
-    "interactive_user": "tiit",
-    "sessions": ["tiit"],
+    "interactive_user": "WINDOWS_USER",
+    "sessions": ["WINDOWS_USER"],
     "cpu_percent": 9.0,
     "ram_total_bytes": 34198626304,
     "ram_used_bytes": 16857104384,
@@ -138,7 +138,7 @@ Authorization: Bearer DEVICE_API_TOKEN
     "frpc_running": true,
     "endpoint_available": true,
     "rdp_connections": 1,
-    "rdp_remote_addresses": ["::ffff:213.193.241.1"],
+    "rdp_remote_addresses": ["CLIENT_IP_ADDRESS"],
     "uptime_seconds": 1379880,
     "top_processes": []
   }

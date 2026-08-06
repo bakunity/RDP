@@ -1,13 +1,13 @@
 # Миграция существующего Hermes RDP
 
-Этот документ описывает перевод старой схемы `один Windows ПК + отдельный Telegram bot + FRPS ON/OFF` в Hermes RDP v1.0.0.
+Этот документ описывает перевод старой схемы `один Windows ПК + отдельный Telegram bot + FRPS ON/OFF` в Hermes RDP v1.0.1.
 
 ## Цель миграции
 
 Сохранить:
 
-- сервер Hermes `31.76.77.87`;
-- endpoint домашнего ПК `31.76.77.87:53389`;
+- сервер Hermes `SERVER_IP_OR_DOMAIN`;
+- endpoint домашнего ПК `SERVER_IP_OR_DOMAIN:53389`;
 - существующую возможность RDP;
 - Telegram bot token и доступ владельца.
 
@@ -20,7 +20,7 @@
 
 ## Важное правило
 
-После миграции «Домашний ПК» не имеет специальной логики. Это просто первое зарегистрированное устройство, которому вручную закреплён порт `53389`.
+После миграции «Windows-PC-01» не имеет специальной логики. Это просто первое зарегистрированное устройство, которому вручную закреплён порт `53389`.
 
 ## 1. Зафиксировать текущее состояние
 
@@ -42,12 +42,12 @@ Get-ScheduledTask | Where-Object TaskName -like 'Hermes*' | Select-Object TaskNa
 
 Проверь, что текущий RDP работает до миграции.
 
-## 2. Скачать v1.0.0
+## 2. Скачать v1.0.1
 
 На Hermes:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.0.0/scripts/install-server.sh -o /tmp/install-hermes-rdp.sh
+curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.0.1/scripts/install-server.sh -o /tmp/install-hermes-rdp.sh
 ```
 
 ```bash
@@ -57,7 +57,7 @@ read -rsp 'Telegram bot token: ' TG_TOKEN; echo
 ## 3. Запустить миграцию сервера
 
 ```bash
-sudo env HERMES_RDP_REF=v1.0.0 bash /tmp/install-hermes-rdp.sh --host 31.76.77.87 --telegram-token "$TG_TOKEN" --telegram-chat-id TELEGRAM_USER_ID --migrate
+sudo env HERMES_RDP_REF=v1.0.1 bash /tmp/install-hermes-rdp.sh --host SERVER_IP_OR_DOMAIN --telegram-token "$TG_TOKEN" --telegram-chat-id TELEGRAM_USER_ID --migrate
 ```
 
 Установщик:
@@ -92,7 +92,7 @@ sudo systemctl status frps.service hermes-rdp.service --no-pager
 ## 5. Создать запись для домашнего ПК
 
 ```bash
-sudo hermes-rdpctl pair create --name 'Домашний ПК' --port 53389
+sudo hermes-rdpctl pair create --name 'Windows-PC-01' --port 53389
 ```
 
 Сохрани `PAIR_CODE` и `FINGERPRINT`.
@@ -102,7 +102,7 @@ sudo hermes-rdpctl pair create --name 'Домашний ПК' --port 53389
 Открой PowerShell от администратора:
 
 ```powershell
-$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.0/scripts/install-client.ps1'; & ([scriptblock]::Create((irm $u))) -Server '31.76.77.87' -PairCode 'PAIR_CODE' -Fingerprint 'FINGERPRINT' -Name 'Домашний ПК' -RepositoryRef 'v1.0.0'
+$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.1/scripts/install-client.ps1'; & ([scriptblock]::Create((irm $u))) -Server 'SERVER_IP_OR_DOMAIN' -PairCode 'PAIR_CODE' -Fingerprint 'FINGERPRINT' -Name 'Windows-PC-01' -RepositoryRef 'v1.0.1'
 ```
 
 Установщик сам остановит и удалит устаревшие задачи:
@@ -146,13 +146,13 @@ sudo hermes-rdpctl devices list
 Ожидаемый endpoint:
 
 ```text
-Домашний ПК → 31.76.77.87:53389
+Windows-PC-01 → SERVER_IP_OR_DOMAIN:53389
 ```
 
 Проверка подключения:
 
 ```powershell
-mstsc.exe /v:31.76.77.87:53389
+mstsc.exe /v:SERVER_IP_OR_DOMAIN:53389
 ```
 
 ## 8. Добавить остальные ПК

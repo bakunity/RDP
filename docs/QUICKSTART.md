@@ -1,6 +1,6 @@
 # Быстрый старт
 
-Этот сценарий подходит и для новой установки, и для перевода текущей одно-PC схемы в Hermes RDP v1.0.0.
+Этот сценарий подходит и для новой установки, и для перевода текущей одно-PC схемы в Hermes RDP v1.0.1.
 
 ## Результат
 
@@ -8,7 +8,7 @@
 
 - Hermes постоянно держит `frps.service` и управляющий `hermes-rdp.service`;
 - Telegram показывает один Multi-PC dashboard;
-- «Домашний ПК» доступен по `31.76.77.87:53389`;
+- «Windows-PC-01» доступен по `SERVER_IP_OR_DOMAIN:53389`;
 - каждый следующий ПК получает следующий свободный порт;
 - все Windows-компьютеры используют одинаковый клиент.
 
@@ -27,7 +27,7 @@
 На Hermes:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.0.0/scripts/install-server.sh -o /tmp/install-hermes-rdp.sh
+curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.0.1/scripts/install-server.sh -o /tmp/install-hermes-rdp.sh
 ```
 
 Перед запуском можно посмотреть файл:
@@ -47,13 +47,13 @@ read -rsp 'Telegram bot token: ' TG_TOKEN; echo
 ### Новая установка
 
 ```bash
-sudo env HERMES_RDP_REF=v1.0.0 bash /tmp/install-hermes-rdp.sh --host SERVER_IP_OR_DOMAIN --telegram-token "$TG_TOKEN" --telegram-chat-id TELEGRAM_USER_ID
+sudo env HERMES_RDP_REF=v1.0.1 bash /tmp/install-hermes-rdp.sh --host SERVER_IP_OR_DOMAIN --telegram-token "$TG_TOKEN" --telegram-chat-id TELEGRAM_USER_ID
 ```
 
 ### Текущий сервер Hermes
 
 ```bash
-sudo env HERMES_RDP_REF=v1.0.0 bash /tmp/install-hermes-rdp.sh --host 31.76.77.87 --telegram-token "$TG_TOKEN" --telegram-chat-id TELEGRAM_USER_ID --migrate
+sudo env HERMES_RDP_REF=v1.0.1 bash /tmp/install-hermes-rdp.sh --host SERVER_IP_OR_DOMAIN --telegram-token "$TG_TOKEN" --telegram-chat-id TELEGRAM_USER_ID --migrate
 ```
 
 Установщик создаст backup, установит FRP, API, Telegram bot, systemd units и правила UFW.
@@ -86,7 +86,7 @@ api: LISTEN 7443
 На Hermes:
 
 ```bash
-sudo hermes-rdpctl pair create --name 'Домашний ПК' --port 53389
+sudo hermes-rdpctl pair create --name 'Windows-PC-01' --port 53389
 ```
 
 Сохрани `PAIR_CODE` и `FINGERPRINT`. Код одноразовый и по умолчанию действует 900 секунд.
@@ -96,7 +96,7 @@ sudo hermes-rdpctl pair create --name 'Домашний ПК' --port 53389
 На Windows открой **PowerShell от имени администратора**:
 
 ```powershell
-$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.0/scripts/install-client.ps1'; & ([scriptblock]::Create((irm $u))) -Server '31.76.77.87' -PairCode 'PAIR_CODE' -Fingerprint 'FINGERPRINT' -Name 'Домашний ПК' -RepositoryRef 'v1.0.0'
+$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.1/scripts/install-client.ps1'; & ([scriptblock]::Create((irm $u))) -Server 'SERVER_IP_OR_DOMAIN' -PairCode 'PAIR_CODE' -Fingerprint 'FINGERPRINT' -Name 'Windows-PC-01' -RepositoryRef 'v1.0.1'
 ```
 
 Установщик:
@@ -104,7 +104,7 @@ $u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.0/scripts/install-client
 1. проверит редакцию и разрядность Windows;
 2. зарегистрирует ПК через одноразовый код;
 3. скачает FRP `0.70.1` и проверит SHA-256;
-4. скачает `HermesRdpAgent.ps1` из тега `v1.0.0`;
+4. скачает `HermesRdpAgent.ps1` из тега `v1.0.1`;
 5. включит RDP и штатное firewall-правило;
 6. создаст Scheduled Task `Hermes RDP Agent` от `SYSTEM`;
 7. запустит FRPC и телеметрию;
@@ -128,7 +128,7 @@ Get-Content 'C:\ProgramData\HermesRDP\agent.log' -Tail 30
 /start
 ```
 
-Должен появиться один dashboard с устройством `Домашний ПК · :53389`.
+Должен появиться один dashboard с устройством `Windows-PC-01 · :53389`.
 
 ## 7. Добавить следующий ПК
 
@@ -137,7 +137,7 @@ Get-Content 'C:\ProgramData\HermesRDP\agent.log' -Tail 30
 Порт будет выделен автоматически:
 
 ```text
-Домашний ПК → :53389
+Windows-PC-01 → :53389
 Ноутбук     → :53390
 Офисный ПК  → :53391
 ```
@@ -147,7 +147,7 @@ Get-Content 'C:\ProgramData\HermesRDP\agent.log' -Tail 30
 На любом компьютере с RDP-клиентом:
 
 ```powershell
-mstsc.exe /v:31.76.77.87:53389
+mstsc.exe /v:SERVER_IP_OR_DOMAIN:53389
 ```
 
 Для второго ПК используй его порт из Telegram.

@@ -268,6 +268,6 @@ echo "frps=$(systemctl is-active frps.service)"
 echo "controller=$(systemctl is-active hermes-rdp.service)"
 echo
 echo "Create the first PC code while preserving port $PORT_START:"
-echo "  sudo hermes-rdpctl pair create --name 'Домашний ПК' --port $PORT_START"
+echo "  sudo hermes-rdpctl pair create --name 'Windows-PC-01' --port $PORT_START"
 echo
 echo "Then send /start to the Telegram bot."
