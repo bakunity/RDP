@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Python tests
+        env:
+          PYTHONPATH: server
+        run: python -m unittest discover -s tests -v
+      - name: Compile Python
+        run: python -m compileall -q server/hermes_rdp
+      - name: Validate Bash
+        run: find scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse PowerShell
+        shell: powershell
+        run: |
+          $Failed = $false
+          Get-ChildItem -Recurse -Filter *.ps1 | ForEach-Object {
+            $Tokens = $null
+            $Errors = $null
+            [void][Management.Automation.Language.Parser]::ParseFile(
+              $_.FullName,
+              [ref]$Tokens,
+              [ref]$Errors
+            )
+            if ($Errors.Count -gt 0) {
+              $Failed = $true
+              Write-Error "$($_.FullName): $($Errors[0].Message)"
+            }
+          }
+          if ($Failed) { exit 1 }
