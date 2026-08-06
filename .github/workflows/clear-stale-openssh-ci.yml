@@ -15,7 +15,6 @@ permissions:
 jobs:
   clear:
     name: Cancel stale Actions runs
-    if: github.event_name == 'push' || github.event.issue.title == 'ci: cancel stale Hermes runs'
     runs-on: windows-2022
     timeout-minutes: 3
     env:
