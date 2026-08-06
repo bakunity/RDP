@@ -9,16 +9,30 @@ on:
     types: [opened]
 
 permissions:
+  actions: write
   contents: read
-
-concurrency:
-  group: prepare-v1-1-0
-  cancel-in-progress: true
 
 jobs:
   clear:
-    name: Release stale concurrency slot
-    runs-on: ubuntu-24.04
-    timeout-minutes: 2
+    name: Cancel stuck Actions run
+    if: github.event_name == 'push' || github.event.issue.title == 'ci: cancel stuck OpenSSH run'
+    runs-on: windows-2022
+    timeout-minutes: 3
+    env:
+      GH_TOKEN: ${{ github.token }}
+      STALE_RUN_ID: '31121438485'
     steps:
-      - run: echo 'Stale OpenSSH CI concurrency slot has been released.'
+      - name: Cancel stale workflow run
+        shell: powershell
+        run: |
+          $Headers = @{
+            Accept = 'application/vnd.github+json'
+            Authorization = "Bearer $env:GH_TOKEN"
+            'X-GitHub-Api-Version' = '2022-11-28'
+          }
+          $Uri = (
+            "https://api.github.com/repos/$env:GITHUB_REPOSITORY/" +
+            "actions/runs/$env:STALE_RUN_ID/cancel"
+          )
+          Invoke-RestMethod -Method Post -Uri $Uri -Headers $Headers
+          Write-Host "Cancellation requested for stale run $env:STALE_RUN_ID."
