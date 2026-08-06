@@ -41,9 +41,10 @@ jobs:
               [ref]$Tokens,
               [ref]$Errors
             )
-            if ($Errors.Count -gt 0) {
+            foreach ($ParseError in @($Errors)) {
               $Failed = $true
-              Write-Error "$($_.FullName): $($Errors[0].Message)"
+              $Extent = $ParseError.Extent
+              Write-Host "::error file=$($_.FullName),line=$($Extent.StartLineNumber),col=$($Extent.StartColumnNumber)::$($ParseError.Message) | token: $($Extent.Text)"
             }
           }
           if ($Failed) { exit 1 }
