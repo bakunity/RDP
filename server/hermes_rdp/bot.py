@@ -14,6 +14,7 @@ from typing import Any
 from .config import Config
 from .db import Registry
 from .tunnel import close_tunnel
+from .tunnel import close_tunnel
 
 
 LOG = logging.getLogger("hermes_rdp.bot")

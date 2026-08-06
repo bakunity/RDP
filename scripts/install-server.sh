@@ -234,7 +234,6 @@ cat > /etc/hermes-rdp/sshd_config <<EOF
 Port $SSH_PORT
 ListenAddress 0.0.0.0
 AddressFamily inet
-Protocol 2
 HostKey /etc/hermes-rdp/ssh_host_ed25519_key
 PidFile /run/hermes-rdp-sshd.pid
 
@@ -300,9 +299,9 @@ fi
 
 CLOSED=0
 while read -r PID; do
-  [[ -n "$PID" && -r "/proc/$PID/cmdline" ]] || continue
-  COMMAND="$(tr '\0' ' ' < "/proc/$PID/cmdline")"
-  if [[ "$COMMAND" == *"sshd: hermes-tunnel"* ]]; then
+  [[ -n "$PID" && -e "/proc/$PID/exe" ]] || continue
+  EXE="$(readlink -f "/proc/$PID/exe" 2>/dev/null || true)"
+  if [[ "$EXE" == /usr/sbin/sshd ]]; then
     kill -TERM "$PID"
     CLOSED=1
   fi
@@ -336,19 +335,20 @@ install \
 
 if ((MIGRATE == 1)); then
   rm -f /etc/systemd/system/frps.service /usr/local/bin/frps
+  rm -rf /etc/frp
 fi
 
 ufw allow "$SSH_PORT/tcp" comment 'Hermes RDP OpenSSH' >/dev/null || true
 ufw allow "$API_PORT/tcp" comment 'Hermes RDP API' >/dev/null || true
 ufw allow "$PORT_START:$PORT_END/tcp" comment 'Hermes RDP devices' >/dev/null || true
 
+PYTHONPATH=/opt/hermes-rdp/app \
+  python3 -m compileall -q /opt/hermes-rdp/app/hermes_rdp
+
 systemctl daemon-reload
 systemctl enable hermes-rdp-sshd.service hermes-rdp.service
 systemctl restart hermes-rdp-sshd.service hermes-rdp.service
 sleep 3
-
-PYTHONPATH=/opt/hermes-rdp/app \
-  python3 -m compileall -q /opt/hermes-rdp/app/hermes_rdp
 
 if ((MIGRATE == 1)); then
   PYTHONPATH=/opt/hermes-rdp/app python3 - <<'PY'

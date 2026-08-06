@@ -316,14 +316,24 @@ if (
         -LiteralPath $SshKeyPath, $SshPublicKeyPath `
         -Force `
         -ErrorAction SilentlyContinue
-    & $KeygenPath `
-        -q `
-        -t ed25519 `
-        -N '' `
-        -C "hermes-rdp-$env:COMPUTERNAME" `
-        -f $SshKeyPath
-    if ($LASTEXITCODE -ne 0) {
-        throw "ssh-keygen завершился с кодом $LASTEXITCODE"
+    $KeygenProcess = Start-Process `
+        -FilePath $KeygenPath `
+        -ArgumentList @(
+            '-q'
+            '-t'
+            'ed25519'
+            '-N'
+            '""'
+            '-C'
+            "hermes-rdp-$env:COMPUTERNAME"
+            '-f'
+            $SshKeyPath
+        ) `
+        -Wait `
+        -NoNewWindow `
+        -PassThru
+    if ($KeygenProcess.ExitCode -ne 0) {
+        throw "ssh-keygen завершился с кодом $($KeygenProcess.ExitCode)"
     }
 }
 

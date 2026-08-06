@@ -51,10 +51,6 @@ CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_devices_active_ssh_key
-ON devices(ssh_public_key)
-WHERE revoked=0 AND ssh_public_key IS NOT NULL AND ssh_public_key<>'';
 """
 
 
