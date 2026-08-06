@@ -1,6 +1,6 @@
 # Быстрый старт
 
-Этот сценарий подходит и для новой установки, и для перевода текущей одно-PC схемы в Hermes RDP v1.0.6.
+Этот сценарий подходит и для новой установки, и для перевода текущей одно-PC схемы в Hermes RDP v1.0.7.
 
 ## Результат
 
@@ -27,7 +27,7 @@
 На Hermes:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.0.6/scripts/install-server.sh -o /tmp/install-hermes-rdp.sh
+curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.0.7/scripts/install-server.sh -o /tmp/install-hermes-rdp.sh
 ```
 
 Перед запуском можно посмотреть файл:
@@ -47,13 +47,13 @@ read -rsp 'Telegram bot token: ' TG_TOKEN; echo
 ### Новая установка
 
 ```bash
-sudo env HERMES_RDP_REF=v1.0.6 bash /tmp/install-hermes-rdp.sh --host SERVER_IP_OR_DOMAIN --telegram-token "$TG_TOKEN" --telegram-chat-id TELEGRAM_USER_ID
+sudo env HERMES_RDP_REF=v1.0.7 bash /tmp/install-hermes-rdp.sh --host SERVER_IP_OR_DOMAIN --telegram-token "$TG_TOKEN" --telegram-chat-id TELEGRAM_USER_ID
 ```
 
 ### Текущий сервер Hermes
 
 ```bash
-sudo env HERMES_RDP_REF=v1.0.6 bash /tmp/install-hermes-rdp.sh --host SERVER_IP_OR_DOMAIN --telegram-token "$TG_TOKEN" --telegram-chat-id TELEGRAM_USER_ID --migrate
+sudo env HERMES_RDP_REF=v1.0.7 bash /tmp/install-hermes-rdp.sh --host SERVER_IP_OR_DOMAIN --telegram-token "$TG_TOKEN" --telegram-chat-id TELEGRAM_USER_ID --migrate
 ```
 
 Установщик создаст backup, установит FRP, API, Telegram bot, systemd units и правила UFW.
@@ -96,7 +96,7 @@ sudo hermes-rdpctl pair create --name 'Windows-PC-01' --port 53389
 На Windows открой **PowerShell от имени администратора**:
 
 ```powershell
-$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.6/scripts/install-client.ps1'; & ([scriptblock]::Create((irm $u))) -Server 'SERVER_IP_OR_DOMAIN' -PairCode 'PAIR_CODE' -Fingerprint 'FINGERPRINT' -Name 'Windows-PC-01' -RepositoryRef 'v1.0.6'
+$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.7/scripts/install-client.ps1'; & ([scriptblock]::Create((irm $u))) -Server 'SERVER_IP_OR_DOMAIN' -PairCode 'PAIR_CODE' -Fingerprint 'FINGERPRINT' -Name 'Windows-PC-01' -RepositoryRef 'v1.0.7'
 ```
 
 Установщик:
@@ -104,7 +104,7 @@ $u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.6/scripts/install-client
 1. проверит редакцию и разрядность Windows;
 2. зарегистрирует ПК через одноразовый код;
 3. скачает FRP `0.70.1` и проверит SHA-256;
-4. скачает `HermesRdpAgent.ps1` из тега `v1.0.6`;
+4. скачает `HermesRdpAgent.ps1` из тега `v1.0.7`;
 5. включит RDP и штатное firewall-правило;
 6. создаст Scheduled Task `Hermes RDP Agent` от `SYSTEM`;
 7. запустит FRPC и телеметрию;

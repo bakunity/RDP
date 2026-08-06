@@ -163,7 +163,7 @@ df -h /
 Вставь значения только в своей SSH-сессии:
 
 ```bash
-export HERMES_RDP_VERSION='v1.0.6'
+export HERMES_RDP_VERSION='v1.0.7'
 export SERVER_HOST='SERVER_IP_OR_DOMAIN'
 export TELEGRAM_USER_ID='123456789'
 ```
@@ -244,7 +244,7 @@ sudo hermes-rdpctl doctor
 ```text
 config: OK (...)
 database: OK (...)
-api: OK (1.0.6)
+api: OK (1.0.7)
 frp-control: LISTEN 7000
 api: LISTEN 7443
 ```
@@ -293,7 +293,7 @@ curl -k "https://127.0.0.1:7443/healthz" | python3 -m json.tool
 {
   "ok": true,
   "service": "hermes-rdp",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "fingerprint": "..."
 }
 ```
@@ -383,7 +383,7 @@ Pair code действует 15 минут и используется один 
 Задай переменные:
 
 ```powershell
-$Version = 'v1.0.6'
+$Version = 'v1.0.7'
 $Server = 'SERVER_IP_OR_DOMAIN'
 $PairCode = 'PAIR_CODE'
 $Fingerprint = 'API_FINGERPRINT'
@@ -758,7 +758,7 @@ sudo hermes-rdpctl devices list
 На Windows локальный agent нужно удалить отдельно:
 
 ```powershell
-$Version = 'v1.0.6'
+$Version = 'v1.0.7'
 $Url = "https://raw.githubusercontent.com/bakunity/RDP/$Version/scripts/uninstall-client.ps1"
 & ([scriptblock]::Create((irm $Url)))
 ```

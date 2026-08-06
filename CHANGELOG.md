@@ -4,7 +4,25 @@
 
 ## [Unreleased]
 
-Пока нет изменений после `v1.0.6`.
+Пока нет изменений после `v1.0.7`.
+
+## [1.0.7] — 2026-08-06
+
+Hotfix HTTPS certificate pinning в Windows PowerShell 5.1.
+
+### Исправлено
+
+- PowerShell scriptblock удалён из `ServerCertificateCustomValidationCallback`;
+- проверка SHA-256 fingerprint выполняется статическим C# callback без зависимости от PowerShell runspace;
+- сетевой запрос больше не завершается общей `HttpRequestException` при корректно доступном сервере;
+- fingerprint pinning сохранён: неверный сертификат по-прежнему отклоняется;
+- добавлен Windows runtime test с реальным самоподписанным сертификатом;
+- добавлены Python regression tests, запрещающие возврат PowerShell callback.
+
+### Совместимость
+
+- API, SQLite registry, pairing contract, FRP и стандартные порты не изменены;
+- `install-client.ps1` остаётся совместимым с Windows PowerShell 5.1.
 
 ## [1.0.6] — 2026-08-06
 
@@ -158,7 +176,8 @@ Hotfix серверного установщика для корректной �
 - удаление устройства отзывает API-доступ, но для полного отзыва скомпрометированного FRP token требуется его ротация и переподключение доверенных ПК;
 - Windows-клиент рассчитан на 64-битные Windows Pro, Enterprise или Education с поддержкой входящего RDP.
 
-[Unreleased]: https://github.com/bakunity/RDP/compare/v1.0.6...HEAD
+[Unreleased]: https://github.com/bakunity/RDP/compare/v1.0.7...HEAD
+[1.0.7]: https://github.com/bakunity/RDP/releases/tag/v1.0.7
 [1.0.6]: https://github.com/bakunity/RDP/releases/tag/v1.0.6
 [1.0.5]: https://github.com/bakunity/RDP/releases/tag/v1.0.5
 [1.0.4]: https://github.com/bakunity/RDP/releases/tag/v1.0.4
