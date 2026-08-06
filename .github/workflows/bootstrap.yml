@@ -23,7 +23,8 @@ jobs:
           cat bootstrap/chunk-* > /tmp/project.b64
           base64 -d /tmp/project.b64 > /tmp/project.tar.gz
           tar -xzf /tmp/project.tar.gz -C .
-          rm -rf bootstrap .github/workflows/bootstrap.yml
+          rm -rf bootstrap
+          rm -f .github/workflows/ci.yml
 
       - name: Commit project
         shell: bash
