@@ -13,7 +13,7 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 install -d -m 0700 "$BACKUP"
 cp -a /opt/hermes-rdp /etc/hermes-rdp/config.json /etc/systemd/system/hermes-rdp.service "$BACKUP/"
-curl -fsSL "https://github.com/$REPO/archive/refs/heads/$REF.tar.gz" -o "$WORK/source.tar.gz"
+curl -fsSL "https://codeload.github.com/$REPO/tar.gz/$REF" -o "$WORK/source.tar.gz"
 tar -xzf "$WORK/source.tar.gz" -C "$WORK"
 ROOT="$(find "$WORK" -maxdepth 1 -mindepth 1 -type d -name 'RDP-*' | head -n1)"
 test -f "$ROOT/server/pyproject.toml"
