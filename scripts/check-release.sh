@@ -8,10 +8,13 @@ echo '== Bash syntax =='
 find scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
 
 echo '== Python compile =='
-python3 -m compileall -q server/hermes_rdp tests
+python3 -m compileall -q server/hermes_rdp tests scripts/check-public-examples.py
 
 echo '== Python tests =='
 PYTHONPATH=server python3 -m unittest discover -s tests -v
+
+echo '== Public example privacy =='
+python3 scripts/check-public-examples.py
 
 echo '== Release metadata =='
 python3 - <<'PY'
