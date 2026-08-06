@@ -1,22 +1,93 @@
-# Безопасность
+# Модель безопасности Hermes RDP
 
-## Границы доступа
+## Защищаемые активы
 
-Выделенный OpenSSH daemon принимает только пользователя `hermes-tunnel`, только public-key authentication и только remote TCP forwarding. Shell, PTY, SFTP, agent forwarding, X11 и local forwarding выключены.
+- Telegram bot token;
+- API certificate private key;
+- Windows Ed25519 private keys;
+- device API-tokens;
+- pairing-коды;
+- Windows credentials;
+- SQLite registry.
 
-Каждый ключ получает `permitlisten` только для назначенного внешнего порта. Компрометация одного клиентского ключа не даёт административный SSH-доступ и не разрешает занять порт другого устройства.
+## Серверные границы
 
-## Закрепление идентичности
+Hermes использует отдельный `sshd`, не изменяя административный SSH на порту `22`.
 
-API использует SHA-256 certificate pinning. SSH host public key доставляется через уже закреплённый HTTPS-канал и сохраняется в отдельном `known_hosts`. Клиент запускается с `StrictHostKeyChecking=yes`.
+Tunnel-user не получает:
 
-## Секреты
+- shell;
+- PTY;
+- SFTP;
+- local forwarding;
+- agent forwarding;
+- X11 forwarding;
+- произвольный remote port.
 
-- приватный Ed25519-ключ хранится только на Windows;
-- сервер хранит public key;
-- API-токены хранятся на сервере только как SHA-256 hash;
-- Telegram token находится в отдельном root-owned файле.
+`AuthorizedKeysCommand` выдаёт ключ с ограничениями, а `permitlisten` привязывает его к назначенному RDP-порту.
+
+## Клиентская trust chain
+
+1. HTTPS API проверяется по SHA-256 fingerprint.
+2. SSH host key приходит через уже закреплённый API.
+3. `StrictHostKeyChecking` запрещает незаметную замену сервера.
+4. Private key остаётся на Windows.
+5. Secret files получают ACL только для `SYSTEM` и Administrators.
+
+## Pairing
+
+Код одноразовый и ограничен по времени. Device создаётся после проверки структуры Ed25519 public key.
+
+При ошибке после pairing установщик пытается отозвать созданное устройство, чтобы не оставлять активный key и занятый порт.
+
+## Telegram
+
+Контроллер сверяет chat ID и actor ID. Bot token хранится в root-owned файле и не должен попадать в команды, логи, скриншоты или git.
+
+## RDP boundary
+
+Hermes защищает регистрацию, ключи и путь до Windows, но не заменяет безопасность самой RDP-сессии.
+
+Внешний endpoint доступен как TCP-порт сервера. Обязательны:
+
+- сильный уникальный Windows-пароль;
+- NLA;
+- актуальные обновления Windows;
+- минимальное число администраторов;
+- ограничение source IP или дополнительный сетевой контроль, когда сценарий это допускает;
+- мониторинг неудачных входов.
+
+Не используйте пустые пароли или общие пароли между устройствами.
 
 ## Отзыв
 
-DELETE удаляет запись устройства, поэтому одновременно перестают работать API-токен и SSH public key. Текущий listener закрывается root-helper, ограниченным диапазоном Hermes-портов.
+DELETE должен:
+
+- отозвать API-token;
+- отозвать SSH public key;
+- завершить listener;
+- освободить порт.
+
+Украденный старый key после отзыва не должен аутентифицироваться.
+
+## Backup и restore
+
+Backup содержит чувствительные данные. Храните его с mode `0700`, не загружайте в публичные облака без шифрования и не прикладывайте к issue.
+
+После restore проверьте permissions, `doctor`, SSH host key и существующие устройства.
+
+## Что не публиковать
+
+Не публикуйте:
+
+- bot token;
+- pairing-код;
+- TLS fingerprint вместе с готовой командой установки;
+- private key;
+- `device.json`;
+- полный agent log;
+- реальные IP и Telegram IDs из production без необходимости.
+
+## Сообщение об уязвимости
+
+Используйте процедуру из [корневого SECURITY.md](../SECURITY.md). Не публикуйте рабочий exploit или секреты в открытом issue.
