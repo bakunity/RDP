@@ -6,7 +6,6 @@ build-backend = "setuptools.build_meta"
 name = "hermes-rdp"
 version = "1.0.0"
 description = "Self-hosted multi-PC RDP gateway with Telegram control"
-readme = "../README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [{name = "Bakunity"}]
