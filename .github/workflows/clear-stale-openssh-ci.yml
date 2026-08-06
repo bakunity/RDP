@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/clear-stale-openssh-ci.yml'
+  issues:
+    types: [opened]
 
 permissions:
   contents: read
