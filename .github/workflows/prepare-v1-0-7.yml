@@ -1,0 +1,33 @@
+name: Prepare v1.0.7 static certificate pinning
+
+on:
+  push:
+    branches:
+      - fix/static-csharp-cert-pinning-v1-0-7
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/static-csharp-cert-pinning-v1-0-7
+
+      - name: Prepare patch
+        run: python3 .github/prepare_v1_0_7.py
+
+      - name: Validate release tree
+        run: bash scripts/check-release.sh
+
+      - name: Commit patch
+        run: |
+          set -Eeuo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m 'fix: use static C# certificate pinning callback'
+          git push
