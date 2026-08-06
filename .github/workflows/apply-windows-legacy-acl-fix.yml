@@ -1,0 +1,303 @@
+name: Apply Windows legacy ACL fix
+
+on:
+  push:
+    branches: [fix/windows-legacy-acl-backup]
+    paths:
+      - '.github/workflows/apply-windows-legacy-acl-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    name: Patch installer and run regression tests
+    runs-on: windows-2022
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BRANCH: fix/windows-legacy-acl-backup
+    steps:
+      - name: Fetch branch without marketplace actions
+        shell: pwsh
+        run: |
+          git init repo
+          Set-Location repo
+          git remote add origin "https://x-access-token:${env:GH_TOKEN}@github.com/${env:GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 origin $env:BRANCH
+          git checkout -B $env:BRANCH FETCH_HEAD
+
+      - name: Apply patch and release metadata
+        shell: pwsh
+        run: |
+          Set-Location repo
+          @'
+          from pathlib import Path
+
+          installer = Path("scripts/install-client.ps1")
+          text = installer.read_text(encoding="utf-8-sig").replace("\r\n", "\n")
+
+          old = r'''$BackupDir = Join-Path $BaseDir (
+              'backups\\' + (Get-Date -Format 'yyyyMMdd-HHmmss')
+          )
+          if (Test-Path -LiteralPath $BaseDir) {
+              New-Item `
+                  -ItemType Directory `
+                  -Path $BackupDir `
+                  -Force |
+                  Out-Null
+              Get-ChildItem `
+                  -LiteralPath $BaseDir `
+                  -Force `
+                  -ErrorAction SilentlyContinue |
+                  Where-Object { $_.Name -ne 'backups' } |
+                  Copy-Item `
+                      -Destination $BackupDir `
+                      -Recurse `
+                      -Force `
+                      -ErrorAction SilentlyContinue
+          }
+          New-Item -ItemType Directory -Path $BaseDir -Force | Out-Null'''
+
+          new = r'''$LegacyMarkers = @(
+              (Join-Path $BaseDir 'winmon'),
+              (Join-Path $BaseDir 'frpc.exe'),
+              (Join-Path $BaseDir 'frpc.toml'),
+              (Join-Path $BaseDir 'frp-ca.crt')
+          )
+          $HasLegacyInstallation = [bool](
+              $LegacyMarkers |
+                  Where-Object { Test-Path -LiteralPath $_ } |
+                  Select-Object -First 1
+          )
+          if ($HasLegacyInstallation) {
+              $LegacyDir = (
+                  "$BaseDir-legacy-" +
+                  (Get-Date -Format 'yyyyMMdd-HHmmssfff')
+              )
+              try {
+                  Move-Item `
+                      -LiteralPath $BaseDir `
+                      -Destination $LegacyDir `
+                      -ErrorAction Stop
+              }
+              catch [System.UnauthorizedAccessException] {
+                  $TakeownPath = Join-Path `
+                      $env:WINDIR `
+                      'System32\\takeown.exe'
+                  $IcaclsPath = Join-Path `
+                      $env:WINDIR `
+                      'System32\\icacls.exe'
+
+                  & $TakeownPath /F $BaseDir /R /D Y | Out-Null
+                  if ($LASTEXITCODE -ne 0) {
+                      throw "takeown завершился с кодом $LASTEXITCODE"
+                  }
+                  & $IcaclsPath `
+                      $BaseDir `
+                      /grant '*S-1-5-32-544:(OI)(CI)F' `
+                      /T `
+                      /C `
+                      /Q |
+                      Out-Null
+                  if ($LASTEXITCODE -ne 0) {
+                      throw "icacls завершился с кодом $LASTEXITCODE"
+                  }
+                  Move-Item `
+                      -LiteralPath $BaseDir `
+                      -Destination $LegacyDir `
+                      -ErrorAction Stop
+              }
+              Write-Host "Старая установка сохранена: $LegacyDir"
+          }
+
+          $BackupDir = Join-Path $BaseDir (
+              'backups\\' + (Get-Date -Format 'yyyyMMdd-HHmmss')
+          )
+          if (Test-Path -LiteralPath $BaseDir) {
+              New-Item `
+                  -ItemType Directory `
+                  -Path $BackupDir `
+                  -Force |
+                  Out-Null
+              Get-ChildItem `
+                  -LiteralPath $BaseDir `
+                  -Force `
+                  -ErrorAction SilentlyContinue |
+                  Where-Object { $_.Name -ne 'backups' } |
+                  Copy-Item `
+                      -Destination $BackupDir `
+                      -Recurse `
+                      -Force `
+                      -ErrorAction Stop
+          }
+          New-Item -ItemType Directory -Path $BaseDir -Force | Out-Null'''
+
+          if old not in text:
+              raise SystemExit("legacy backup block not found")
+          text = text.replace(old, new, 1)
+          installer.write_text(text, encoding="utf-8-sig")
+
+          Path("tests/test_windows_legacy_acl_backup.py").write_text(
+              '''from __future__ import annotations
+
+import unittest
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class WindowsLegacyAclBackupTests(unittest.TestCase):
+    def test_legacy_install_is_moved_before_pairing(self) -> None:
+        text = (ROOT / "scripts/install-client.ps1").read_text(
+            encoding="utf-8-sig"
+        )
+        self.assertIn("$HasLegacyInstallation", text)
+        self.assertIn("Move-Item", text)
+        self.assertIn("takeown.exe", text)
+        self.assertIn("icacls.exe", text)
+        self.assertIn("*S-1-5-32-544:(OI)(CI)F", text)
+        self.assertLess(
+            text.index("$HasLegacyInstallation"),
+            text.index("$Pair = Invoke-PinnedPost"),
+        )
+
+    def test_legacy_markers_cover_old_frp_and_monitor(self) -> None:
+        text = (ROOT / "scripts/install-client.ps1").read_text(
+            encoding="utf-8-sig"
+        )
+        for marker in ["winmon", "frpc.exe", "frpc.toml", "frp-ca.crt"]:
+            self.assertIn(marker, text)
+
+
+if __name__ == "__main__":
+    unittest.main()
+''',
+              encoding="utf-8",
+          )
+
+          version = "1.1.1"
+          Path("VERSION").write_text(version + "\n", encoding="utf-8")
+          init_path = Path("server/hermes_rdp/__init__.py")
+          init_path.write_text(
+              init_path.read_text(encoding="utf-8").replace(
+                  '__version__ = "1.1.0"',
+                  '__version__ = "1.1.1"',
+              ),
+              encoding="utf-8",
+          )
+          project_path = Path("server/pyproject.toml")
+          project_path.write_text(
+              project_path.read_text(encoding="utf-8").replace(
+                  'version = "1.1.0"',
+                  'version = "1.1.1"',
+                  1,
+              ),
+              encoding="utf-8",
+          )
+
+          changelog_path = Path("CHANGELOG.md")
+          changelog = changelog_path.read_text(encoding="utf-8")
+          old_unreleased = "## [Unreleased]\n\nПока нет изменений после `v1.1.0`.\n"
+          new_release = """## [Unreleased]
+
+Пока нет изменений после `v1.1.1`.
+
+## [1.1.1] — 2026-08-07
+
+Hotfix повторной установки поверх старого Windows-клиента.
+
+### Исправлено
+
+- legacy-каталог с защищёнными ключами больше не копируется пофайлово;
+- старая FRP/WinMon-установка атомарно переносится в соседний архивный каталог;
+- при устаревших ACL установщик сам выполняет ограниченный `takeown`/`icacls` только для каталога Hermes RDP;
+- pairing по-прежнему начинается только после успешной подготовки локального каталога;
+- добавлены regression tests для защищённых legacy-файлов.
+
+Релиз: https://github.com/bakunity/RDP/releases/tag/v1.1.1
+"""
+          if old_unreleased not in changelog:
+              raise SystemExit("Unreleased changelog block not found")
+          changelog_path.write_text(
+              changelog.replace(old_unreleased, new_release, 1),
+              encoding="utf-8",
+          )
+
+          readme_path = Path("README.md")
+          readme = readme_path.read_text(encoding="utf-8")
+          readme = readme.replace(
+              "## Установка сервера v1.1.0",
+              "## Установка сервера v1.1.1",
+          )
+          readme = readme.replace(
+              "RDP/v1.1.0/scripts/install-server.sh",
+              "RDP/v1.1.1/scripts/install-server.sh",
+          )
+          readme = readme.replace(
+              "HERMES_RDP_REF=v1.1.0",
+              "HERMES_RDP_REF=v1.1.1",
+          )
+          release_anchor = "- [Последний релиз](https://github.com/bakunity/RDP/releases/latest)\n"
+          release_lines = (
+              release_anchor
+              + "- [Hermes RDP v1.1.1](https://github.com/bakunity/RDP/releases/tag/v1.1.1)\n"
+              + "- [Release notes v1.1.1](docs/releases/v1.1.1.md)\n"
+          )
+          if "Hermes RDP v1.1.1" not in readme:
+              readme = readme.replace(release_anchor, release_lines, 1)
+          readme_path.write_text(readme, encoding="utf-8")
+
+          Path("docs/releases/v1.1.1.md").write_text(
+              """# Hermes RDP v1.1.1
+
+Релиз: https://github.com/bakunity/RDP/releases/tag/v1.1.1
+
+Hotfix Windows-установщика после реального перехода с FRP/WinMon на OpenSSH.
+
+## Исправлено
+
+- защищённые legacy-файлы больше не копируются рекурсивно;
+- старая установка переносится целиком в `C:\\ProgramData\\HermesRDP-legacy-*`;
+- fallback `takeown`/`icacls` применяется только к старому каталогу Hermes RDP;
+- pairing не расходуется до успешной локальной подготовки;
+- текущая OpenSSH-архитектура, API и серверные порты не изменены.
+
+## Проверка
+
+Подтверждены чистая установка сервера `1.1.0`, pairing Windows, OpenSSH reverse tunnel и внешнее RDP-подключение через мобильную сеть. Этот патч закрывает найденную ошибку повторной установки поверх старого клиента.
+""",
+              encoding="utf-8",
+          )
+
+          Path(".github/workflows/apply-windows-legacy-acl-fix.yml").unlink()
+          '@ | python -
+
+      - name: Parse PowerShell and run release checks
+        shell: pwsh
+        run: |
+          Set-Location repo
+          $tokens = $null
+          $errors = $null
+          [void][Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path 'scripts/install-client.ps1'),
+              [ref]$tokens,
+              [ref]$errors
+          )
+          if ($errors.Count -gt 0) {
+              $errors | Format-List | Out-String | Write-Error
+              exit 1
+          }
+          python -m unittest discover -s tests -v
+          bash scripts/check-release.sh
+
+      - name: Commit patched branch
+        shell: pwsh
+        run: |
+          Set-Location repo
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "fix: archive protected legacy Windows installation"
+          git push origin HEAD:$env:BRANCH
