@@ -44,3 +44,6 @@ jobs:
             }
           }
           if ($Failed) { exit 1 }
+      - name: Execute static certificate pinning test
+        shell: powershell
+        run: .\tests\Test-PinnedHttpClient.ps1
