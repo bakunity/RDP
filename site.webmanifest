@@ -1,0 +1,17 @@
+{
+  "name": "Hermes RDP",
+  "short_name": "Hermes RDP",
+  "description": "Self-hosted multi-PC RDP gateway with Telegram control.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#050908",
+  "theme_color": "#07110f",
+  "icons": [
+    {
+      "src": "/assets/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
