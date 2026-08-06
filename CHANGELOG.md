@@ -4,7 +4,24 @@
 
 ## [Unreleased]
 
-Пока нет изменений после `v1.0.2`.
+Пока нет изменений после `v1.0.3`.
+
+## [1.0.3] — 2026-08-06
+
+Hotfix чистой серверной установки после проверки на отдельном Debian-сервере.
+
+### Исправлено
+
+- установщик больше не запускает `sed` по отсутствующему `/etc/frp/frps.toml`;
+- чтение legacy FRP token выполняется только при наличии старого конфигурационного файла;
+- чистая установка больше не завершается с `exit=2` до создания systemd-служб;
+- добавлен regression test структуры clean-install ветки.
+
+### Совместимость
+
+- повторный запуск после частичной установки `v1.0.2` безопасен;
+- существующий сгенерированный FRP token сохраняется;
+- API, SQLite, pairing contract и порты не изменены.
 
 ## [1.0.2] — 2026-08-06
 
@@ -89,7 +106,8 @@ Hotfix серверного установщика для корректной �
 - удаление устройства отзывает API-доступ, но для полного отзыва скомпрометированного FRP token требуется его ротация и переподключение доверенных ПК;
 - Windows-клиент рассчитан на 64-битные Windows Pro, Enterprise или Education с поддержкой входящего RDP.
 
-[Unreleased]: https://github.com/bakunity/RDP/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/bakunity/RDP/compare/v1.0.3...HEAD
+[1.0.3]: https://github.com/bakunity/RDP/releases/tag/v1.0.3
 [1.0.2]: https://github.com/bakunity/RDP/releases/tag/v1.0.2
 [1.0.1]: https://github.com/bakunity/RDP/releases/tag/v1.0.1
 [1.0.0]: https://github.com/bakunity/RDP/releases/tag/v1.0.0
