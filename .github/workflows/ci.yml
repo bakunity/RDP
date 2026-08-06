@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: prepare-v1-1-0
   cancel-in-progress: true
 
 jobs:
