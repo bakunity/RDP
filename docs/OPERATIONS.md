@@ -183,11 +183,11 @@ sudo hermes-rdpctl doctor
 Стабильная версия:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.0.2/scripts/update-server.sh -o /tmp/update-hermes-rdp.sh
+curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.0.3/scripts/update-server.sh -o /tmp/update-hermes-rdp.sh
 ```
 
 ```bash
-sudo env HERMES_RDP_REF=v1.0.2 bash /tmp/update-hermes-rdp.sh
+sudo env HERMES_RDP_REF=v1.0.3 bash /tmp/update-hermes-rdp.sh
 ```
 
 ```bash
@@ -207,7 +207,7 @@ sudo hermes-rdpctl doctor
 PowerShell от администратора:
 
 ```powershell
-$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.2/scripts/update-client.ps1'; & ([scriptblock]::Create((irm $u))) -RepositoryRef 'v1.0.2'
+$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.3/scripts/update-client.ps1'; & ([scriptblock]::Create((irm $u))) -RepositoryRef 'v1.0.3'
 ```
 
 Проверка:

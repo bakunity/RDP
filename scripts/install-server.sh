@@ -140,7 +140,10 @@ if [[ ! -s /etc/hermes-rdp/frp-token ]]; then
   if [[ -s /etc/frp/token ]]; then
     tr -d '\r\n' < /etc/frp/token > /etc/hermes-rdp/frp-token
   else
-    old_token="$(sed -n 's/^[[:space:]]*auth\.token[[:space:]]*=[[:space:]]*"\(.*\)"[[:space:]]*$/\1/p' /etc/frp/frps.toml 2>/dev/null | head -n1)"
+    old_token=""
+    if [[ -s /etc/frp/frps.toml ]]; then
+      old_token="$(sed -n 's/^[[:space:]]*auth\.token[[:space:]]*=[[:space:]]*"\(.*\)"[[:space:]]*$/\1/p' /etc/frp/frps.toml 2>/dev/null | head -n1)"
+    fi
     if [[ -n "$old_token" ]]; then
       printf '%s' "$old_token" > /etc/hermes-rdp/frp-token
     else
