@@ -13,6 +13,7 @@ from typing import Any
 
 from .config import Config
 from .db import Registry
+from .tunnel import close_tunnel
 
 
 LOG = logging.getLogger("hermes_rdp.bot")
@@ -188,7 +189,14 @@ class TelegramBot:
         if data.startswith("cmd:"):
             _, action, device_id = data.split(":", 2)
             try:
+                device = self.registry.get_device(device_id)
+                self.registry.set_enabled(device_id, action != "off")
                 self.registry.queue_command(device_id, action)
+                if action == "off":
+                    try:
+                        close_tunnel(self.config, int(device["rdp_port"]))
+                    except Exception as exc:
+                        LOG.warning("tunnel close failed: %s", exc)
                 self._answer(callback_id, f"Команда {action.upper()} отправлена")
             except Exception as exc:
                 self._answer(callback_id, str(exc))
@@ -203,10 +211,18 @@ class TelegramBot:
             return
         if data.startswith("delete_yes:"):
             device_id = data.split(":", 1)[1]
-            self.registry.revoke_device(device_id)
+            try:
+                device = self.registry.get_device(device_id)
+                self.registry.revoke_device(device_id)
+                try:
+                    close_tunnel(self.config, int(device["rdp_port"]))
+                except Exception as exc:
+                    LOG.warning("deleted tunnel close failed: %s", exc)
+                self._answer(callback_id, "Устройство удалено")
+            except Exception as exc:
+                self._answer(callback_id, str(exc))
             self.registry.set_setting("screen", "home")
             self.registry.set_setting("selected_device", "")
-            self._answer(callback_id, "Устройство удалено")
             self.render()
             return
         self._answer(callback_id)
@@ -232,7 +248,7 @@ class TelegramBot:
         text = (
             "🖥 HERMES RDP · КОМПЬЮТЕРЫ\n\n"
             f"Онлайн: {online} из {len(devices)}\n"
-            f"FRP-сервер: постоянно включён\n"
+            f"OpenSSH-туннели: порт {self.config.ssh_bind_port}\n"
             f"Диапазон RDP: {self.config.port_start}–{self.config.port_end}\n"
             f"Обновлено: {datetime.now().strftime('%H:%M:%S')}"
         )
@@ -270,6 +286,7 @@ class TelegramBot:
             f"  Server='{self.config.public_host}'\n"
             f"  PairCode='{code}'\n"
             f"  Fingerprint='{self.config.tls_fingerprint}'\n"
+            f"  RepositoryRef='{self.config.repository_ref}'\n"
             "}\n"
             "& ([scriptblock]::Create($s)) @p"
         )
@@ -305,7 +322,7 @@ class TelegramBot:
             )
         if not process_lines:
             process_lines.append("—")
-        frpc = telemetry.get("frpc_running", False)
+        ssh_tunnel = telemetry.get("ssh_tunnel_running", False)
         endpoint = telemetry.get("endpoint_available", False)
         text = (
             f"{'🟢' if online else '🔴'} {escape(device['display_name']).upper()} · "
@@ -324,7 +341,7 @@ class TelegramBot:
             f"⬇️ Получено: {format_bytes(telemetry.get('network_received_bytes'))}\n"
             f"⬆️ Отправлено: {format_bytes(telemetry.get('network_sent_bytes'))}\n"
             f"Маршрут: {escape(telemetry.get('route', '—'))}\n\n"
-            f"FRPC: {'работает' if frpc else 'остановлен'}\n"
+            f"SSH-туннель: {'работает' if ssh_tunnel else 'остановлен'}\n"
             f"Endpoint: {'доступен' if endpoint else 'закрыт'}\n"
             f"RDP-соединений: {int(telemetry.get('rdp_connections', 0) or 0)}\n"
             f"Внешние клиенты: {escape(', '.join(telemetry.get('rdp_remote_addresses') or []) or 'нет')}\n"
@@ -362,8 +379,8 @@ class TelegramBot:
             "⚠️ УДАЛЕНИЕ УСТРОЙСТВА\n\n"
             f"Компьютер: {escape(device['display_name'])}\n"
             f"RDP: {self.config.public_host}:{device['rdp_port']}\n\n"
-            "Доступ к API будет отозван. Локальный клиент нужно удалить отдельным "
-            "скриптом на самом Windows-ПК."
+            "API-token и SSH-ключ будут отозваны, а RDP-порт освобождён. "
+            "Локальный клиент нужно удалить отдельным скриптом на Windows-ПК."
         )
         keyboard = {
             "inline_keyboard": [

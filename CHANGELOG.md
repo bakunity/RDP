@@ -4,7 +4,37 @@
 
 ## [Unreleased]
 
-Пока нет изменений после `v1.0.7`.
+Пока нет изменений после `v1.1.0`.
+
+## [1.1.0] — 2026-08-06
+
+Крупный релиз: транспорт Hermes RDP переведён с FRP на системный OpenSSH.
+
+### Добавлено
+
+- отдельный изолированный `sshd` на порту `7000/tcp`;
+- индивидуальный Ed25519-ключ и постоянный RDP-порт для каждого ПК;
+- динамический `AuthorizedKeysCommand` с `permitlisten` только на назначенный порт;
+- закрепление SSH host key через уже закреплённый HTTPS API;
+- автоматическое восстановление reverse SSH-туннеля после обрыва или перезагрузки;
+- атомарный pairing, отзыв SSH-ключа и повторное использование освобождённых портов.
+
+### Изменено
+
+- Windows использует встроенные `ssh.exe` и `ssh-keygen.exe`;
+- Telegram ON/OFF/RESTART управляет OpenSSH-туннелем;
+- OFF и DELETE закрывают активный listener на сервере;
+- миграция с `v1.0.x` выполняется явно через `--migrate`.
+
+### Удалено
+
+- `frps`, `frpc.exe`, загрузка стороннего FRP-архива и Defender exclusions.
+
+### Безопасность
+
+- tunnel-user не получает shell, PTY, SFTP, agent forwarding или произвольные порты;
+- private key остаётся только на Windows-ПК;
+- удаление устройства отзывает API-token и SSH public key.
 
 ## [1.0.7] — 2026-08-06
 
@@ -176,7 +206,8 @@ Hotfix серверного установщика для корректной �
 - удаление устройства отзывает API-доступ, но для полного отзыва скомпрометированного FRP token требуется его ротация и переподключение доверенных ПК;
 - Windows-клиент рассчитан на 64-битные Windows Pro, Enterprise или Education с поддержкой входящего RDP.
 
-[Unreleased]: https://github.com/bakunity/RDP/compare/v1.0.7...HEAD
+[Unreleased]: https://github.com/bakunity/RDP/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/bakunity/RDP/releases/tag/v1.1.0
 [1.0.7]: https://github.com/bakunity/RDP/releases/tag/v1.0.7
 [1.0.6]: https://github.com/bakunity/RDP/releases/tag/v1.0.6
 [1.0.5]: https://github.com/bakunity/RDP/releases/tag/v1.0.5
