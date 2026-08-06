@@ -67,7 +67,7 @@ sudo hermes-rdpctl pair create --name 'Ноутбук'
 Новый code с конкретным портом:
 
 ```bash
-sudo hermes-rdpctl pair create --name 'Домашний ПК' --port 53389
+sudo hermes-rdpctl pair create --name 'Windows-PC-01' --port 53389
 ```
 
 Переименование:

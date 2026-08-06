@@ -35,7 +35,7 @@ Hermes RDP публикует RDP нескольких Windows-компьюте�
 
 ```text
 ┌──────────────────────┐
-│ Windows: Домашний ПК │──┐
+│ Windows: Windows-PC-01 │──┐
 │ FRPC + RDP Agent     │  │
 └──────────────────────┘  │
                            │  FRP control 7000/tcp
@@ -55,9 +55,9 @@ Hermes RDP публикует RDP нескольких Windows-компьюте�
 Публичные RDP endpoints:
 
 ```text
-Домашний ПК → 31.76.77.87:53389
-Ноутбук     → 31.76.77.87:53390
-Офисный ПК  → 31.76.77.87:53391
+Windows-PC-01 → SERVER_IP_OR_DOMAIN:53389
+Ноутбук     → SERVER_IP_OR_DOMAIN:53390
+Офисный ПК  → SERVER_IP_OR_DOMAIN:53391
 ```
 
 ## Быстрый старт
@@ -87,7 +87,7 @@ sudo env HERMES_RDP_REF=v1.0.0 bash /tmp/install-hermes-rdp.sh --host SERVER_IP_
 Миграция уже работающего Hermes/FRP/Telegram-бота:
 
 ```bash
-sudo env HERMES_RDP_REF=v1.0.0 bash /tmp/install-hermes-rdp.sh --host 31.76.77.87 --telegram-token "$TG_TOKEN" --telegram-chat-id TELEGRAM_USER_ID --migrate
+sudo env HERMES_RDP_REF=v1.0.0 bash /tmp/install-hermes-rdp.sh --host SERVER_IP_OR_DOMAIN --telegram-token "$TG_TOKEN" --telegram-chat-id TELEGRAM_USER_ID --migrate
 ```
 
 После установки:
@@ -98,26 +98,26 @@ rm -f /tmp/install-hermes-rdp.sh
 sudo hermes-rdpctl doctor
 ```
 
-### 2. Подключить текущий «Домашний ПК» и сохранить порт `53389`
+### 2. Подключить текущий «Windows-PC-01» и сохранить порт `53389`
 
 На Hermes:
 
 ```bash
-sudo hermes-rdpctl pair create --name 'Домашний ПК' --port 53389
+sudo hermes-rdpctl pair create --name 'Windows-PC-01' --port 53389
 ```
 
 Команда выведет:
 
 ```text
 PAIR_CODE=XXXXXXXX
-SERVER=31.76.77.87
+SERVER=SERVER_IP_OR_DOMAIN
 FINGERPRINT=...
 ```
 
 На Windows открой PowerShell **от имени администратора**:
 
 ```powershell
-$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.0/scripts/install-client.ps1'; & ([scriptblock]::Create((irm $u))) -Server '31.76.77.87' -PairCode 'PAIR_CODE' -Fingerprint 'FINGERPRINT' -Name 'Домашний ПК' -RepositoryRef 'v1.0.0'
+$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.0/scripts/install-client.ps1'; & ([scriptblock]::Create((irm $u))) -Server 'SERVER_IP_OR_DOMAIN' -PairCode 'PAIR_CODE' -Fingerprint 'FINGERPRINT' -Name 'Windows-PC-01' -RepositoryRef 'v1.0.0'
 ```
 
 ### 3. Добавить любой следующий ПК
@@ -131,7 +131,7 @@ $u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.0/scripts/install-client
 ```text
 🖥 HERMES RDP · КОМПЬЮТЕРЫ
 
-🟢 Домашний ПК · :53389
+🟢 Windows-PC-01 · :53389
 🟢 Ноутбук · :53390
 🔴 Офисный ПК · :53391
 

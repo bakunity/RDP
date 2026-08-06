@@ -38,7 +38,7 @@ $u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.0/scripts/install-client
 Для текущего домашнего компьютера:
 
 ```powershell
-$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.0/scripts/install-client.ps1'; & ([scriptblock]::Create((irm $u))) -Server '31.76.77.87' -PairCode 'PAIR_CODE' -Fingerprint 'FINGERPRINT' -Name 'Домашний ПК' -RepositoryRef 'v1.0.0'
+$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.0/scripts/install-client.ps1'; & ([scriptblock]::Create((irm $u))) -Server 'SERVER_IP_OR_DOMAIN' -PairCode 'PAIR_CODE' -Fingerprint 'FINGERPRINT' -Name 'Windows-PC-01' -RepositoryRef 'v1.0.0'
 ```
 
 Параметр `-Name` можно не указывать: установщик спросит название или использует имя Windows-компьютера.
@@ -146,13 +146,13 @@ Get-NetTCPConnection -LocalPort 3389 -State Listen -ErrorAction SilentlyContinue
 Связь с Hermes:
 
 ```powershell
-Test-NetConnection 31.76.77.87 -Port 7000
+Test-NetConnection SERVER_IP_OR_DOMAIN -Port 7000
 ```
 
 API:
 
 ```powershell
-Test-NetConnection 31.76.77.87 -Port 7443
+Test-NetConnection SERVER_IP_OR_DOMAIN -Port 7443
 ```
 
 После первых данных Telegram должен показать устройство как `ONLINE` максимум через 15 секунд.

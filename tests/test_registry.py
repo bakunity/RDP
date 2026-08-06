@@ -14,15 +14,15 @@ class RegistryTests(unittest.TestCase):
         self.temp.cleanup()
 
     def test_pair_register_and_authenticate(self):
-        code = self.registry.create_pair_code(display_name="Домашний ПК", preferred_port=53389)
+        code = self.registry.create_pair_code(display_name="Windows-PC-01", preferred_port=53389)
         pair = self.registry.consume_pair_code(code)
         device, token = self.registry.register_device(
             pair=pair,
             display_name="Ignored",
-            machine_name="MS-7D98",
+            machine_name="WINDOWS-PC-01",
             fingerprint="abc",
         )
-        self.assertEqual(device["display_name"], "Домашний ПК")
+        self.assertEqual(device["display_name"], "Windows-PC-01")
         self.assertEqual(device["rdp_port"], 53389)
         self.assertIsNotNone(self.registry.authenticate(device["id"], token))
         self.assertIsNone(self.registry.authenticate(device["id"], "wrong"))

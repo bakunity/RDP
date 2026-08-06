@@ -25,7 +25,7 @@ sudo hermes-rdpctl pair create --name 'Ноутбук'
 Конкретный порт:
 
 ```bash
-sudo hermes-rdpctl pair create --name 'Домашний ПК' --port 53389
+sudo hermes-rdpctl pair create --name 'Windows-PC-01' --port 53389
 ```
 
 TTL 5 минут:
@@ -106,7 +106,7 @@ Get-Process frpc -ErrorAction SilentlyContinue
 ```
 
 ```powershell
-Test-NetConnection 31.76.77.87 -Port 7000
+Test-NetConnection SERVER_IP_OR_DOMAIN -Port 7000
 ```
 
 ## Windows: RDP
@@ -120,7 +120,7 @@ Get-NetTCPConnection -LocalPort 3389 -State Listen -ErrorAction SilentlyContinue
 ```
 
 ```powershell
-mstsc.exe /v:31.76.77.87:53389
+mstsc.exe /v:SERVER_IP_OR_DOMAIN:53389
 ```
 
 ## Stable install v1.0.0

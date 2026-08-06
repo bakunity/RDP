@@ -60,7 +60,7 @@ sudo env HERMES_RDP_REF=v1.0.0 bash /tmp/install-hermes-rdp.sh --host SERVER_IP_
 ### Миграция старой установки
 
 ```bash
-sudo env HERMES_RDP_REF=v1.0.0 bash /tmp/install-hermes-rdp.sh --host 31.76.77.87 --telegram-token "$TG_TOKEN" --telegram-chat-id TELEGRAM_USER_ID --migrate
+sudo env HERMES_RDP_REF=v1.0.0 bash /tmp/install-hermes-rdp.sh --host SERVER_IP_OR_DOMAIN --telegram-token "$TG_TOKEN" --telegram-chat-id TELEGRAM_USER_ID --migrate
 ```
 
 После запуска:
@@ -176,7 +176,7 @@ curl -k https://127.0.0.1:7443/healthz
 С сохранением старого endpoint:
 
 ```bash
-sudo hermes-rdpctl pair create --name 'Домашний ПК' --port 53389
+sudo hermes-rdpctl pair create --name 'Windows-PC-01' --port 53389
 ```
 
 Автоматический свободный порт:
