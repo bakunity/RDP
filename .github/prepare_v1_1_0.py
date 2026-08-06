@@ -8,9 +8,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def replace_once(text: str, old: str, new: str, label: str) -> str:
-    if old not in text:
-        raise SystemExit(f"missing patch anchor: {label}")
-    return text.replace(old, new, 1)
+    if old in text:
+        return text.replace(old, new, 1)
+    if new in text:
+        return text
+    raise SystemExit(f"missing patch anchor: {label}")
 
 
 bot_path = ROOT / "server/hermes_rdp/bot.py"
@@ -191,3 +193,39 @@ changelog = replace_once(
     "changelog links",
 )
 changelog_path.write_text(changelog, encoding="utf-8")
+
+# Existing SQLite databases must add columns before creating the new index.
+db_path = ROOT / "server/hermes_rdp/db.py"
+db = db_path.read_text(encoding="utf-8")
+schema_index = '''
+CREATE UNIQUE INDEX IF NOT EXISTS idx_devices_active_ssh_key
+ON devices(ssh_public_key)
+WHERE revoked=0 AND ssh_public_key IS NOT NULL AND ssh_public_key<>'';
+'''
+if schema_index in db:
+    db = db.replace(schema_index, "", 1)
+if db.count("CREATE UNIQUE INDEX IF NOT EXISTS idx_devices_active_ssh_key") != 1:
+    raise SystemExit("SSH key index must only be created after column migration")
+db_path.write_text(db, encoding="utf-8")
+
+install_path = ROOT / "scripts/install-server.sh"
+install = install_path.read_text(encoding="utf-8")
+install = install.replace("Protocol 2\n", "", 1)
+old_order = '''systemctl daemon-reload
+systemctl enable hermes-rdp-sshd.service hermes-rdp.service
+systemctl restart hermes-rdp-sshd.service hermes-rdp.service
+sleep 3
+
+PYTHONPATH=/opt/hermes-rdp/app \\
+  python3 -m compileall -q /opt/hermes-rdp/app/hermes_rdp
+'''
+new_order = '''PYTHONPATH=/opt/hermes-rdp/app \\
+  python3 -m compileall -q /opt/hermes-rdp/app/hermes_rdp
+
+systemctl daemon-reload
+systemctl enable hermes-rdp-sshd.service hermes-rdp.service
+systemctl restart hermes-rdp-sshd.service hermes-rdp.service
+sleep 3
+'''
+install = replace_once(install, old_order, new_order, "installer validation order")
+install_path.write_text(install, encoding="utf-8")
