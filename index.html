@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#07110f">
+  <meta name="color-scheme" content="dark">
+  <title>Hermes RDP — единый RDP-шлюз для нескольких Windows-ПК</title>
+  <meta name="description" content="Самостоятельный multi-PC RDP-шлюз через один публичный Linux-сервер с Telegram-управлением, LIVE-метриками и простым подключением новых Windows-ПК.">
+  <meta name="keywords" content="RDP, FRP, Windows, Linux, Telegram bot, remote desktop, self-hosted, Hermes RDP">
+  <meta name="author" content="Bakunity">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://rdp.apruxdomain.lol/">
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="/site.webmanifest">
+  <link rel="stylesheet" href="/assets/styles.css">
+
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="ru_RU">
+  <meta property="og:site_name" content="Hermes RDP">
+  <meta property="og:title" content="Hermes RDP — единый RDP-шлюз для нескольких Windows-ПК">
+  <meta property="og:description" content="Один публичный Linux-сервер, несколько Windows-ПК, постоянные RDP-порты и управление через Telegram.">
+  <meta property="og:url" content="https://rdp.apruxdomain.lol/">
+  <meta property="og:image" content="https://rdp.apruxdomain.lol/assets/og-card.svg">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Hermes RDP">
+  <meta name="twitter:description" content="Self-hosted multi-PC RDP gateway with Telegram control.">
+  <meta name="twitter:image" content="https://rdp.apruxdomain.lol/assets/og-card.svg">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Hermes RDP",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Linux server, Windows 10/11 client",
+    "softwareVersion": "1.0.1",
+    "url": "https://rdp.apruxdomain.lol/",
+    "downloadUrl": "https://github.com/bakunity/RDP/releases/latest",
+    "codeRepository": "https://github.com/bakunity/RDP",
+    "license": "https://opensource.org/licenses/MIT",
+    "description": "Self-hosted multi-PC RDP gateway through one public Linux server with Telegram control."
+  }
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Перейти к содержимому</a>
+
+  <header class="site-header" data-header>
+    <div class="container header-inner">
+      <a class="brand" href="#top" aria-label="Hermes RDP — главная">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 36 36" role="img">
+            <path d="M18 3 31 9.5v8.8c0 7.1-4.5 12.2-13 14.7C9.5 30.5 5 25.4 5 18.3V9.5L18 3Z" fill="currentColor" opacity=".2"/>
+            <path d="M18 5.8 28.5 11v7.1c0 5.8-3.5 9.8-10.5 12-7-2.2-10.5-6.2-10.5-12V11L18 5.8Z" fill="none" stroke="currentColor" stroke-width="1.8"/>
+            <path d="M12.2 18h11.6M18 12.2v11.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span>Hermes <strong>RDP</strong></span>
+      </a>
+
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" data-nav-toggle>
+        <span class="sr-only">Открыть меню</span>
+        <span></span><span></span><span></span>
+      </button>
+
+      <nav class="site-nav" id="site-nav" aria-label="Основная навигация" data-nav>
+        <a href="#how">Как работает</a>
+        <a href="#features">Возможности</a>
+        <a href="#security">Безопасность</a>
+        <a href="#install">Установка</a>
+        <a class="nav-github" href="https://github.com/bakunity/RDP" target="_blank" rel="noreferrer">GitHub ↗</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" id="top">
+      <div class="hero-grid" aria-hidden="true"></div>
+      <div class="hero-orb hero-orb-a" aria-hidden="true"></div>
+      <div class="hero-orb hero-orb-b" aria-hidden="true"></div>
+
+      <div class="container hero-layout">
+        <div class="hero-copy reveal">
+          <a class="release-pill" href="https://github.com/bakunity/RDP/releases/tag/v1.0.1" target="_blank" rel="noreferrer">
+            <span class="status-dot"></span>
+            Стабильный релиз v1.0.1
+            <span aria-hidden="true">→</span>
+          </a>
+
+          <h1>Один сервер.<br><span>Все ваши Windows‑ПК.</span></h1>
+          <p class="hero-lead">Hermes RDP публикует удалённый рабочий стол нескольких компьютеров через один Linux-сервер с публичным адресом. У каждого ПК свой постоянный порт, LIVE-метрики и управление из Telegram.</p>
+
+          <div class="hero-actions">
+            <a class="button button-primary" href="#install">Развернуть проект</a>
+            <a class="button button-secondary" href="https://github.com/bakunity/RDP" target="_blank" rel="noreferrer">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.88c-2.78.6-3.37-1.18-3.37-1.18-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.35 1.09 2.92.83.09-.65.35-1.09.64-1.34-2.22-.25-4.56-1.11-4.56-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02A9.56 9.56 0 0 1 12 6.8c.85 0 1.71.12 2.51.35 1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.86v2.77c0 .27.18.58.69.48A10 10 0 0 0 12 2Z" fill="currentColor"/></svg>
+              Открыть GitHub
+            </a>
+          </div>
+
+          <div class="hero-points" aria-label="Ключевые особенности">
+            <span><i></i> Self-hosted</span>
+            <span><i></i> Windows 10/11</span>
+            <span><i></i> Ubuntu / Debian</span>
+            <span><i></i> MIT License</span>
+          </div>
+        </div>
+
+        <div class="dashboard-shell reveal reveal-delay" aria-label="Пример Telegram-панели Hermes RDP">
+          <div class="window-bar">
+            <div class="window-dots"><span></span><span></span><span></span></div>
+            <div class="window-title">Hermes Control · live</div>
+            <div class="window-lock">TLS</div>
+          </div>
+
+          <div class="dashboard-body">
+            <div class="dashboard-head">
+              <div>
+                <small>HERMES RDP</small>
+                <h2>Компьютеры</h2>
+              </div>
+              <span class="live-badge"><i></i> LIVE 3s</span>
+            </div>
+
+            <div class="device-list">
+              <article class="device-card active">
+                <div class="device-icon">W</div>
+                <div class="device-main">
+                  <strong>Windows-PC-01</strong>
+                  <span>CPU 18% · RAM 49% · 15д 21ч</span>
+                </div>
+                <div class="device-port">:53389</div>
+                <div class="device-state"><i></i> ONLINE</div>
+              </article>
+
+              <article class="device-card">
+                <div class="device-icon">W</div>
+                <div class="device-main">
+                  <strong>Office-PC</strong>
+                  <span>CPU 7% · RAM 36% · 4д 08ч</span>
+                </div>
+                <div class="device-port">:53390</div>
+                <div class="device-state"><i></i> ONLINE</div>
+              </article>
+
+              <article class="device-card offline">
+                <div class="device-icon">W</div>
+                <div class="device-main">
+                  <strong>Laptop</strong>
+                  <span>Последний сеанс 28 мин. назад</span>
+                </div>
+                <div class="device-port">:53391</div>
+                <div class="device-state"><i></i> OFFLINE</div>
+              </article>
+            </div>
+
+            <div class="metric-grid">
+              <div class="metric"><span>FRPS</span><strong>ACTIVE</strong></div>
+              <div class="metric"><span>API</span><strong>HTTPS</strong></div>
+              <div class="metric"><span>Endpoints</span><strong>3</strong></div>
+              <div class="metric"><span>RDP sessions</span><strong>1</strong></div>
+            </div>
+
+            <div class="dashboard-actions">
+              <button type="button">＋ Добавить ПК</button>
+              <button type="button">↻ Refresh</button>
+              <button type="button">⚙ Settings</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="container trust-strip reveal">
+        <div><strong>1</strong><span>публичный сервер</span></div>
+        <div><strong>32</strong><span>порта в стандартном пуле</span></div>
+        <div><strong>3 сек.</strong><span>интервал LIVE-метрик</span></div>
+        <div><strong>15 мин.</strong><span>срок pairing-кода</span></div>
+      </div>
+    </section>
+
+    <section class="section" id="how">
+      <div class="container">
+        <div class="section-heading reveal">
+          <span class="eyebrow">АРХИТЕКТУРА</span>
+          <h2>Как это работает</h2>
+          <p>Windows-компьютеры сами устанавливают защищённое исходящее соединение с Hermes. На роутерах клиентов не требуется пробрасывать входящие порты.</p>
+        </div>
+
+        <div class="flow reveal">
+          <div class="flow-node flow-windows">
+            <div class="node-icon">01</div>
+            <small>WINDOWS</small>
+            <h3>FRPC + RDP Agent</h3>
+            <p>Агент собирает метрики, получает команды и поднимает персональный FRP-туннель.</p>
+            <code>localhost:3389</code>
+          </div>
+          <div class="flow-arrow"><span>TLS</span><i></i></div>
+          <div class="flow-node flow-server">
+            <div class="node-icon">02</div>
+            <small>LINUX SERVER</small>
+            <h3>Hermes Gateway</h3>
+            <p>FRPS, HTTPS API, SQLite registry и Telegram controller работают как единый управляющий узел.</p>
+            <code>7000 · 7443</code>
+          </div>
+          <div class="flow-arrow"><span>RDP</span><i></i></div>
+          <div class="flow-node flow-client">
+            <div class="node-icon">03</div>
+            <small>REMOTE CLIENT</small>
+            <h3>Постоянный endpoint</h3>
+            <p>Подключение стандартным Remote Desktop по адресу сервера и закреплённому порту.</p>
+            <code>SERVER:53389</code>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-muted" id="features">
+      <div class="container">
+        <div class="section-heading reveal">
+          <span class="eyebrow">ВОЗМОЖНОСТИ</span>
+          <h2>Не просто туннель</h2>
+          <p>Hermes RDP объединяет развёртывание, регистрацию устройств, телеметрию и управление в одном проекте.</p>
+        </div>
+
+        <div class="feature-grid">
+          <article class="feature-card feature-wide reveal">
+            <div class="feature-icon">⌁</div>
+            <div>
+              <h3>Multi-PC по одной схеме</h3>
+              <p>Первый и все последующие компьютеры используют один установщик и один агент. Особенным остаётся только сервер.</p>
+            </div>
+            <div class="port-stack" aria-label="Пример распределения портов">
+              <span><b>PC-01</b><code>:53389</code></span>
+              <span><b>PC-02</b><code>:53390</code></span>
+              <span><b>PC-03</b><code>:53391</code></span>
+            </div>
+          </article>
+
+          <article class="feature-card reveal">
+            <div class="feature-icon">◉</div>
+            <h3>Telegram Dashboard</h3>
+            <p>Один редактируемый экран со статусами всех ПК, без потока служебных сообщений.</p>
+          </article>
+
+          <article class="feature-card reveal">
+            <div class="feature-icon">↻</div>
+            <h3>ON / OFF / RESTART</h3>
+            <p>Управление туннелем выбранного компьютера без остановки остальных устройств.</p>
+          </article>
+
+          <article class="feature-card reveal">
+            <div class="feature-icon">▥</div>
+            <h3>LIVE-телеметрия</h3>
+            <p>CPU, RAM, диск, сеть, аптайм, процессы, пользователь и активные RDP-сессии.</p>
+          </article>
+
+          <article class="feature-card reveal">
+            <div class="feature-icon">＋</div>
+            <h3>Pairing за минуты</h3>
+            <p>Одноразовый код, автоматическая выдача порта и готовая команда PowerShell.</p>
+          </article>
+
+          <article class="feature-card reveal">
+            <div class="feature-icon">▣</div>
+            <h3>Диагностика</h3>
+            <p><code>hermes-rdpctl doctor</code> проверяет службы, конфигурацию и состояние проекта.</p>
+          </article>
+
+          <article class="feature-card reveal">
+            <div class="feature-icon">⇡</div>
+            <h3>Обновление и backup</h3>
+            <p>Версионированные установщики, резервные копии и документированный rollback.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="security">
+      <div class="container security-layout">
+        <div class="security-copy reveal">
+          <span class="eyebrow">SECURITY BY DEFAULT</span>
+          <h2>Контроль остаётся у вас</h2>
+          <p>Проект разворачивается на вашей инфраструктуре. Устройства регистрируются отдельно, секреты не публикуются в репозитории, а доступ к панели ограничен выбранным Telegram ID.</p>
+
+          <ul class="check-list">
+            <li><span>✓</span><div><strong>TLS 1.2+</strong><small>HTTPS API и принудительный TLS для FRP.</small></div></li>
+            <li><span>✓</span><div><strong>Fingerprint pinning</strong><small>Windows installer проверяет сертификат API.</small></div></li>
+            <li><span>✓</span><div><strong>Отдельные device tokens</strong><small>На сервере хранится только SHA-256.</small></div></li>
+            <li><span>✓</span><div><strong>Одноразовый pairing</strong><small>Код по умолчанию действует 15 минут.</small></div></li>
+          </ul>
+
+          <a class="text-link" href="https://github.com/bakunity/RDP/blob/main/docs/SECURITY.md" target="_blank" rel="noreferrer">Открыть модель безопасности →</a>
+        </div>
+
+        <div class="security-visual reveal reveal-delay">
+          <div class="shield-ring ring-one"></div>
+          <div class="shield-ring ring-two"></div>
+          <div class="shield-core">
+            <svg viewBox="0 0 120 140" aria-hidden="true">
+              <path d="M60 5 111 30v34.6c0 28-17.7 48.1-51 58C26.7 112.7 9 92.6 9 64.6V30L60 5Z" fill="currentColor" opacity=".15"/>
+              <path d="M60 15 101 35v28c0 22.8-14.1 39.2-41 47.6C33.1 102.2 19 85.8 19 63V35l41-20Z" fill="none" stroke="currentColor" stroke-width="3"/>
+              <path d="m40 62 13 13 28-31" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <strong>SELF-HOSTED</strong>
+            <span>Ваш сервер · Ваши устройства</span>
+          </div>
+          <div class="security-tag tag-a">TLS</div>
+          <div class="security-tag tag-b">SHA-256</div>
+          <div class="security-tag tag-c">ACL</div>
+          <div class="security-tag tag-d">PINNING</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-install" id="install">
+      <div class="container">
+        <div class="section-heading reveal">
+          <span class="eyebrow">QUICK START</span>
+          <h2>От чистого сервера до первого RDP</h2>
+          <p>Используйте стабильный тег релиза. Значения сервера, Telegram ID и pairing-кода подставляются при развёртывании.</p>
+        </div>
+
+        <div class="install-grid reveal">
+          <div class="steps" role="tablist" aria-label="Этапы установки">
+            <button class="step-tab active" type="button" role="tab" aria-selected="true" aria-controls="step-server" data-step="server">
+              <span>01</span><div><strong>Установить сервер</strong><small>Ubuntu / Debian</small></div>
+            </button>
+            <button class="step-tab" type="button" role="tab" aria-selected="false" aria-controls="step-pair" data-step="pair">
+              <span>02</span><div><strong>Создать pairing</strong><small>Hermes CLI</small></div>
+            </button>
+            <button class="step-tab" type="button" role="tab" aria-selected="false" aria-controls="step-windows" data-step="windows">
+              <span>03</span><div><strong>Подключить Windows</strong><small>PowerShell Admin</small></div>
+            </button>
+            <button class="step-tab" type="button" role="tab" aria-selected="false" aria-controls="step-check" data-step="check">
+              <span>04</span><div><strong>Проверить endpoint</strong><small>Remote Desktop</small></div>
+            </button>
+          </div>
+
+          <div class="terminal">
+            <div class="terminal-bar">
+              <span></span><span></span><span></span>
+              <strong data-terminal-title>SERVER · BASH</strong>
+            </div>
+
+            <div class="terminal-panel active" id="step-server" role="tabpanel" data-panel="server">
+              <div class="code-block">
+                <button class="copy-button" type="button" data-copy="#code-server">Копировать</button>
+                <pre id="code-server"><code><span class="comment"># Скачать стабильный установщик</span>
+curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.0.1/scripts/install-server.sh \
+  -o /tmp/install-hermes-rdp.sh
+
+<span class="comment"># Запустить установку</span>
+sudo env HERMES_RDP_REF=v1.0.1 bash /tmp/install-hermes-rdp.sh \
+  --host SERVER_IP_OR_DOMAIN \
+  --telegram-token "$TG_TOKEN" \
+  --telegram-chat-id TELEGRAM_USER_ID</code></pre>
+              </div>
+            </div>
+
+            <div class="terminal-panel" id="step-pair" role="tabpanel" data-panel="pair" hidden>
+              <div class="code-block">
+                <button class="copy-button" type="button" data-copy="#code-pair">Копировать</button>
+                <pre id="code-pair"><code><span class="comment"># Создать первый компьютер на стандартном порту</span>
+sudo hermes-rdpctl pair create \
+  --name 'Windows-PC-01' \
+  --port 53389
+
+<span class="output">PAIR_CODE=XXXXXXXX
+SERVER=SERVER_IP_OR_DOMAIN
+FINGERPRINT=SHA256_HEX</span></code></pre>
+              </div>
+            </div>
+
+            <div class="terminal-panel" id="step-windows" role="tabpanel" data-panel="windows" hidden>
+              <div class="code-block">
+                <button class="copy-button" type="button" data-copy="#code-windows">Копировать</button>
+                <pre id="code-windows"><code><span class="comment"># PowerShell от имени администратора</span>
+$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.1/scripts/install-client.ps1'
+& ([scriptblock]::Create((irm $u))) \
+  -Server 'SERVER_IP_OR_DOMAIN' \
+  -PairCode 'PAIR_CODE' \
+  -Fingerprint 'SHA256_HEX' \
+  -Name 'Windows-PC-01' \
+  -RepositoryRef 'v1.0.1'</code></pre>
+              </div>
+            </div>
+
+            <div class="terminal-panel" id="step-check" role="tabpanel" data-panel="check" hidden>
+              <div class="code-block">
+                <button class="copy-button" type="button" data-copy="#code-check">Копировать</button>
+                <pre id="code-check"><code><span class="comment"># Проверка доступности</span>
+Test-NetConnection SERVER_IP_OR_DOMAIN -Port 53389
+
+<span class="comment"># Открыть Remote Desktop</span>
+mstsc.exe /v:SERVER_IP_OR_DOMAIN:53389</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="install-links reveal">
+          <a href="https://github.com/bakunity/RDP/blob/v1.0.1/docs/QUICKSTART.md" target="_blank" rel="noreferrer"><strong>Быстрый старт</strong><span>Основной сценарий установки →</span></a>
+          <a href="https://github.com/bakunity/RDP/blob/v1.0.1/docs/TESTING_A_TO_Z.md" target="_blank" rel="noreferrer"><strong>Тестирование от А до Я</strong><span>Полный acceptance test →</span></a>
+          <a href="https://github.com/bakunity/RDP/blob/v1.0.1/docs/TROUBLESHOOTING.md" target="_blank" rel="noreferrer"><strong>Диагностика</strong><span>Проблемы и решения →</span></a>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="docs">
+      <div class="container">
+        <div class="section-heading reveal">
+          <span class="eyebrow">DOCUMENTATION</span>
+          <h2>Понятно пользователю.<br>Предсказуемо разработчику.</h2>
+          <p>Проект документирует установку, архитектуру, API, эксплуатацию, безопасность, релизы и дальнейшую разработку.</p>
+        </div>
+
+        <div class="docs-grid">
+          <a class="doc-card reveal" href="https://github.com/bakunity/RDP/blob/main/docs/INDEX.md" target="_blank" rel="noreferrer"><span>01</span><div><strong>Индекс документации</strong><small>Все материалы по ролям</small></div><b>↗</b></a>
+          <a class="doc-card reveal" href="https://github.com/bakunity/RDP/blob/main/docs/ARCHITECTURE.md" target="_blank" rel="noreferrer"><span>02</span><div><strong>Архитектура</strong><small>Компоненты и потоки данных</small></div><b>↗</b></a>
+          <a class="doc-card reveal" href="https://github.com/bakunity/RDP/blob/main/docs/API.md" target="_blank" rel="noreferrer"><span>03</span><div><strong>API Contract</strong><small>Pairing, telemetry, commands</small></div><b>↗</b></a>
+          <a class="doc-card reveal" href="https://github.com/bakunity/RDP/blob/main/docs/DEVELOPMENT.md" target="_blank" rel="noreferrer"><span>04</span><div><strong>Разработка</strong><small>Структура и правила изменений</small></div><b>↗</b></a>
+          <a class="doc-card reveal" href="https://github.com/bakunity/RDP/blob/main/docs/OPERATIONS.md" target="_blank" rel="noreferrer"><span>05</span><div><strong>Эксплуатация</strong><small>Backup, update, restore</small></div><b>↗</b></a>
+          <a class="doc-card reveal" href="https://github.com/bakunity/RDP/releases/latest" target="_blank" rel="noreferrer"><span>06</span><div><strong>Релизы</strong><small>Теги и история изменений</small></div><b>↗</b></a>
+        </div>
+      </div>
+    </section>
+
+    <section class="section faq-section">
+      <div class="container faq-layout">
+        <div class="section-heading reveal">
+          <span class="eyebrow">FAQ</span>
+          <h2>Частые вопросы</h2>
+          <p>Коротко о границах и принципах текущей версии.</p>
+        </div>
+
+        <div class="faq-list reveal">
+          <details>
+            <summary>Нужен ли белый IP на каждом Windows-ПК?<span>＋</span></summary>
+            <p>Нет. Публичный адрес требуется только Linux-серверу Hermes. Windows-клиенты устанавливают исходящие соединения с ним.</p>
+          </details>
+          <details>
+            <summary>Первый компьютер отличается от остальных?<span>＋</span></summary>
+            <p>Нет. Все Windows-компьютеры равноправны и используют одинаковый установщик. Отличаются только device credentials и выделенный RDP-порт.</p>
+          </details>
+          <details>
+            <summary>Можно ли сохранить привычный порт 53389?<span>＋</span></summary>
+            <p>Да. При создании pairing порт можно закрепить явно. Следующие устройства получат свободные порты из настроенного диапазона.</p>
+          </details>
+          <details>
+            <summary>Данные проходят через сторонний облачный сервис?<span>＋</span></summary>
+            <p>Нет. Контроллер, FRP-сервер, API и реестр устройств работают на вашем Linux-сервере. Telegram используется как интерфейс управления.</p>
+          </details>
+          <details>
+            <summary>Проект подходит для production?<span>＋</span></summary>
+            <p>Версия 1.0.1 является стабильной, но перед production-развёртыванием рекомендуется пройти полный гайд тестирования и изучить документ безопасности.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <section class="cta-section">
+      <div class="container cta-card reveal">
+        <div>
+          <span class="eyebrow">OPEN SOURCE · MIT</span>
+          <h2>Соберите свою RDP-инфраструктуру</h2>
+          <p>Разверните Hermes на отдельном сервере, подключите первый Windows-ПК и проверьте полный сценарий по документации.</p>
+        </div>
+        <div class="cta-actions">
+          <a class="button button-primary" href="https://github.com/bakunity/RDP/releases/latest" target="_blank" rel="noreferrer">Скачать последний релиз</a>
+          <a class="button button-secondary" href="https://github.com/bakunity/RDP/blob/v1.0.1/docs/TESTING_A_TO_Z.md" target="_blank" rel="noreferrer">Открыть тестовый гайд</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-main">
+      <a class="brand" href="#top">
+        <span class="brand-mark" aria-hidden="true">H</span>
+        <span>Hermes <strong>RDP</strong></span>
+      </a>
+      <p>Self-hosted multi-PC RDP gateway with Telegram control.</p>
+      <div class="footer-links">
+        <a href="https://github.com/bakunity/RDP" target="_blank" rel="noreferrer">GitHub</a>
+        <a href="https://github.com/bakunity/RDP/releases/latest" target="_blank" rel="noreferrer">Releases</a>
+        <a href="https://github.com/bakunity/RDP/blob/main/docs/INDEX.md" target="_blank" rel="noreferrer">Docs</a>
+        <a href="https://github.com/bakunity/RDP/blob/main/LICENSE" target="_blank" rel="noreferrer">MIT License</a>
+      </div>
+    </div>
+    <div class="container footer-bottom">
+      <span>© <span data-year></span> Bakunity</span>
+      <span>Built for predictable remote access.</span>
+    </div>
+  </footer>
+
+  <div class="toast" role="status" aria-live="polite" data-toast>Команда скопирована</div>
+  <script src="/assets/app.js" defer></script>
+</body>
+</html>
