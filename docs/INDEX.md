@@ -5,6 +5,7 @@
 ## Пользователю
 
 - [Быстрый старт](QUICKSTART.md) — сервер, первый ПК и следующий ПК по шагам.
+- [Тестирование от А до Я](TESTING_A_TO_Z.md) — отдельный сервер, новый бот, новый Windows-ПК и полный acceptance test.
 - [Установка Windows](INSTALL_WINDOWS.md) — единый клиент для всех компьютеров.
 - [Команды](COMMANDS.md) — короткая шпаргалка для PowerShell и Hermes.
 - [Диагностика](TROUBLESHOOTING.md) — что проверять при OFFLINE, закрытом endpoint или молчащем боте.
@@ -27,8 +28,8 @@
 ## Релизы
 
 - [Последний GitHub Release](https://github.com/bakunity/RDP/releases/latest)
-- [v1.0.0](https://github.com/bakunity/RDP/releases/tag/v1.0.0)
-- [Release notes v1.0.0](releases/v1.0.0.md)
+- [v1.0.1](https://github.com/bakunity/RDP/releases/tag/v1.0.1)
+- [Release notes v1.0.1](releases/v1.0.1.md)
 - [Changelog](../CHANGELOG.md)
 
 ## Важное правило архитектуры

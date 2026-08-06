@@ -16,7 +16,7 @@ Hermes RDP публикует RDP нескольких Windows-компьюте�
 
 > **Главный принцип проекта:** основной компьютер и все дополнительные компьютеры равноправны. Для каждого используется один и тот же Windows-установщик и один и тот же агент. Специальным узлом является только сервер Hermes.
 
-## Что входит в v1.0.0
+## Что входит в v1.0.1
 
 - постоянные адреса вида `SERVER:53389`, `SERVER:53390`, `SERVER:53391`;
 - единый Telegram dashboard без потока отдельных сообщений;
@@ -69,7 +69,7 @@ Windows-PC-01 → SERVER_IP_OR_DOMAIN:53389
 Стабильный установщик последнего релиза:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.0.0/scripts/install-server.sh -o /tmp/install-hermes-rdp.sh
+curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.0.1/scripts/install-server.sh -o /tmp/install-hermes-rdp.sh
 ```
 
 Чтобы Telegram token не попал в историю команд:
@@ -81,13 +81,13 @@ read -rsp 'Telegram bot token: ' TG_TOKEN; echo
 Новая установка:
 
 ```bash
-sudo env HERMES_RDP_REF=v1.0.0 bash /tmp/install-hermes-rdp.sh --host SERVER_IP_OR_DOMAIN --telegram-token "$TG_TOKEN" --telegram-chat-id TELEGRAM_USER_ID
+sudo env HERMES_RDP_REF=v1.0.1 bash /tmp/install-hermes-rdp.sh --host SERVER_IP_OR_DOMAIN --telegram-token "$TG_TOKEN" --telegram-chat-id TELEGRAM_USER_ID
 ```
 
 Миграция уже работающего Hermes/FRP/Telegram-бота:
 
 ```bash
-sudo env HERMES_RDP_REF=v1.0.0 bash /tmp/install-hermes-rdp.sh --host SERVER_IP_OR_DOMAIN --telegram-token "$TG_TOKEN" --telegram-chat-id TELEGRAM_USER_ID --migrate
+sudo env HERMES_RDP_REF=v1.0.1 bash /tmp/install-hermes-rdp.sh --host SERVER_IP_OR_DOMAIN --telegram-token "$TG_TOKEN" --telegram-chat-id TELEGRAM_USER_ID --migrate
 ```
 
 После установки:
@@ -117,7 +117,7 @@ FINGERPRINT=...
 На Windows открой PowerShell **от имени администратора**:
 
 ```powershell
-$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.0/scripts/install-client.ps1'; & ([scriptblock]::Create((irm $u))) -Server 'SERVER_IP_OR_DOMAIN' -PairCode 'PAIR_CODE' -Fingerprint 'FINGERPRINT' -Name 'Windows-PC-01' -RepositoryRef 'v1.0.0'
+$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.1/scripts/install-client.ps1'; & ([scriptblock]::Create((irm $u))) -Server 'SERVER_IP_OR_DOMAIN' -PairCode 'PAIR_CODE' -Fingerprint 'FINGERPRINT' -Name 'Windows-PC-01' -RepositoryRef 'v1.0.1'
 ```
 
 ### 3. Добавить любой следующий ПК
@@ -164,26 +164,26 @@ Get-Content 'C:\ProgramData\HermesRDP\agent.log' -Tail 50
 
 ## Обновление
 
-Сервер до стабильной версии `v1.0.0`:
+Сервер до стабильной версии `v1.0.1`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.0.0/scripts/update-server.sh -o /tmp/update-hermes-rdp.sh
-sudo env HERMES_RDP_REF=v1.0.0 bash /tmp/update-hermes-rdp.sh
+curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.0.1/scripts/update-server.sh -o /tmp/update-hermes-rdp.sh
+sudo env HERMES_RDP_REF=v1.0.1 bash /tmp/update-hermes-rdp.sh
 rm -f /tmp/update-hermes-rdp.sh
 ```
 
 Windows-клиент:
 
 ```powershell
-$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.0/scripts/update-client.ps1'; & ([scriptblock]::Create((irm $u))) -RepositoryRef 'v1.0.0'
+$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.1/scripts/update-client.ps1'; & ([scriptblock]::Create((irm $u))) -RepositoryRef 'v1.0.1'
 ```
 
 ## Релизы
 
 - [Последний релиз](https://github.com/bakunity/RDP/releases/latest)
-- [Hermes RDP v1.0.0](https://github.com/bakunity/RDP/releases/tag/v1.0.0)
+- [Hermes RDP v1.0.1](https://github.com/bakunity/RDP/releases/tag/v1.0.1)
 - [История изменений](CHANGELOG.md)
-- [Описание релиза v1.0.0](docs/releases/v1.0.0.md)
+- [Описание релиза v1.0.1](docs/releases/v1.0.1.md)
 
 Для продакшена используй URL с конкретным тегом. `main` предназначен для разработки и может изменяться между релизами.
 
@@ -192,6 +192,7 @@ $u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.0/scripts/update-client.
 | Документ | Для чего |
 |---|---|
 | [Быстрый старт](docs/QUICKSTART.md) | Развернуть сервер и подключить первый ПК |
+| [Тестирование от А до Я](docs/TESTING_A_TO_Z.md) | Полная проверка на отдельном сервере, новом боте и новом Windows-ПК |
 | [Установка сервера](docs/INSTALL_SERVER.md) | Параметры, порты, файлы и проверка установки |
 | [Установка Windows](docs/INSTALL_WINDOWS.md) | Подключение основного и дополнительных ПК |
 | [Миграция](docs/MIGRATION.md) | Перевод старой одно-PC схемы без смены `53389` |

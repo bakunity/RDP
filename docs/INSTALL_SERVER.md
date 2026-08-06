@@ -37,12 +37,12 @@ Token лучше не писать напрямую в историю shell:
 read -rsp 'Telegram bot token: ' TG_TOKEN; echo
 ```
 
-## Стабильная установка v1.0.0
+## Стабильная установка v1.0.1
 
 Скачать установщик:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.0.0/scripts/install-server.sh -o /tmp/install-hermes-rdp.sh
+curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.0.1/scripts/install-server.sh -o /tmp/install-hermes-rdp.sh
 ```
 
 Проверить содержимое:
@@ -54,13 +54,13 @@ less /tmp/install-hermes-rdp.sh
 ### Новая установка
 
 ```bash
-sudo env HERMES_RDP_REF=v1.0.0 bash /tmp/install-hermes-rdp.sh --host SERVER_IP_OR_DOMAIN --telegram-token "$TG_TOKEN" --telegram-chat-id TELEGRAM_USER_ID
+sudo env HERMES_RDP_REF=v1.0.1 bash /tmp/install-hermes-rdp.sh --host SERVER_IP_OR_DOMAIN --telegram-token "$TG_TOKEN" --telegram-chat-id TELEGRAM_USER_ID
 ```
 
 ### Миграция старой установки
 
 ```bash
-sudo env HERMES_RDP_REF=v1.0.0 bash /tmp/install-hermes-rdp.sh --host SERVER_IP_OR_DOMAIN --telegram-token "$TG_TOKEN" --telegram-chat-id TELEGRAM_USER_ID --migrate
+sudo env HERMES_RDP_REF=v1.0.1 bash /tmp/install-hermes-rdp.sh --host SERVER_IP_OR_DOMAIN --telegram-token "$TG_TOKEN" --telegram-chat-id TELEGRAM_USER_ID --migrate
 ```
 
 После запуска:
@@ -83,7 +83,7 @@ rm -f /tmp/install-hermes-rdp.sh
 --migrate                   подтвердить замену старого Hermes RDP bot/setup
 ```
 
-Версия исходников выбирается переменной окружения `HERMES_RDP_REF`. Для продакшена указывай релизный тег, например `v1.0.0`. Для тестовой ветки можно временно передать имя ветки.
+Версия исходников выбирается переменной окружения `HERMES_RDP_REF`. Для продакшена указывай релизный тег, например `v1.0.1`. Для тестовой ветки можно временно передать имя ветки.
 
 ## Что делает установщик
 
