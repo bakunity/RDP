@@ -24,10 +24,17 @@ jobs:
           set -Eeuo pipefail
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add server/hermes_rdp/bot.py server/hermes_rdp/__init__.py server/pyproject.toml VERSION CHANGELOG.md
+          git add \
+            server/hermes_rdp/bot.py \
+            server/hermes_rdp/db.py \
+            server/hermes_rdp/__init__.py \
+            server/pyproject.toml \
+            scripts/install-server.sh \
+            VERSION \
+            CHANGELOG.md
           if git diff --cached --quiet; then
             echo 'No generated changes'
             exit 0
           fi
-          git commit -m 'feat: finalize OpenSSH Telegram UI and v1.1.0 metadata'
+          git commit -m 'fix: finalize OpenSSH migration safety'
           git push
