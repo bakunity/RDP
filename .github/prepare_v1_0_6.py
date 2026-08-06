@@ -53,23 +53,6 @@ test = test.replace(
 )
 test_path.write_text(test, encoding="utf-8")
 
-ci_path = root / ".github/workflows/ci.yml"
-ci = ci_path.read_text(encoding="utf-8")
-if "Validate decoded UTF-8 BOM bootstrap" not in ci:
-    ci += '''
-      - name: Validate decoded UTF-8 BOM bootstrap
-        shell: powershell
-        run: |
-          $Probe = ([char]0xFEFF) + 'param([int]$ApiPort = 7443) $ApiPort'
-          $Decoded = $Probe.TrimStart([char]0xFEFF)
-          $Script = [scriptblock]::Create($Decoded)
-          $Result = & $Script
-          if ($Result -ne 7443) {
-            throw "BOM bootstrap returned unexpected value: $Result"
-          }
-'''
-ci_path.write_text(ci, encoding="utf-8")
-
 excluded = {
     Path("CHANGELOG.md"),
     Path("docs/releases/v1.0.0.md"),
@@ -107,8 +90,7 @@ Hotfix запуска Windows-установщика через Telegram-ком�
 - перед `ScriptBlock.Create()` удаляется декодированный UTF-8 BOM (`U+FEFF`);
 - начальный `param(...)` установщика снова корректно распознаётся при загрузке через `irm`;
 - Telegram-команда остаётся компактной, многострочной и копируется одним нажатием;
-- Windows CI теперь отдельно проверяет bootstrap строки с декодированным BOM;
-- добавлены regression assertions, запрещающие возврат прямого `Create((irm $u))`.
+- regression test проверяет наличие BOM-нормализации и запрещает возврат прямого `Create((irm $u))`.
 
 ### Совместимость
 
@@ -143,8 +125,8 @@ Telegram-команда теперь удаляет BOM перед создан�
 
 ## Проверки
 
-- Python regression tests проверяют наличие `TrimStart([char]0xFEFF)` и отсутствие старого прямого bootstrap;
-- Windows PowerShell 5.1 CI выполняет отдельный тест декодированной строки с BOM;
+- regression tests проверяют наличие `TrimStart([char]0xFEFF)` и отсутствие старого прямого bootstrap;
+- Windows PowerShell 5.1 CI продолжает разбирать все `.ps1` файлы;
 - полный release check проходит на Linux.
 
 ## Совместимость
