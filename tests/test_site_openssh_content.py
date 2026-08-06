@@ -16,7 +16,7 @@ class WebsiteOpenSshContentTests(unittest.TestCase):
             "REAL-WORLD VALIDATION",
             "мобильные данные",
             "permitlisten",
-            "Hermes RDP Agent",
+            "Hermes Agent",
         ]:
             self.assertIn(required, text)
 
