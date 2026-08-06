@@ -265,12 +265,13 @@ class TelegramBot:
         code = self.registry.get_setting("pair_code", "") or ""
         command = (
             "$u='" + self.config.client_installer_url + "'\n"
+            "$s=(irm $u).TrimStart([char]0xFEFF)\n"
             "$p=@{\n"
             f"  Server='{self.config.public_host}'\n"
             f"  PairCode='{code}'\n"
             f"  Fingerprint='{self.config.tls_fingerprint}'\n"
             "}\n"
-            "& ([scriptblock]::Create((irm $u))) @p"
+            "& ([scriptblock]::Create($s)) @p"
         )
         text = (
             "➕ ДОБАВЛЕНИЕ WINDOWS-ПК\n\n"

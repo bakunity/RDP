@@ -4,7 +4,23 @@
 
 ## [Unreleased]
 
-Пока нет изменений после `v1.0.5`.
+Пока нет изменений после `v1.0.6`.
+
+## [1.0.6] — 2026-08-06
+
+Hotfix запуска Windows-установщика через Telegram-команду в PowerShell 5.1.
+
+### Исправлено
+
+- перед `ScriptBlock.Create()` удаляется декодированный UTF-8 BOM (`U+FEFF`);
+- начальный `param(...)` установщика снова корректно распознаётся при загрузке через `irm`;
+- Telegram-команда остаётся компактной, многострочной и копируется одним нажатием;
+- regression test проверяет наличие BOM-нормализации и запрещает возврат прямого `Create((irm $u))`.
+
+### Совместимость
+
+- сам `install-client.ps1` остаётся в UTF-8 BOM для корректной работы русского текста в Windows PowerShell 5.1;
+- API, SQLite registry, pairing contract, FRP и стандартные порты не изменены.
 
 ## [1.0.5] — 2026-08-06
 
@@ -142,7 +158,8 @@ Hotfix серверного установщика для корректной �
 - удаление устройства отзывает API-доступ, но для полного отзыва скомпрометированного FRP token требуется его ротация и переподключение доверенных ПК;
 - Windows-клиент рассчитан на 64-битные Windows Pro, Enterprise или Education с поддержкой входящего RDP.
 
-[Unreleased]: https://github.com/bakunity/RDP/compare/v1.0.5...HEAD
+[Unreleased]: https://github.com/bakunity/RDP/compare/v1.0.6...HEAD
+[1.0.6]: https://github.com/bakunity/RDP/releases/tag/v1.0.6
 [1.0.5]: https://github.com/bakunity/RDP/releases/tag/v1.0.5
 [1.0.4]: https://github.com/bakunity/RDP/releases/tag/v1.0.4
 [1.0.3]: https://github.com/bakunity/RDP/releases/tag/v1.0.3
