@@ -1,5 +1,6 @@
 name: Publish release
 
+# Release tags always point to the commit that last changed VERSION.
 on:
   push:
     branches: [main]
