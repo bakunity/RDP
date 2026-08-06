@@ -1,0 +1,52 @@
+name: Recover v1.0.4 Telegram copy hotfix
+
+on:
+  push:
+    branches:
+      - fix/telegram-copy-command-v1-0-4
+
+permissions:
+  contents: write
+
+jobs:
+  recover:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/telegram-copy-command-v1-0-4
+
+      - name: Run corrected preparation script
+        shell: python
+        run: |
+          from pathlib import Path
+          import textwrap
+
+          path = Path('.github/workflows/prepare-v1-0-4.yml')
+          workflow = path.read_text(encoding='utf-8')
+          start_marker = '        run: |\n'
+          end_marker = '\n      - name: Validate patched tree'
+          start = workflow.index(start_marker) + len(start_marker)
+          end = workflow.index(end_marker, start)
+          code = textwrap.dedent(workflow[start:end])
+          broken = r'self.assertNotIn("\n& ([scriptblock]", text)'
+          fixed = r'self.assertNotIn("\\n& ([scriptblock]", text)'
+          if broken not in code:
+              raise SystemExit('broken test escape anchor missing')
+          code = code.replace(broken, fixed, 1)
+          exec(compile(code, str(path), 'exec'))
+
+      - name: Validate patched tree
+        run: bash scripts/check-release.sh
+
+      - name: Commit hotfix
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -f .github/workflows/prepare-v1-0-4.yml .github/workflows/recover-v1-0-4.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m 'fix: make Telegram installer command copyable'
+          git push
