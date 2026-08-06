@@ -1,0 +1,33 @@
+name: Prepare v1.1.0 OpenSSH release
+
+on:
+  push:
+    branches:
+      - feat/openssh-tunnels-v1-1-0
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/openssh-tunnels-v1-1-0
+      - name: Apply bot and release metadata patch
+        run: python3 .github/prepare_v1_1_0.py
+      - name: Validate release tree
+        run: bash scripts/check-release.sh
+      - name: Commit generated patch
+        run: |
+          set -Eeuo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add server/hermes_rdp/bot.py server/hermes_rdp/__init__.py server/pyproject.toml VERSION CHANGELOG.md
+          if git diff --cached --quiet; then
+            echo 'No generated changes'
+            exit 0
+          fi
+          git commit -m 'feat: finalize OpenSSH Telegram UI and v1.1.0 metadata'
+          git push
