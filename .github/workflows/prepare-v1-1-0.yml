@@ -10,13 +10,19 @@ permissions:
 
 jobs:
   patch:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
         with:
           ref: feat/openssh-tunnels-v1-1-0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - name: Apply bot and release metadata patch
-        run: python3 .github/prepare_v1_1_0.py
+        run: python .github/prepare_v1_1_0.py
       - name: Validate release tree
         run: bash scripts/check-release.sh
       - name: Commit generated patch
