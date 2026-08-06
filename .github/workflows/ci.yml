@@ -10,26 +10,22 @@ permissions:
 
 jobs:
   linux:
+    name: Linux validation
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Python tests
-        env:
-          PYTHONPATH: server
-        run: python -m unittest discover -s tests -v
-      - name: Compile Python
-        run: python -m compileall -q server/hermes_rdp
-      - name: Validate Bash
-        run: find scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+      - name: Full release checks
+        run: bash scripts/check-release.sh
 
   windows:
+    name: Windows PowerShell 5.1 validation
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Parse PowerShell
+      - name: Parse all PowerShell files
         shell: powershell
         run: |
           $Failed = $false
