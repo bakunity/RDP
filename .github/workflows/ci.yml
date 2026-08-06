@@ -15,7 +15,7 @@ concurrency:
 jobs:
   linux:
     name: Linux validation
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Clone tested branch without marketplace actions
         run: |
@@ -32,7 +32,7 @@ jobs:
 
   windows:
     name: Windows PowerShell 5.1 validation
-    runs-on: windows-latest
+    runs-on: windows-2022
     steps:
       - name: Clone tested branch without marketplace actions
         shell: powershell
