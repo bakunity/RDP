@@ -15,6 +15,8 @@
 
 ## [1.1.0] — 2026-08-06
 
+Релиз: https://github.com/bakunity/RDP/releases/tag/v1.1.0
+
 Крупный релиз: транспорт Hermes RDP переведён с FRP на системный OpenSSH.
 
 ### Добавлено
