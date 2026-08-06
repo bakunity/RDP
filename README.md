@@ -1,76 +1,58 @@
 # Hermes RDP
 
-Самостоятельный RDP-шлюз для нескольких Windows-компьютеров через один публичный Linux-сервер.
+<p align="center">
+  <strong>Самостоятельный multi-PC RDP-шлюз через один публичный Linux-сервер с управлением из Telegram.</strong>
+</p>
 
-Сервер является единственным специальным узлом. **Основной ПК и дополнительные ПК устанавливаются одним и тем же Windows-клиентом** и отличаются только названием и автоматически выданным портом.
+<p align="center">
+  <a href="https://github.com/bakunity/RDP/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/bakunity/RDP?display_name=tag"></a>
+  <a href="https://github.com/bakunity/RDP/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/bakunity/RDP/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-green.svg"></a>
+  <img alt="Windows" src="https://img.shields.io/badge/client-Windows%2010%2F11-blue">
+  <img alt="Server" src="https://img.shields.io/badge/server-Ubuntu%20%7C%20Debian-orange">
+</p>
 
-## Что умеет
+Hermes RDP публикует RDP нескольких Windows-компьютеров через один сервер с публичным IP. Сервер принимает FRP-туннели, хранит реестр устройств, выдаёт постоянные порты и показывает состояние каждого ПК в одном Telegram-дашборде.
+
+> **Главный принцип проекта:** основной компьютер и все дополнительные компьютеры равноправны. Для каждого используется один и тот же Windows-установщик и один и тот же агент. Специальным узлом является только сервер Hermes.
+
+## Что входит в v1.0.0
 
 - постоянные адреса вида `SERVER:53389`, `SERVER:53390`, `SERVER:53391`;
-- один Telegram dashboard без простыни сообщений;
-- список всех компьютеров и их ONLINE/OFFLINE-состояние;
-- ON, OFF и RESTART выбранного RDP-туннеля;
+- единый Telegram dashboard без потока отдельных сообщений;
+- список всех ПК и состояния `ONLINE` / `OFFLINE`;
+- персональные `ON`, `OFF` и `RESTART` для каждого туннеля;
 - LIVE-метрики Windows каждые 3 секунды;
 - CPU, RAM, диск, сеть, аптайм, процессы, пользователь и RDP-сессии;
-- одноразовые коды подключения;
-- автоматическая установка FRP и проверка SHA-256;
-- одинаковая установка первого и последующих ПК;
-- резервные копии, обновление, диагностика и удаление.
+- одноразовые восьмисимвольные коды подключения;
+- автоматическая выдача свободного RDP-порта;
+- установка FRP `0.70.1` с проверкой SHA-256;
+- TLS для API и FRP;
+- резервные копии, обновление, удаление и диагностика;
+- CI на Linux и Windows PowerShell 5.1.
 
-## Архитектура
+## Схема
 
 ```text
-Windows PC 1 ─┐
-Windows PC 2 ─┼─ FRPC + HTTPS agent ──> Hermes server ──> Telegram bot
-Windows PC N ─┘                         FRPS + API + registry
+┌──────────────────────┐
+│ Windows: Домашний ПК │──┐
+│ FRPC + RDP Agent     │  │
+└──────────────────────┘  │
+                           │  FRP control 7000/tcp
+┌──────────────────────┐  ├──────────────────────────┐
+│ Windows: Ноутбук     │──┤                          │
+│ FRPC + RDP Agent     │  │                          ▼
+└──────────────────────┘  │              ┌────────────────────────┐
+                           │ HTTPS 7443    │ Hermes Linux server    │
+┌──────────────────────┐  ├─────────────▶│ FRPS + API + SQLite    │
+│ Windows: Офисный ПК  │──┘              │ Telegram dashboard     │
+│ FRPC + RDP Agent     │                 └───────────┬────────────┘
+└──────────────────────┘                              │
+                                                      ▼
+                                             Telegram пользователя
 ```
 
-- `frps` на сервере работает постоянно;
-- каждый Windows-клиент получает уникальный `device_id`, API-токен и RDP-порт;
-- ON/OFF управляет только выбранным клиентом;
-- первый компьютер не имеет особого кода или отдельной роли.
-
-Подробности: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-
-## Быстрый старт
-
-### 1. Установка сервера
-
-Ubuntu/Debian, команда выполняется через SSH на сервере:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/main/scripts/install-server.sh   | sudo bash -s --       --host 31.76.77.87       --telegram-token 'TELEGRAM_BOT_TOKEN'       --telegram-chat-id 'TELEGRAM_USER_ID'       --migrate
-```
-
-Установщик:
-
-- создаст резервную копию текущей конфигурации;
-- установит FRP `0.70.1`;
-- поднимет HTTPS API на `7443/tcp`;
-- поднимет FRP control на `7000/tcp`;
-- разрешит RDP-порты `53389–53420/tcp`;
-- установит Telegram Multi-PC dashboard.
-
-### 2. Подключение «Домашнего ПК» с сохранением `53389`
-
-На сервере:
-
-```bash
-sudo hermes-rdpctl pair create --name 'Домашний ПК' --port 53389
-```
-
-Команда покажет `PAIR_CODE`, адрес и fingerprint. На Windows открой PowerShell **от администратора**:
-
-```powershell
-$u='https://raw.githubusercontent.com/bakunity/RDP/main/scripts/install-client.ps1'
-& ([scriptblock]::Create((irm $u))) -Server '31.76.77.87' -PairCode 'КОД' -Fingerprint 'FINGERPRINT'
-```
-
-### 3. Добавление следующих ПК
-
-В Telegram нажми `➕ ДОБАВИТЬ ПК`. Бот создаст код и готовую PowerShell-команду. Запусти её на новом компьютере от администратора.
-
-Новый ПК автоматически получит следующий свободный адрес, например:
+Публичные RDP endpoints:
 
 ```text
 Домашний ПК → 31.76.77.87:53389
@@ -78,69 +60,168 @@ $u='https://raw.githubusercontent.com/bakunity/RDP/main/scripts/install-client.p
 Офисный ПК  → 31.76.77.87:53391
 ```
 
-## Управление
+## Быстрый старт
 
-На сервере:
+### 1. Подготовить сервер
+
+Требуется Ubuntu/Debian, публичный IP или DNS, `sudo`, Telegram bot token и числовой Telegram user ID.
+
+Стабильный установщик последнего релиза:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.0.0/scripts/install-server.sh -o /tmp/install-hermes-rdp.sh
+```
+
+Чтобы Telegram token не попал в историю команд:
+
+```bash
+read -rsp 'Telegram bot token: ' TG_TOKEN; echo
+```
+
+Новая установка:
+
+```bash
+sudo env HERMES_RDP_REF=v1.0.0 bash /tmp/install-hermes-rdp.sh --host SERVER_IP_OR_DOMAIN --telegram-token "$TG_TOKEN" --telegram-chat-id TELEGRAM_USER_ID
+```
+
+Миграция уже работающего Hermes/FRP/Telegram-бота:
+
+```bash
+sudo env HERMES_RDP_REF=v1.0.0 bash /tmp/install-hermes-rdp.sh --host 31.76.77.87 --telegram-token "$TG_TOKEN" --telegram-chat-id TELEGRAM_USER_ID --migrate
+```
+
+После установки:
+
+```bash
+unset TG_TOKEN
+rm -f /tmp/install-hermes-rdp.sh
+sudo hermes-rdpctl doctor
+```
+
+### 2. Подключить текущий «Домашний ПК» и сохранить порт `53389`
+
+На Hermes:
+
+```bash
+sudo hermes-rdpctl pair create --name 'Домашний ПК' --port 53389
+```
+
+Команда выведет:
+
+```text
+PAIR_CODE=XXXXXXXX
+SERVER=31.76.77.87
+FINGERPRINT=...
+```
+
+На Windows открой PowerShell **от имени администратора**:
+
+```powershell
+$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.0/scripts/install-client.ps1'; & ([scriptblock]::Create((irm $u))) -Server '31.76.77.87' -PairCode 'PAIR_CODE' -Fingerprint 'FINGERPRINT' -Name 'Домашний ПК' -RepositoryRef 'v1.0.0'
+```
+
+### 3. Добавить любой следующий ПК
+
+В Telegram нажми `➕ ДОБАВИТЬ ПК`, скопируй команду и выполни её на новом компьютере от администратора. Все дополнительные ПК устанавливаются точно так же, как первый.
+
+## Telegram-панель
+
+Главный экран показывает список устройств:
+
+```text
+🖥 HERMES RDP · КОМПЬЮТЕРЫ
+
+🟢 Домашний ПК · :53389
+🟢 Ноутбук · :53390
+🔴 Офисный ПК · :53391
+
+➕ ДОБАВИТЬ ПК
+🔄 REFRESH    ⏸ LIVE 3s
+```
+
+Экран устройства показывает ресурсы Windows, endpoint, FRPC, RDP-сессии и процессы. Кнопки `ON`, `OFF`, `RESTART` влияют только на выбранный ПК; `frps` на Hermes продолжает работать для остальных устройств.
+
+## Основные команды
+
+Hermes:
 
 ```bash
 sudo hermes-rdpctl doctor
 sudo hermes-rdpctl devices list
 sudo hermes-rdpctl pair create --name 'Ноутбук'
-sudo journalctl -u hermes-rdp.service -f
-sudo journalctl -u frps.service -f
+sudo hermes-rdpctl devices rename DEVICE_ID 'Новое имя'
+sudo hermes-rdpctl devices delete DEVICE_ID
+sudo hermes-rdpctl dashboard reset
 ```
 
-На Windows:
+Windows:
 
 ```powershell
 Get-ScheduledTask -TaskName 'Hermes RDP Agent'
-Get-Content 'C:\ProgramData\HermesRDPgent.log' -Tail 50
+Get-ScheduledTaskInfo -TaskName 'Hermes RDP Agent'
+Get-Content 'C:\ProgramData\HermesRDP\agent.log' -Tail 50
 ```
 
 ## Обновление
 
-Сервер:
+Сервер до стабильной версии `v1.0.0`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/main/scripts/update-server.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.0.0/scripts/update-server.sh -o /tmp/update-hermes-rdp.sh
+sudo env HERMES_RDP_REF=v1.0.0 bash /tmp/update-hermes-rdp.sh
+rm -f /tmp/update-hermes-rdp.sh
 ```
 
-Windows-клиент, PowerShell от администратора:
+Windows-клиент:
 
 ```powershell
-$u='https://raw.githubusercontent.com/bakunity/RDP/main/scripts/update-client.ps1'
-& ([scriptblock]::Create((irm $u)))
+$u='https://raw.githubusercontent.com/bakunity/RDP/v1.0.0/scripts/update-client.ps1'; & ([scriptblock]::Create((irm $u))) -RepositoryRef 'v1.0.0'
 ```
+
+## Релизы
+
+- [Последний релиз](https://github.com/bakunity/RDP/releases/latest)
+- [Hermes RDP v1.0.0](https://github.com/bakunity/RDP/releases/tag/v1.0.0)
+- [История изменений](CHANGELOG.md)
+- [Описание релиза v1.0.0](docs/releases/v1.0.0.md)
+
+Для продакшена используй URL с конкретным тегом. `main` предназначен для разработки и может изменяться между релизами.
 
 ## Документация
 
-- [Установка сервера](docs/INSTALL_SERVER.md)
-- [Установка Windows-клиента](docs/INSTALL_WINDOWS.md)
-- [Архитектура](docs/ARCHITECTURE.md)
-- [Эксплуатация](docs/OPERATIONS.md)
-- [Безопасность](docs/SECURITY.md)
-- [Диагностика](docs/TROUBLESHOOTING.md)
+| Документ | Для чего |
+|---|---|
+| [Быстрый старт](docs/QUICKSTART.md) | Развернуть сервер и подключить первый ПК |
+| [Установка сервера](docs/INSTALL_SERVER.md) | Параметры, порты, файлы и проверка установки |
+| [Установка Windows](docs/INSTALL_WINDOWS.md) | Подключение основного и дополнительных ПК |
+| [Миграция](docs/MIGRATION.md) | Перевод старой одно-PC схемы без смены `53389` |
+| [Архитектура](docs/ARCHITECTURE.md) | Компоненты, потоки данных и границы ответственности |
+| [API](docs/API.md) | Контракты pairing, telemetry и command result |
+| [Эксплуатация](docs/OPERATIONS.md) | Runbook, backup, restore, update и удаление |
+| [Диагностика](docs/TROUBLESHOOTING.md) | Поиск проблем по симптомам |
+| [Безопасность](docs/SECURITY.md) | Секреты, TLS, ACL и ограничения v1 |
+| [Разработка](docs/DEVELOPMENT.md) | Структура проекта и правила для будущих разработчиков |
+| [Релизы](docs/RELEASE.md) | Подготовка и автоматическая публикация версий |
+
+Полный индекс: [docs/INDEX.md](docs/INDEX.md).
 
 ## Требования
 
-Сервер:
+**Сервер:** Ubuntu/Debian, Python 3.11+, публичный IPv4 или DNS, root/sudo, доступ к GitHub и Telegram API.
 
-- Ubuntu или Debian;
-- публичный IPv4 или DNS-имя;
-- root/sudo;
-- открытые TCP-порты `7000`, `7443` и диапазон RDP.
+**Windows:** 64-битная Windows 10/11 Pro, Enterprise или Education, PowerShell 5.1+, права администратора, доступ к GitHub и Hermes, включённый входящий RDP.
 
-Клиент:
+## Безопасность
 
-- Windows 10/11 Pro, Enterprise или Education;
-- PowerShell 5.1+;
-- права администратора;
-- включённый входящий RDP.
+- API работает через TLS 1.2+ и pinning SHA-256 fingerprint;
+- pairing code одноразовый и по умолчанию действует 15 минут;
+- у каждого устройства отдельный API token, на сервере хранится только его SHA-256;
+- FRP использует собственную CA и принудительный TLS;
+- доступ к Telegram ограничен одним заданным user ID;
+- локальные секреты Windows закрыты ACL для `SYSTEM` и Administrators.
 
-## Важное ограничение v0.1
-
-API-токен уникален для каждого устройства, но FRP использует общий серверный token. Отзыв устройства сразу закрывает его управление и телеметрию, однако при компрометации локальной FRP-конфигурации рекомендуется ротировать общий FRP token на сервере и переподключить доверенные устройства.
+Текущее ограничение: FRP token общий для всех клиентов. Подробности и процедура ротации: [docs/SECURITY.md](docs/SECURITY.md).
 
 ## Лицензия
 
-MIT.
+[MIT](LICENSE).
