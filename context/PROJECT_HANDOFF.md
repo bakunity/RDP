@@ -4,320 +4,232 @@ Last updated: 2026-08-07
 
 ## 1. Product vector
 
-Hermes RDP is evolving from a reverse-RDP experiment into a small self-hosted **remote access control plane**:
+Hermes RDP is a self-hosted **multi-PC remote-access control plane**:
 
-> One public Linux server provides controlled remote access to multiple Windows PCs. Every PC gets its own persistent endpoint, credentials and state; pairing, monitoring and control are available through Telegram.
+> One public Linux server provides controlled remote RDP access to multiple Windows PCs. Every PC gets its own persistent endpoint, credentials and state; pairing, monitoring and control are available through Telegram.
 
-The product is **not** positioned as an SSH wrapper or an FRP replacement. OpenSSH is the current transport implementation. The actual product is the managed multi-device remote-access system around it.
+OpenSSH is the current transport implementation. The product is not an SSH wrapper and should not be treated as an FRP project.
 
 ## 2. Current architecture
 
 ```text
-                           Telegram user
-                                |
-                                v
-                     +---------------------+
-                     | Telegram Dashboard  |
-                     +----------+----------+
-                                |
-                                v
-                     +---------------------+
-                     | Hermes Controller   |
-                     | HTTPS API           |
-                     | SQLite Registry     |
-                     | Command Queue       |
-                     | Telemetry           |
-                     +----------+----------+
-                                |
-                     +----------v----------+
-                     | Dedicated OpenSSH   |
-                     | sshd :7000          |
-                     +-----+----------+-----+
-                           |          |
-                 reverse SSH          reverse SSH
-                           |          |
-                    +------v---+   +--v-------+
-                    | Windows  |   | Windows  |
-                    | Agent    |   | Agent    |
-                    | ssh.exe  |   | ssh.exe  |
-                    | RDP 3389 |   | RDP 3389 |
-                    +----------+   +----------+
-                         |              |
-                      :53389         :53390 ...
-                         |              |
-                         +------ Remote RDP client
+Telegram user
+     |
+     v
+Hermes Controller/API + SQLite + command queue
+     |
+     +---- dedicated Hermes sshd
+                 |
+        reverse OpenSSH tunnels
+          /              \
+   Windows PC #1      Windows PC #2 ...
+   RDP 3389           RDP 3389
+          \              /
+        persistent public endpoints
+                 |
+          standard RDP client
 ```
 
 Server side:
 
-- `hermes-rdp.service`: HTTPS API + Telegram bot + SQLite registry.
-- `hermes-rdp-sshd.service`: isolated OpenSSH daemon for reverse forwarding.
-- administrative SSH on port 22 is separate and must not be replaced by Hermes.
+- `hermes-rdp.service`: HTTPS API + Telegram bot + SQLite registry;
+- `hermes-rdp-sshd.service`: isolated OpenSSH daemon for reverse forwarding;
+- administrative SSH on port 22 remains separate;
 - RDP endpoint pool defaults to `53389–53420`.
 
 Windows side:
 
-- built-in `ssh.exe` and `ssh-keygen.exe` are used;
+- built-in `ssh.exe` and `ssh-keygen.exe`;
 - `HermesRdpAgent.ps1` runs from Scheduled Task as `SYSTEM`;
-- each PC has its own Ed25519 keypair, API token, device ID and RDP port;
+- each PC gets its own Ed25519 keypair, API token, device ID and persistent RDP endpoint;
 - private SSH key stays on Windows;
-- server stores the public key and authorizes only its assigned port through `permitlisten`;
-- API HTTPS certificate is pinned; SSH host key is received through the pinned API and stored in dedicated `known_hosts`.
+- server stores only the public key and authorizes only the assigned endpoint via `permitlisten`;
+- API certificate is pinned;
+- SSH host key is delivered through the pinned API and stored in dedicated `known_hosts`.
 
-## 3. How the project got here
-
-Major evolution:
+## 3. Architecture history
 
 ```text
 reverse RDP idea
-  -> FRP server/client
-  -> static public endpoint
-  -> multi-PC registry
-  -> Telegram dashboard
-  -> pairing codes
-  -> per-device API tokens
-  -> LIVE telemetry
-  -> ON/OFF/RESTART
-  -> TLS certificate pinning
-  -> Windows/server installers
-  -> backup/update/uninstall
-  -> Defender false-positive on FRP binary
-  -> decision to remove FRP
-  -> Windows system OpenSSH
-  -> isolated server sshd
-  -> per-device Ed25519 keys
-  -> permitlisten isolation
-  -> SSH host-key pinning
-  -> atomic pairing/revoke/port reuse design
-  -> successful real external RDP over mobile data
-  -> multiple devices observed registering and using assigned ports
+ -> FRP prototype
+ -> multi-PC registry + Telegram + pairing
+ -> Defender operational problem with FRP Windows binary
+ -> FRP removed
+ -> Windows system OpenSSH
+ -> isolated server sshd
+ -> per-device Ed25519 keys + permitlisten
+ -> SSH host-key pinning
+ -> real external RDP PASS
+ -> reboot recovery PASS
+ -> Telegram OFF/ON behavioral PASS
+ -> stabilization phase
 ```
 
-`v1.1.0` is the OpenSSH transition release and is already published on GitHub.
+`v1.1.0` is the published OpenSSH transition release.
 
-## 4. Confirmed real-world result
+## 4. Confirmed real-world results
 
-The important milestone is no longer theoretical: a Windows PC was paired successfully, the installer completed, the reverse OpenSSH path came up, and Microsoft Remote Desktop connected from a phone using mobile data rather than the Windows PC's LAN.
+The following are no longer theoretical:
 
-This confirmed the real path:
+- clean OpenSSH-based Windows install completed;
+- real RDP connection worked from a phone over mobile data;
+- devices can be added and assigned persistent ports;
+- tested Windows reboot recovered automatically and RDP became usable again;
+- Telegram **OFF** disconnected an active RDP session;
+- Telegram **ON** restored RDP access;
+- the user explicitly confirmed ON/OFF functionality works.
+
+Important evidence nuance:
 
 ```text
-mobile network
-    -> public Linux server RDP endpoint
-    -> reverse OpenSSH forwarding
-    -> Windows 127.0.0.1:3389
+OFF -> user-visible RDP access interrupted     PASS
+ON  -> user-visible RDP access restored        PASS
+Windows reboot -> access recovers              PASS
+OFF -> endpoint independently port-probed CLOSED   not separately proven in final test
 ```
 
-The user later also confirmed that devices are being added and ports work. Formal acceptance of every multi-device/recovery/control scenario is still incomplete.
+Do not repeat basic “does reverse OpenSSH RDP work?” testing unless a relevant change could have regressed it.
 
-## 5. Main open product bug: state/control semantics
+## 5. Main open product bug: truthful state
 
-Current Telegram device view can show apparently contradictory data such as:
+Telegram can still show contradictory telemetry such as:
 
 ```text
-PC ONLINE
+Agent ONLINE
 SSH tunnel: stopped
-Endpoint: available
-RDP connections: active
+RDP/endpoint actually usable
 ```
 
-This can appear both after ON and after OFF even though endpoints/RDP work.
+This is now clearly an **observability/state-model bug**, not evidence that the transport itself is broken.
 
-The current UI conflates several independent states. They must be separated:
-
-1. **Agent connectivity**: ONLINE / OFFLINE (heartbeat/API reachability).
-2. **Desired access state**: ON / OFF (`devices.enabled`).
-3. **Command state**: queued / executing / success / failed / timeout.
-4. **Actual SSH transport state**: connected / disconnected.
-5. **Server endpoint state**: open / closed.
-6. **RDP session state**: active sessions / none.
-
-Important: a PC should remain `ONLINE` while RDP access is `OFF`, because the agent must remain connected to the API so it can receive the next `ON` command.
-
-### Current command flow
-
-Telegram currently:
-
-- immediately calls `set_enabled()`;
-- queues `on`, `off` or `restart`;
-- for `off`, also calls the server tunnel-close helper;
-- replies only with “command sent”.
-
-Windows agent polls every ~3 seconds. It sends telemetry, receives a pending command in the telemetry response, executes it and uploads `command-result`.
-
-The database already stores enough information for a better UX:
-
-- `enabled`;
-- `pending_command`;
-- `pending_created_at`;
-- `command_seq`;
-- `last_result_json`.
-
-Telegram currently does not expose this lifecycle clearly.
-
-## 6. Likely reason for false `SSH tunnel: stopped`
-
-`HermesRdpAgent.ps1` identifies Hermes SSH processes with a strict `Win32_Process.CommandLine` match. The process must contain both:
-
-- the configured private-key path;
-- the exact reverse forwarding string `0.0.0.0:<rdp_port>:127.0.0.1:3389`.
-
-The installer uses a looser check and only searches for an `ssh.exe` process containing the SSH key path.
-
-Therefore the installer can consider the tunnel running while telemetry reports it stopped. This is a strong candidate but **must be verified on an actual test Windows machine before declaring it the final root cause**.
-
-A second possibility is an orphan/legacy SSH process that holds the endpoint but is not recognized by the current agent matcher.
-
-## 7. OFF behavior must be proven, not inferred
-
-One stale telemetry frame immediately after pressing OFF is expected because the agent sends telemetry before receiving the pending command.
-
-However after command completion the required behavior is:
+Hermes must represent these states independently:
 
 ```text
-Agent: ONLINE
-Desired RDP access: OFF
-SSH: disconnected
-Endpoint: CLOSED
-RDP sessions through endpoint: none
+Agent heartbeat     ONLINE / OFFLINE
+Desired access      ENABLED / DISABLED
+Command lifecycle   IDLE / PENDING / SUCCESS / FAILED / TIMEOUT
+SSH transport       CONNECTED / DISCONNECTED / UNKNOWN
+Public endpoint     OPEN / CLOSED / UNKNOWN
+RDP sessions        N
 ```
 
-If the endpoint stays open, investigate separately:
-
-- whether Windows executed the command;
-- whether `Stop-SshTunnel` found the correct ssh.exe process;
-- whether the server `close_tunnel` helper killed the correct sshd child/listener;
-- whether a second/orphan process reopened the endpoint.
-
-Do not treat “command sent” as command success.
-
-## 8. Telegram Dashboard v2 direction
-
-The dashboard should become state-driven instead of button-driven.
-
-Recommended device status block:
+A valid disabled device should remain:
 
 ```text
-AGENT            ONLINE
-RDP ACCESS       ENABLED / DISABLED
-SSH TUNNEL       CONNECTED / DISCONNECTED
-ENDPOINT         OPEN / CLOSED
-RDP SESSIONS     N active
-LAST COMMAND     success / failed / pending + timestamp
+Agent ONLINE
+Access DISABLED
+SSH DISCONNECTED
+Endpoint CLOSED
 ```
 
-Buttons should be contextual:
+The agent stays ONLINE so it can receive the next ON command.
 
-- access enabled: `DISABLE ACCESS`, `RESTART TUNNEL`;
-- access disabled: `ENABLE ACCESS`;
-- command pending: show progress and prevent duplicate contradictory commands;
-- active RDP session + OFF/RESTART: show confirmation because it will disconnect the session.
+## 6. Likely telemetry root cause to verify
 
-Command progression should be visible:
+`HermesRdpAgent.ps1` identifies Hermes SSH processes with a stricter `Win32_Process.CommandLine` match than the installer uses for its post-install check.
+
+Likely scenario:
+
+- real `ssh.exe` is running correctly;
+- installer recognizes it;
+- agent telemetry matcher does not;
+- dashboard reports `SSH tunnel: stopped` even while RDP works.
+
+This is a **LIKELY** cause, not confirmed. Inspect the actual tested Windows `ssh.exe` command line before patching. Also rule out orphan/legacy SSH processes.
+
+## 7. Command semantics / Dashboard v2
+
+Current command flow stores enough data for a better UX (`enabled`, pending command, sequence/result data), but Telegram mostly communicates “command sent” rather than the lifecycle of the command.
+
+Target progression:
 
 ```text
 queued -> delivered -> executing -> success / failed / timeout
 ```
 
-The current “external clients” field should not claim `127.0.0.1` is an external RDP client. Windows sees the SSH-forwarded source locally. If true external source IPs are needed, observe them server-side before forwarding.
-
-## 9. Windows legacy ACL installer defect
-
-A real upgrade attempt from the old Hermes/WinMon/FRP directory failed because a protected legacy key was not readable during recursive backup.
-
-Current `main` still contains the fragile pattern:
-
-- create backup **inside** `C:\ProgramData\HermesRDP\backups`;
-- enumerate old directory;
-- recursively `Copy-Item` protected children.
-
-The intended fix is:
-
-1. stop old tasks/processes;
-2. move/rename the whole old Hermes directory to a sibling path such as `HermesRDP-legacy-<timestamp>`;
-3. same-volume rename should avoid reading every protected child;
-4. only on access failure apply scoped `takeown` + `icacls` to the old Hermes directory;
-5. create a clean new directory;
-6. only then perform pairing.
-
-A branch named `fix/windows-legacy-acl-backup` was created in an earlier session, but the actual fix was not confirmed merged. Verify GitHub before using it.
-
-## 10. Reliability gaps
-
-Before calling the product stable, test/close:
-
-- Windows reboot -> automatic tunnel recovery;
-- temporary Windows network loss -> reconnect;
-- Linux server reboot -> services + endpoints recover;
-- controller restart without breaking tunnel behavior;
-- at least two simultaneous devices with different ports and keys;
-- first key cannot claim second device port;
-- OFF / ON / RESTART exact state transitions;
-- DELETE revokes API token and SSH key;
-- DELETE closes endpoint;
-- freed port can be safely reused;
-- legacy reinstall path;
-- server update and rollback;
-- Windows agent update and rollback.
-
-Current update scripts create backups, but do not yet provide a full transactional health-check + automatic rollback contract for all runtime failures.
-
-## 11. Documentation audit
-
-The user explicitly dislikes the current documentation and wants the quality/visual explanation restored.
-
-This is justified by repository state:
-
-- old `v1.0.7` `ARCHITECTURE.md` was much richer: goals, boundaries, server/client roles, Mermaid component diagram, pairing sequence, command sequence, data model, trust flow, failure behavior;
-- current OpenSSH `ARCHITECTURE.md` became much shorter and lost much of that explanatory structure;
-- `DEVELOPMENT.md` still contains stale FRPS/FRPC architectural rules;
-- `ROADMAP.md` still includes obsolete FRP items;
-- `WEBSITE.md` still contains stale `v1.0.7`/FRP maintenance wording;
-- current README previously claimed `v1.1.0` release was not yet published, but `v1.1.0` is now published.
-
-Required direction: restore the **structure and clarity** of the old documentation, but rewrite all technical content for the OpenSSH architecture.
-
-## 12. README audit
-
-The user wants the polished top section from the old README restored.
-
-`v1.0.7` had visual badges/buttons for:
-
-- latest release;
-- CI;
-- MIT license;
-- Windows;
-- Ubuntu/Debian.
-
-It also clearly stated the important architectural principle:
-
-> All Windows PCs are equal clients. There is no special “main PC”; only the Linux Hermes server is special.
-
-This principle should return prominently to the current README.
-
-README desired flow:
+Recommended device block:
 
 ```text
-logo/title + product statement
-badges / website / docs / release links
-what Hermes solves
-large architecture diagram
-key capabilities
-quick start
-Telegram dashboard behavior
-security model
-operations / update
-full documentation index
-release status
+AGENT            ONLINE
+RDP ACCESS       ENABLED / DISABLED
+SSH TUNNEL       CONNECTED / DISCONNECTED / UNKNOWN
+ENDPOINT         OPEN / CLOSED / UNKNOWN
+RDP SESSIONS     N active
+LAST COMMAND     success / failed / pending + timestamp
 ```
 
-## 13. Website audit
+Buttons should be contextual and contradictory commands should be prevented while one is pending.
 
-The current site is technically competent (static HTML/CSS/JS, responsive, security headers, no trackers/runtime dependencies) but the user dislikes both design and copy.
+The old `External clients = 127.0.0.1` concept is misleading because Windows sees SSH-forwarded RDP locally. Real source IP, if needed, must be observed server-side before forwarding.
 
-Do not keep patching the current visual structure indefinitely. Plan a **Website v2** after control/state behavior is stable.
+## 8. Pairing UX observation
 
-The first 5–10 seconds should explain the product before the implementation details:
+One installation attempt failed with `pair code expired`. A fresh valid pairing flow later completed successfully.
+
+This is not a transport failure. The installer/UI should eventually explain expired pairing codes cleanly and provide a straightforward retry path instead of surfacing a confusing PowerShell exception wall.
+
+## 9. Legacy Windows ACL installer defect
+
+A real upgrade from an old Hermes/WinMon/FRP directory previously failed because recursive backup attempted to read a protected legacy key.
+
+Desired fix:
+
+```text
+stop old tasks/processes
+ -> rename/move whole old Hermes directory to sibling legacy archive
+ -> scoped takeown/icacls only if move is denied
+ -> create clean HermesRDP directory
+ -> only then pair/install
+```
+
+A branch named `fix/windows-legacy-acl-backup` existed earlier, but merge status must be rechecked before relying on it.
+
+## 10. Remaining reliability / security acceptance
+
+Already PASS:
+
+- clean server/OpenSSH architecture;
+- fresh Windows install;
+- external-network RDP;
+- tested Windows reboot recovery;
+- user-visible OFF/ON access behavior.
+
+Still required:
+
+- temporary Windows network loss -> reconnect;
+- Linux server reboot -> services + endpoints recover;
+- controller restart behavior;
+- dedicated sshd restart behavior;
+- repeated reconnect without duplicate/orphan SSH processes;
+- two+ devices simultaneously with isolation;
+- first device key cannot claim second device endpoint;
+- RESTART actually recreates transport;
+- DELETE revokes API token + SSH key;
+- DELETE closes endpoint;
+- safe freed-port reuse;
+- low-level endpoint CLOSED/OPEN measurement around OFF/ON;
+- safe server update + automatic rollback;
+- safe Windows client update + automatic rollback;
+- legacy reinstall path.
+
+## 11. Documentation / README / website audit
+
+The user does not consider the current public documentation/site final.
+
+Documentation issues found:
+
+- older `v1.0.7` architecture docs were much richer in diagrams, sequences, trust flow and failure behavior;
+- current OpenSSH docs became shorter and lost explanatory structure;
+- some development/roadmap/website docs still contained stale FRP/version wording during the audit;
+- README lost useful badges/buttons and the strong architecture presentation.
+
+Required direction: restore the **clarity and structure** of the old docs while keeping all technical content OpenSSH-correct.
+
+Key product principle to state prominently:
+
+> All Windows PCs are equal clients. Only the Linux Hermes server has the special infrastructure role.
+
+Website v2 should explain the product before implementation details:
 
 ```text
 Home PC ----\
@@ -326,40 +238,48 @@ Laptop ------/       |
                      +---- Telegram control
 ```
 
-Then explain OpenSSH, Ed25519, pinning and isolation as security/architecture details.
+Do not prioritize a cosmetic website rebuild before state correctness and remaining reliability work.
 
-The old/current site design itself is not a product requirement; the redesign should be evaluated on clarity, visual hierarchy, architecture illustration and credible product presentation.
+## 12. Release direction
 
-## 14. Release direction
+Project phase: **stabilization**, not feature discovery.
 
-Do not add unrelated features before stability.
+Recommended coherent target:
 
-Recommended release path:
+**Hermes RDP v1.2.0 — Stabilization**
 
-- use `v1.1.x` for critical correctness hotfixes if required immediately;
-- target **`v1.2.0 — Stabilization`** as the coherent next product milestone.
+Order:
 
-Suggested PR groups:
-
-1. state + tunnel correctness;
-2. recovery + update + rollback;
-3. Telegram Dashboard v2;
-4. documentation + README rebuild;
+1. fix truthful state / SSH telemetry / command lifecycle;
+2. finish recovery + delete/isolation + update/rollback acceptance;
+3. build Telegram Dashboard v2 on measured state;
+4. rebuild docs + README;
 5. Website v2;
 6. full acceptance + release.
 
-## 15. Working style for future chats
+Critical correctness fixes can ship as `v1.1.x` patches.
 
-The user prefers:
+## 13. Immediate next engineering target
 
-- Russian language;
-- direct technical communication;
-- one stage at a time during live infrastructure work;
-- copy-paste commands rather than manual `nano`/`vim` editing;
+Do this before unrelated work:
+
+1. inspect actual Hermes `ssh.exe` process command line on the tested Windows PC;
+2. compare it with `Get-SshProcesses` matching logic;
+3. fix measured SSH state;
+4. obtain/represent measured endpoint state;
+5. expose command result lifecycle in Telegram;
+6. then implement Dashboard v2.
+
+## 14. Working style for future chats
+
+- Russian;
+- direct technical discussion;
+- one live infrastructure stage at a time;
+- copy-paste commands instead of manual `nano`/`vim` editing;
 - explicit verification after each stage;
-- do not claim PASS without output/result;
-- separate rollback command where practical;
-- do not weaken Microsoft Defender to make the project work;
-- documentation should be visual and explanatory, with arrows/diagrams and architecture, not sparse placeholders.
-
-Never request or echo secrets such as bot tokens, pairing codes, fingerprints, private keys or device tokens.
+- do not claim PASS without output/user evidence;
+- separate rollback command/plan where practical;
+- do not weaken Microsoft Defender;
+- do not reintroduce FRP;
+- do not expose secrets in diagnostics/context;
+- keep documentation visual, explanatory and coherent.
