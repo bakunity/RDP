@@ -28,9 +28,63 @@ Low-level `OFF -> endpoint CLOSED` still deserves an explicit listener/port meas
 
 ## Priority 0 — do not expand scope yet
 
-The transport works. The next risk is not “can RDP connect?” but whether the control plane tells the truth and remains deterministic under failure/recovery.
+The transport works. The next risks are Windows installer compatibility and whether the control plane tells the truth under real state transitions and failures.
 
-## Stage 1 — State & tunnel correctness
+## Stage 1 — Windows compatibility + native OpenSSH resolution
+
+### Confirmed bug to fix
+
+On Windows 10 Pro x64, the installer can be launched from a 32-bit PowerShell process:
+
+```text
+Is64BitOS      = True
+Is64BitProcess = False
+PowerShell     = C:\Windows\SysWOW64\WindowsPowerShell\v1.0\powershell.exe
+```
+
+In that context, hard-coded `System32\OpenSSH` lookup is wrong because filesystem redirection hides the intended native 64-bit Microsoft OpenSSH binaries.
+
+Required resolver:
+
+```powershell
+if ([Environment]::Is64BitOperatingSystem -and -not [Environment]::Is64BitProcess) {
+    $NativeSystem = "$env:WINDIR\Sysnative"
+} else {
+    $NativeSystem = "$env:WINDIR\System32"
+}
+```
+
+Use only:
+
+```text
+$NativeSystem\OpenSSH\ssh.exe
+$NativeSystem\OpenSSH\ssh-keygen.exe
+```
+
+Do not use PATH/`Get-Command ssh.exe` as fallback because Git SSH may be present and must not silently replace Windows Microsoft OpenSSH.
+
+### Required behavior
+
+```text
+OpenSSH installed + native binaries found      -> continue
+OpenSSH not installed                          -> install, re-check
+OpenSSH installed but native binaries missing  -> clear diagnostic error
+x86 PowerShell on x64 Windows                  -> transparently use Sysnative
+```
+
+### Regression coverage
+
+Add tests for:
+
+- x64 OS + x64 PowerShell -> System32 path;
+- x64 OS + x86 PowerShell -> Sysnative path;
+- Git SSH present in PATH -> still use Microsoft OpenSSH;
+- OpenSSH absent -> install then resolve;
+- capability installed but native binary unavailable -> deterministic failure message.
+
+User should not need to manually relaunch a 64-bit PowerShell after this fix.
+
+## Stage 2 — State & tunnel correctness
 
 ### Immediate objective
 
@@ -60,7 +114,7 @@ RDP sessions: N
 
 Rule: `ONLINE` means agent/API heartbeat only. A device may correctly be `Agent ONLINE + Access OFF + SSH disconnected + Endpoint closed`.
 
-## Stage 2 — Remaining reliability / recovery
+## Stage 3 — Remaining reliability / recovery
 
 Still test:
 
@@ -74,7 +128,7 @@ Still test:
 
 Windows reboot recovery is already PASS.
 
-## Stage 3 — Device/security lifecycle acceptance
+## Stage 4 — Device/security lifecycle acceptance
 
 Verify:
 
@@ -91,7 +145,7 @@ Verify:
 
 Also verify `RESTART` means a real transport restart rather than only changing a flag.
 
-## Stage 4 — Safe installation / migration / updates
+## Stage 5 — Safe installation / migration / updates
 
 ### Legacy Windows reinstall
 
@@ -141,7 +195,7 @@ failure
  -> verify previous access
 ```
 
-## Stage 5 — Telegram Dashboard v2
+## Stage 6 — Telegram Dashboard v2
 
 Only after state measurement is trustworthy.
 
@@ -173,7 +227,7 @@ Buttons:
 
 Do not label Windows-side `127.0.0.1` as an external client.
 
-## Stage 6 — Documentation rebuild
+## Stage 7 — Documentation rebuild
 
 Use old `v1.0.7` documentation quality as the structural baseline, not its obsolete FRP implementation.
 
@@ -197,7 +251,7 @@ README should restore polished badges/buttons and prominently state:
 
 Sweep all docs for stale FRP/version claims.
 
-## Stage 7 — Website v2
+## Stage 8 — Website v2
 
 Do not keep cosmetically patching the current page.
 
@@ -211,11 +265,12 @@ Windows PCs -> one Hermes server -> remote RDP clients
 
 Then explain OpenSSH, per-device Ed25519 isolation, pinning, persistent endpoints, telemetry and self-hosted security.
 
-## Stage 8 — Final acceptance matrix
+## Stage 9 — Final acceptance matrix
 
 ```text
 Clean server install                  PASS
 Windows fresh install                 PASS
+Win10 x64 + x86 PowerShell install    TODO FIX + REGRESSION TEST
 Legacy Windows reinstall              TODO
 External RDP over another network     PASS
 Device #1                             PASS
@@ -258,11 +313,12 @@ Release automation                    verify current
 
 Implementation order:
 
-1. truthful state + command lifecycle;
-2. remaining recovery/security/delete/update acceptance;
-3. Dashboard v2;
-4. docs/README rebuild;
-5. Website v2;
-6. full acceptance + release.
+1. Windows native OpenSSH compatibility resolver;
+2. truthful state + command lifecycle;
+3. remaining recovery/security/delete/update acceptance;
+4. Dashboard v2;
+5. docs/README rebuild;
+6. Website v2;
+7. full acceptance + release.
 
 Critical correctness fixes may ship as `v1.1.x` patches first.
