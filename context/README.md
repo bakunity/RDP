@@ -6,31 +6,45 @@
 
 ## Порядок чтения
 
-1. [`PROJECT_HANDOFF.md`](PROJECT_HANDOFF.md) — сжатый контекст всей работы и текущая архитектура.
-2. [`CURRENT_STATE.md`](CURRENT_STATE.md) — что подтверждено фактически, что только предполагается, какие баги открыты.
-3. [`LATEST_AUDIT.md`](LATEST_AUDIT.md) — последний подробный аудит ON/OFF, dashboard, reliability, документации, README и сайта.
-4. [`NEXT_WORK.md`](NEXT_WORK.md) — вектор целей, приоритеты и критерий готового продукта.
-5. [`DECISIONS.md`](DECISIONS.md) — важные архитектурные решения и ограничения, которые нельзя потерять.
-6. [`SESSION_PROTOCOL.md`](SESSION_PROTOCOL.md) — как обновлять эту папку перед следующим переездом в новый чат.
-7. [`HISTORY.md`](HISTORY.md) — крупные этапы развития проекта.
+1. [`LAST_SESSION.md`](LAST_SESSION.md) — что произошло в самом последнем длинном чате и что делать следующим шагом.
+2. [`PROJECT_HANDOFF.md`](PROJECT_HANDOFF.md) — сжатый контекст всей работы и текущая архитектура.
+3. [`CURRENT_STATE.md`](CURRENT_STATE.md) — что подтверждено фактически, что только предполагается, какие баги открыты.
+4. [`LATEST_AUDIT.md`](LATEST_AUDIT.md) — последний подробный аудит ON/OFF, dashboard, reliability, документации, README и сайта.
+5. [`NEXT_WORK.md`](NEXT_WORK.md) — вектор целей, приоритеты и критерий готового продукта.
+6. [`DECISIONS.md`](DECISIONS.md) — важные архитектурные решения и ограничения, которые нельзя потерять.
+7. [`SESSION_PROTOCOL.md`](SESSION_PROTOCOL.md) — как обновлять эту папку перед следующим переездом в новый чат.
+8. [`HISTORY.md`](HISTORY.md) — крупные этапы развития проекта.
 
 ## Репозиторий
 
 - Project: `bakunity/RDP`
 - Product: **Hermes RDP**
 - Public site: `https://hermes-rdp.vercel.app/`
-- Main immediately before context initialization: `6cecc33d520e8bd07c322d660c200a454d17e93f`
+- Base product `main` immediately before context initialization: `6cecc33d520e8bd07c322d660c200a454d17e93f`
 - Latest published GitHub Release at context initialization: `v1.1.0`
 - Context initialized: **2026-08-07**
+- Latest session handoff refreshed: **2026-08-07** after real reboot + Telegram OFF/ON validation.
 
 ## Фраза для нового чата
 
 Достаточно написать:
 
-> Открой `context/README.md` в репозитории `bakunity/RDP`, прочитай весь project handoff и продолжай проект с текущего состояния. Сначала ничего не меняй: сверь GitHub/release и коротко подтверди, что понял архитектуру, открытые баги и следующий этап.
+> Открой `context/README.md` в репозитории `bakunity/RDP`, прочитай весь context по указанному порядку и продолжай проект с текущего состояния. Сначала сверь актуальный GitHub/release/ветки и коротко подтверди, что понял последние подтверждённые тесты, открытые баги и следующий этап. Не повторяй уже пройденные проверки без причины.
+
+## Перед следующим переездом
+
+В конце каждого длинного рабочего чата новый ассистент должен:
+
+1. перезаписать `LAST_SESSION.md` свежим компактным delta-контекстом;
+2. обновить `CURRENT_STATE.md`, если появились новые PASS/FAIL;
+3. обновить `PROJECT_HANDOFF.md`, если изменились архитектура или ключевой вектор;
+4. обновить `NEXT_WORK.md`, если завершились этапы или изменились приоритеты;
+5. обновить `LATEST_AUDIT.md`, если был новый глубокий анализ;
+6. добавить короткую запись в `HISTORY.md` для значимого milestone;
+7. не записывать секреты.
 
 ## Правило актуальности
 
-GitHub и реальная инфраструктура всегда важнее этого snapshot. Перед конкретным изменением нужно проверить актуальный `main`, release, нужные файлы и открытые PR/ветки.
+GitHub и реальная инфраструктура всегда важнее snapshot. Перед конкретным изменением нужно проверить актуальный `main`, release, нужные файлы и открытые PR/ветки.
 
 Эта папка **не должна содержать секреты**: bot token, pairing code, TLS/API fingerprint, SSH private key, device token, реальные production IP, Telegram numeric IDs и содержимое secret config.
