@@ -78,6 +78,45 @@ Do not downgrade the real behavioral PASS merely because the telemetry UI is ina
 
 The user reports that devices can be added and assigned ports work. A second endpoint from the normal pool has been observed in the Telegram dashboard. Formal isolation/revoke/delete acceptance for multiple devices remains to be completed.
 
+## Confirmed installer compatibility defect
+
+### Windows 10 x64 launched from 32-bit PowerShell
+
+A real Windows 10 Pro x64 / build 19045 system exposed a confirmed path-resolution defect in the Windows installer.
+
+Observed facts:
+
+```text
+Is64BitOperatingSystem = True
+Is64BitProcess         = False
+PowerShell path        = C:\Windows\SysWOW64\WindowsPowerShell\v1.0\powershell.exe
+OpenSSH.Client         = Installed
+Reboot pending         = False
+```
+
+The current installer assumes Microsoft OpenSSH is found through `C:\Windows\System32\OpenSSH`. From a 32-bit process on 64-bit Windows, filesystem redirection prevents that lookup from reaching the intended native 64-bit binaries. The native binaries are reachable through `C:\Windows\Sysnative\OpenSSH`.
+
+Required fix:
+
+```powershell
+if ([Environment]::Is64BitOperatingSystem -and -not [Environment]::Is64BitProcess) {
+    $NativeSystem = "$env:WINDIR\Sysnative"
+} else {
+    $NativeSystem = "$env:WINDIR\System32"
+}
+```
+
+Resolve the Microsoft binaries only from:
+
+```text
+$NativeSystem\OpenSSH\ssh.exe
+$NativeSystem\OpenSSH\ssh-keygen.exe
+```
+
+Do **not** use `Get-Command ssh.exe`, PATH or Git's bundled SSH as the permanent fallback. On the affected PC, PATH could resolve SSH from Git, which is not the Hermes transport dependency.
+
+Status: **CONFIRMED BUG / NOT YET FIXED**.
+
 ## Open / not yet accepted
 
 ### Telegram state correctness
@@ -132,6 +171,16 @@ The close helper finds the PID owning the RDP listener and kills it if `/proc/<p
 
 Current `main` installer must still be rechecked for the fragile recursive backup path over an existing protected Hermes directory. A real old installation previously produced access denied. Desired solution remains whole-directory archive/rename with scoped ACL fallback.
 
+### Windows compatibility regression coverage
+
+After fixing the `SysWOW64`/`Sysnative` defect, add tests for at least:
+
+- x64 Windows + x64 PowerShell -> `System32\OpenSSH`;
+- x64 Windows + x86 PowerShell -> `Sysnative\OpenSSH`;
+- Microsoft OpenSSH installed while Git SSH appears earlier in PATH -> Hermes still chooses Microsoft OpenSSH;
+- OpenSSH absent -> install + re-check;
+- OpenSSH capability reports installed but native binary missing -> clear diagnostic error.
+
 ### Remaining recovery tests
 
 Still need formal PASS for:
@@ -182,6 +231,8 @@ Treat current site as an interim version. Do not spend time polishing it before 
 
 The project is in **stabilization**, not feature discovery.
 
-Core transport works. Fresh client installation works. External RDP works. Tested Windows reboot recovery works. Telegram OFF/ON works at the user-visible RDP level.
+Core transport works. Fresh client installation works on the validated normal path. External RDP works. Tested Windows reboot recovery works. Telegram OFF/ON works at the user-visible RDP level.
 
-The next work is to make state truthful, command completion visible, remaining recovery deterministic, migrations/updates safe, and the product/documentation coherent.
+A Windows compatibility defect remains for x86 PowerShell running on x64 Windows and must be fixed without PATH/Git SSH fallback.
+
+The next work is to make installation portable across supported Windows launch contexts, state truthful, command completion visible, remaining recovery deterministic, migrations/updates safe, and the product/documentation coherent.
