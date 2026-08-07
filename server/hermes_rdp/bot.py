@@ -14,7 +14,6 @@ from typing import Any
 from .config import Config
 from .db import Registry
 from .tunnel import close_tunnel
-from .tunnel import close_tunnel
 
 
 LOG = logging.getLogger("hermes_rdp.bot")
@@ -191,6 +190,8 @@ class TelegramBot:
             _, action, device_id = data.split(":", 2)
             try:
                 device = self.registry.get_device(device_id)
+                if device.get("pending_command"):
+                    raise ValueError("Предыдущая команда ещё выполняется")
                 self.registry.set_enabled(device_id, action != "off")
                 self.registry.queue_command(device_id, action)
                 if action == "off":
@@ -323,8 +324,31 @@ class TelegramBot:
             )
         if not process_lines:
             process_lines.append("—")
-        ssh_tunnel = telemetry.get("ssh_tunnel_running", False)
-        endpoint = telemetry.get("endpoint_available", False)
+        ssh_tunnel = bool(telemetry.get("ssh_tunnel_running", False))
+        endpoint = bool(telemetry.get("endpoint_available", False))
+        access_enabled = bool(device.get("enabled", True))
+        pending_action = str(device.get("pending_command") or "")
+        last_result = device.get("last_result") or {}
+        action_names = {
+            "on": "включение доступа",
+            "off": "выключение доступа",
+            "restart": "перезапуск туннеля",
+        }
+        if pending_action:
+            command_line = (
+                "⏳ Команда: "
+                + action_names.get(pending_action, pending_action)
+                + "…"
+            )
+        elif last_result:
+            result_icon = "✅" if last_result.get("ok") else "❌"
+            result_action = action_names.get(
+                str(last_result.get("action") or ""),
+                "последняя команда",
+            )
+            command_line = f"{result_icon} Последняя команда: {result_action}"
+        else:
+            command_line = "Последняя команда: —"
         text = (
             f"{'🟢' if online else '🔴'} {escape(device['display_name']).upper()} · "
             f"{'ONLINE' if online else 'OFFLINE'}\n\n"
@@ -342,22 +366,33 @@ class TelegramBot:
             f"⬇️ Получено: {format_bytes(telemetry.get('network_received_bytes'))}\n"
             f"⬆️ Отправлено: {format_bytes(telemetry.get('network_sent_bytes'))}\n"
             f"Маршрут: {escape(telemetry.get('route', '—'))}\n\n"
-            f"SSH-туннель: {'работает' if ssh_tunnel else 'остановлен'}\n"
-            f"Endpoint: {'доступен' if endpoint else 'закрыт'}\n"
+            "СОСТОЯНИЕ\n"
+            f"Агент: {'🟢 ONLINE' if online else '🔴 OFFLINE'}\n"
+            f"RDP-доступ: {'🟢 ВКЛЮЧЕН' if access_enabled else '⚪ ВЫКЛЮЧЕН'}\n"
+            f"SSH-туннель: {'🟢 CONNECTED' if ssh_tunnel else '⚪ DISCONNECTED'}\n"
+            f"Endpoint: {'🟢 OPEN' if endpoint else '⚪ CLOSED'}\n"
             f"RDP-соединений: {int(telemetry.get('rdp_connections', 0) or 0)}\n"
-            f"Внешние клиенты: {escape(', '.join(telemetry.get('rdp_remote_addresses') or []) or 'нет')}\n"
-            f"Сессии: {escape(', '.join(sessions) or 'нет')}\n"
+            f"{command_line}\n"
+            f"Сессии Windows: {escape(', '.join(sessions) or 'нет')}\n"
             f"Аптайм Windows: {format_duration(telemetry.get('uptime_seconds'))}\n\n"
             "🔝 Процессы\n" + "\n".join(process_lines) + "\n\n"
             f"Обновлено: {datetime.now().strftime('%H:%M:%S')}"
         )
+        if pending_action:
+            control_rows = [
+                [{"text": "⏳ КОМАНДА ВЫПОЛНЯЕТСЯ", "callback_data": "refresh"}]
+            ]
+        elif access_enabled:
+            control_rows = [[
+                {"text": "🔴 ВЫКЛЮЧИТЬ ДОСТУП", "callback_data": f"cmd:off:{device['id']}"},
+                {"text": "♻️ RESTART", "callback_data": f"cmd:restart:{device['id']}"},
+            ]]
+        else:
+            control_rows = [[
+                {"text": "🟢 ВКЛЮЧИТЬ ДОСТУП", "callback_data": f"cmd:on:{device['id']}"},
+            ]]
         keyboard = {
-            "inline_keyboard": [
-                [
-                    {"text": "🟢 ON", "callback_data": f"cmd:on:{device['id']}"},
-                    {"text": "🔴 OFF", "callback_data": f"cmd:off:{device['id']}"},
-                    {"text": "♻️ RESTART", "callback_data": f"cmd:restart:{device['id']}"},
-                ],
+            "inline_keyboard": control_rows + [
                 [
                     {"text": "🔄 REFRESH", "callback_data": "refresh"},
                     {

@@ -427,16 +427,18 @@ class Registry:
     def complete_command(
         self, device_id: str, seq: int, ok: bool, message: str
     ) -> None:
-        result = {
-            "seq": int(seq),
-            "ok": bool(ok),
-            "message": str(message)[:500],
-            "completed_at": now(),
-        }
         with self.connect() as conn:
             row = conn.execute(
-                "SELECT command_seq FROM devices WHERE id=?", (device_id,)
+                "SELECT command_seq,pending_command FROM devices WHERE id=?",
+                (device_id,),
             ).fetchone()
+            result = {
+                "seq": int(seq),
+                "action": str(row["pending_command"] or "") if row else "",
+                "ok": bool(ok),
+                "message": str(message)[:500],
+                "completed_at": now(),
+            }
             if not row or int(row["command_seq"]) != int(seq):
                 return
             conn.execute(
