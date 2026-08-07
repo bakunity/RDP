@@ -7,17 +7,19 @@ Purpose: make long project work portable between ChatGPT conversations without r
 The assistant should:
 
 1. read `context/README.md`;
-2. read `context/PROJECT_HANDOFF.md`;
-3. read `context/CURRENT_STATE.md`;
-4. read `context/NEXT_WORK.md`;
-5. read `context/DECISIONS.md`;
-6. inspect the relevant current GitHub files/PRs/releases before acting;
-7. briefly tell the user what is understood and what stage is next;
-8. do not silently assume the context snapshot is newer than GitHub.
+2. read `context/LAST_SESSION.md`;
+3. read `context/PROJECT_HANDOFF.md`;
+4. read `context/CURRENT_STATE.md`;
+5. read `context/LATEST_AUDIT.md`;
+6. read `context/NEXT_WORK.md`;
+7. read `context/DECISIONS.md`;
+8. inspect the relevant current GitHub files/PRs/releases before acting;
+9. briefly tell the user what is understood and what stage is next;
+10. do not silently assume the context snapshot is newer than GitHub.
 
 Suggested user prompt:
 
-> Открой `context/README.md` в `bakunity/RDP`, прочитай project handoff и продолжай с текущего состояния. Сначала сверь GitHub и ничего не меняй, пока не подтвердим следующий этап.
+> Открой `context/README.md` в `bakunity/RDP`, прочитай весь context по указанному порядку и продолжай с текущего состояния. Сначала сверь актуальный GitHub/release/ветки, назови последние подтверждённые PASS, открытые баги и следующий этап. Не повторяй уже пройденные проверки без причины.
 
 ## During a session
 
@@ -34,6 +36,19 @@ For any live change:
 ## Before moving to another chat
 
 Update the context **after** the useful work of the session is complete.
+
+### Rewrite `LAST_SESSION.md`
+
+This is the mandatory compact delta for the next chat. Replace the previous contents with:
+
+- what was actually done in the current chat;
+- latest real PASS/FAIL results;
+- the last important analysis/conclusion;
+- what must not be repeated;
+- the exact next engineering target;
+- any new caveats that are easy to lose in a long conversation.
+
+Keep it compact. Do not turn it into a raw transcript.
 
 ### Update `CURRENT_STATE.md`
 
@@ -65,6 +80,10 @@ Do not turn it into a raw transcript.
 
 Remove completed stages and reorder priorities if the project direction changed.
 
+### Update `LATEST_AUDIT.md`
+
+Only when a new detailed analysis materially changes the project understanding. Preserve the latest important audit conclusions and clearly mark what later testing confirmed or disproved.
+
 ### Update `DECISIONS.md`
 
 Only when a durable architectural/product decision changed or a new durable constraint was accepted.
@@ -94,6 +113,8 @@ Use these terms consistently:
 - **PLANNED** — desired future work, no implementation claim.
 
 This distinction is especially important for networking, recovery and ON/OFF behavior.
+
+A useful rule: user-visible behavior and low-level transport behavior can have different evidence levels. Example: if OFF disconnects an active RDP session, that is a behavioral PASS; do not automatically claim a separate `endpoint CLOSED` network-level PASS unless the listener/port was actually measured.
 
 ## Sensitive information policy
 
@@ -140,6 +161,7 @@ The user prefers:
 - do not confuse `ONLINE` heartbeat with RDP access being ON;
 - do not claim the SSH tunnel is stopped solely from the current unreliable telemetry field;
 - do not treat “command sent” as “command completed”;
+- do not re-prove that basic OpenSSH reverse RDP works unless a relevant change may have regressed it;
 - do not redesign the website before core state correctness unless the user explicitly reprioritizes;
 - do not overwrite published release tags;
 - do not expose secrets while asking for diagnostics.
