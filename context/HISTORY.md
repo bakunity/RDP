@@ -90,8 +90,7 @@ During ON/OFF testing the Telegram dashboard showed contradictory state such as:
 
 - device ONLINE;
 - SSH tunnel reported stopped;
-- endpoint available;
-- active RDP connection.
+- endpoint/RDP actually usable.
 
 This triggered a full product audit.
 
@@ -99,8 +98,8 @@ Main conclusion: core transport works, but the control plane/state model must be
 
 The next target became a stabilization cycle focused on:
 
-1. truthful state and deterministic ON/OFF/RESTART;
-2. reboot/network recovery;
+1. truthful state and deterministic command lifecycle;
+2. remaining reboot/network recovery;
 3. safe update/rollback;
 4. Dashboard v2;
 5. full documentation/README rebuild;
@@ -112,3 +111,20 @@ The next target became a stabilization cycle focused on:
 Created repository folder `context/` so future conversations can reconstruct the project without relying on the previous long chat.
 
 The context intentionally excludes secrets and stores architecture, current state, durable decisions, audit conclusions and next-work protocol.
+
+## 2026-08-07 — Windows reboot + Telegram OFF/ON PASS
+
+Further live acceptance closed several previously open questions:
+
+- the tested Windows PC was rebooted and Hermes recovered automatically enough for RDP to work again;
+- pressing OFF in Telegram disconnected the active RDP session / made access unusable;
+- pressing ON restored RDP access;
+- the user explicitly confirmed the functionality works.
+
+The remaining `SSH tunnel: stopped` inconsistency is therefore treated as a telemetry/state-representation bug rather than proof of a broken transport.
+
+The acceptance matrix now distinguishes user-visible access behavior from a separate low-level endpoint-listener measurement.
+
+## 2026-08-07 — Latest-session handoff protocol added
+
+Added `context/LAST_SESSION.md` as the compact per-chat delta. `context/README.md` and `SESSION_PROTOCOL.md` now require future long chats to refresh this file before migration, and to propagate real PASS/FAIL changes into the durable context files.
