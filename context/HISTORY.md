@@ -128,3 +128,18 @@ The acceptance matrix now distinguishes user-visible access behavior from a sepa
 ## 2026-08-07 — Latest-session handoff protocol added
 
 Added `context/LAST_SESSION.md` as the compact per-chat delta. `context/README.md` and `SESSION_PROTOCOL.md` now require future long chats to refresh this file before migration, and to propagate real PASS/FAIL changes into the durable context files.
+
+## 2026-08-07 — Windows 10 x86 PowerShell compatibility bug confirmed
+
+A second Windows test exposed a real installer compatibility defect:
+
+- OS is Windows 10 Pro x64 build 19045;
+- OpenSSH.Client is installed;
+- installer was launched from 32-bit PowerShell under `SysWOW64`;
+- hard-coded `System32\OpenSSH` lookup failed because of WOW64 filesystem redirection;
+- native Microsoft OpenSSH binaries were visible via `Sysnative\OpenSSH`;
+- `Get-Command ssh.exe` could resolve Git SSH, which Hermes must not use as a fallback.
+
+The required product fix is an architecture-aware native-system resolver: use `Sysnative` when a 32-bit PowerShell process runs on 64-bit Windows, otherwise use `System32`. Add regression tests and keep Microsoft system OpenSSH as the only supported transport binary source.
+
+This was added to the `v1.2.0 — Stabilization` work as a Windows compatibility layer item.
