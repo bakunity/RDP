@@ -1,4 +1,4 @@
-﻿$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Net.Http
 
 $BaseDir = 'C:\ProgramData\HermesRDP'
@@ -314,26 +314,77 @@ function Get-NetworkTotals {
     return @($Received, $Sent)
 }
 
-function Test-TcpPort {
-    param(
-        [string]$HostName,
-        [int]$Port,
-        [int]$TimeoutMs = 1500
+function Get-RdpConnectionSummary {
+    # A real Hermes RDP connection reaches TermService from loopback because
+    # the dedicated Hermes ssh.exe forwards the public server port to
+    # 127.0.0.1:3389. Direct LAN/VPN RDP keeps the real remote address.
+    # Loopback alone is not enough: the reverse-side peer must belong to this
+    # device's Hermes ssh.exe process, identified by its unique key path.
+    $LoopbackAddresses = @('127.0.0.1', '::1', '::ffff:127.0.0.1')
+    $Established = @(
+        Get-NetTCPConnection -State Established -ErrorAction SilentlyContinue
     )
-    $Client = New-Object Net.Sockets.TcpClient
-    try {
-        $Async = $Client.BeginConnect($HostName, $Port, $null, $null)
-        if (-not $Async.AsyncWaitHandle.WaitOne($TimeoutMs, $false)) {
-            return $false
+    $RdpConnections = @(
+        $Established |
+            Where-Object { [int]($_.LocalPort) -eq 3389 }
+    )
+    $HermesSshPids = @(
+        Get-SshProcesses |
+            ForEach-Object { [int]($_.ProcessId) }
+    )
+
+    $HermesCount = 0
+    $DirectCount = 0
+    $OtherLocalCount = 0
+    $RemoteAddresses = @()
+    $DirectRemoteAddresses = @()
+
+    foreach ($Connection in $RdpConnections) {
+        $RemoteAddress = [string]$Connection.RemoteAddress
+        if ($RemoteAddress -and $RemoteAddresses -notcontains $RemoteAddress) {
+            $RemoteAddresses += $RemoteAddress
         }
-        $Client.EndConnect($Async)
-        return $true
+
+        if ($LoopbackAddresses -notcontains $RemoteAddress) {
+            $DirectCount += 1
+            if (
+                $RemoteAddress -and
+                $DirectRemoteAddresses -notcontains $RemoteAddress
+            ) {
+                $DirectRemoteAddresses += $RemoteAddress
+            }
+            continue
+        }
+
+        $Peer = @(
+            $Established |
+                Where-Object {
+                    $LoopbackAddresses -contains [string]($_.LocalAddress) -and
+                    $LoopbackAddresses -contains [string]($_.RemoteAddress) -and
+                    [int]($_.LocalPort) -eq [int]($Connection.RemotePort) -and
+                    [int]($_.RemotePort) -eq 3389
+                } |
+                Select-Object -First 1
+        )
+
+        if (
+            $Peer.Count -gt 0 -and
+            $HermesSshPids -contains [int]($Peer[0].OwningProcess)
+        ) {
+            $HermesCount += 1
+        }
+        else {
+            $OtherLocalCount += 1
+        }
     }
-    catch {
-        return $false
-    }
-    finally {
-        $Client.Close()
+
+    return [pscustomobject]@{
+        total = [int]$RdpConnections.Count
+        hermes = [int]$HermesCount
+        direct = [int]$DirectCount
+        other_local = [int]$OtherLocalCount
+        remote_addresses = @($RemoteAddresses)
+        direct_remote_addresses = @($DirectRemoteAddresses)
     }
 }
 
@@ -412,17 +463,7 @@ function Get-Telemetry {
     $DiskFree = [int64]$Disk.FreeSpace
     $DiskUsed = [math]::Max(0, [int64]($DiskTotal - $DiskFree))
     $Network = Get-NetworkTotals
-    $RdpConnections = @(
-        Get-NetTCPConnection `
-            -LocalPort 3389 `
-            -State Established `
-            -ErrorAction SilentlyContinue
-    )
-    $RemoteAddresses = @(
-        $RdpConnections |
-            Select-Object -ExpandProperty RemoteAddress -Unique |
-            Where-Object { $_ }
-    )
+    $Rdp = Get-RdpConnectionSummary
     $Sessions = @(Get-Sessions)
     $Boot = if ($Os.LastBootUpTime -is [datetime]) {
         [datetime]$Os.LastBootUpTime
@@ -436,10 +477,6 @@ function Get-Telemetry {
     $State = Get-AgentState
     $SshProcesses = @(Get-SshProcesses)
     $TunnelRunning = $SshProcesses.Count -gt 0
-    $EndpointAvailable = Test-TcpPort `
-        -HostName $Config.server `
-        -Port ([int]$Config.rdp_port) `
-        -TimeoutMs 1500
 
     return [ordered]@{
         captured_at = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
@@ -466,9 +503,12 @@ function Get-Telemetry {
         access_enabled = [bool]$State.enabled
         ssh_tunnel_running = $TunnelRunning
         ssh_process_count = [int]$SshProcesses.Count
-        endpoint_available = [bool]$EndpointAvailable
-        rdp_connections = $RdpConnections.Count
-        rdp_remote_addresses = $RemoteAddresses
+        rdp_connections = [int]$Rdp.total
+        rdp_hermes_connections = [int]$Rdp.hermes
+        rdp_direct_connections = [int]$Rdp.direct
+        rdp_other_local_connections = [int]$Rdp.other_local
+        rdp_remote_addresses = @($Rdp.remote_addresses)
+        rdp_direct_remote_addresses = @($Rdp.direct_remote_addresses)
         uptime_seconds = $Uptime
         top_processes = @(Get-TopProcesses)
     }
