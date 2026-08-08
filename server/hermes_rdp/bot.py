@@ -349,10 +349,29 @@ class TelegramBot:
         else:
             endpoint_status = "⚪ UNKNOWN"
 
-        if online and "rdp_connections" in telemetry:
-            rdp_connections = str(int(telemetry.get("rdp_connections", 0) or 0))
+        if online and "rdp_hermes_connections" in telemetry:
+            rdp_hermes_connections = str(
+                int(telemetry.get("rdp_hermes_connections", 0) or 0)
+            )
         else:
-            rdp_connections = "UNKNOWN"
+            rdp_hermes_connections = "UNKNOWN"
+
+        if online and "rdp_direct_connections" in telemetry:
+            rdp_direct_connections = str(
+                int(telemetry.get("rdp_direct_connections", 0) or 0)
+            )
+        else:
+            rdp_direct_connections = "UNKNOWN"
+
+        rdp_other_line = ""
+        if online and "rdp_other_local_connections" in telemetry:
+            rdp_other_connections = int(
+                telemetry.get("rdp_other_local_connections", 0) or 0
+            )
+            if rdp_other_connections > 0:
+                rdp_other_line = (
+                    f"RDP локально (другое): {rdp_other_connections}\n"
+                )
 
         pending_action = str(device.get("pending_command") or "")
         last_result = device.get("last_result") or {}
@@ -401,7 +420,9 @@ class TelegramBot:
             f"Агент применил: {applied_access}\n"
             f"SSH-туннель: {ssh_status}\n"
             f"Endpoint: {endpoint_status}\n"
-            f"RDP-соединений: {rdp_connections}\n"
+            f"🌐 RDP через Hermes: {rdp_hermes_connections}\n"
+            f"🏠 RDP напрямую (LAN/VPN): {rdp_direct_connections}\n"
+            f"{rdp_other_line}"
             f"{command_line}\n"
             f"Сессии Windows: {escape(', '.join(sessions) or 'нет')}\n"
             f"Аптайм Windows: {format_duration(telemetry.get('uptime_seconds'))}\n\n"
