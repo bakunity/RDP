@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 from . import __version__
 from .config import Config
 from .db import Registry
-from .tunnel import close_tunnel
+from .tunnel import close_tunnel, endpoint_listener_state
 
 
 LOG = logging.getLogger("hermes_rdp.api")
@@ -152,13 +152,27 @@ class ApiHandler(BaseHTTPRequestHandler):
         )
 
     def _telemetry(self, device_id: str) -> None:
-        if not self._device_auth(device_id):
+        device = self._device_auth(device_id)
+        if not device:
             self._json(HTTPStatus.UNAUTHORIZED, {"ok": False, "error": "unauthorized"})
             return
         body = self._read_json()
         telemetry = body.get("telemetry")
         if not isinstance(telemetry, dict):
             raise ValueError("telemetry object required")
+
+        # Endpoint truth belongs to the Linux server. A Windows-side TCP probe
+        # can be a false positive behind VPN/TUN/proxy routing, so never trust
+        # the client value for the public Hermes listener.
+        telemetry = dict(telemetry)
+        endpoint_state = endpoint_listener_state(int(device["rdp_port"]))
+        if endpoint_state is None:
+            telemetry.pop("endpoint_available", None)
+            telemetry["endpoint_source"] = "unknown"
+        else:
+            telemetry["endpoint_available"] = endpoint_state
+            telemetry["endpoint_source"] = "server_listener"
+
         command = self.server.registry.update_telemetry(device_id, telemetry)
         self._json(HTTPStatus.OK, {"ok": True, "command": command})
 
