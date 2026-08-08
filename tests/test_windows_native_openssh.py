@@ -20,6 +20,18 @@ class WindowsNativeOpenSshTests(unittest.TestCase):
         self.assertIn("ssh = $SshPath", text)
         self.assertIn("keygen = $KeygenPath", text)
 
+    def test_existing_install_is_detected_before_destructive_actions(self) -> None:
+        text = (ROOT / "scripts/install-client.ps1").read_text(encoding="utf-8-sig")
+        guard = text.index("$ExistingConfigPath")
+        stop_tasks = text.index("$LegacyTasks = @(")
+        stop_processes = text.index("Stop-HermesProcesses", stop_tasks)
+        backup = text.index("$BackupDir = Join-Path", stop_processes)
+        self.assertLess(guard, stop_tasks)
+        self.assertLess(guard, stop_processes)
+        self.assertLess(guard, backup)
+        self.assertIn("Hermes RDP уже установлен на этом ПК", text)
+        self.assertIn("repair/update flow", text)
+
 
 if __name__ == "__main__":
     unittest.main()
