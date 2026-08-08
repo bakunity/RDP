@@ -1,20 +1,23 @@
 # Hermes RDP — Continuous Context Protocol
 
-Purpose: make the project recoverable from GitHub at any moment, even if the current chat is compressed, partially lost or abandoned before a planned handoff.
+Updated: 2026-08-08
+
+Purpose: make the project recoverable from GitHub at any moment even if the current chat is compressed, lost or abandoned, while also preventing context from becoming a stale append-only dump.
 
 ## Principle
 
-Do not treat the conversation as the source of truth.
-
 ```text
 chat = temporary working memory
-GitHub context = durable project memory
-runtime/CI = evidence
+runtime / CI = evidence
+HOT context = current durable working memory
+archive / Git history = historical memory
 ```
 
-The context system is **event-driven**. Important facts are checkpointed when they become durable, not only at the end of a conversation.
+Context is both **continuously checkpointed** and **continuously compacted**.
 
-## At the beginning of every project chat
+Saving a fact and retiring an obsolete fact are equally important operations.
+
+## Start of every project chat
 
 Read in this order:
 
@@ -25,236 +28,250 @@ Read in this order:
 5. `context/PROJECT_HANDOFF.md`;
 6. `context/NEXT_WORK.md`;
 7. `context/DECISIONS.md`;
-8. `context/LATEST_AUDIT.md` if deeper reasoning is needed;
-9. `context/LAST_SESSION.md` only as a chat-boundary delta;
+8. `context/SESSION_PROTOCOL.md` / `CONTEXT_LIFECYCLE.md` if changing project-memory rules;
+9. `LATEST_AUDIT`, `LAST_SESSION` and archive only when deeper/history context is needed;
 10. inspect current GitHub PRs/branches/releases/files before acting.
 
-Then briefly establish:
+Establish explicitly:
 
 - what is actually deployed;
 - active PR/branch/head;
 - latest real PASS/FAIL;
-- implemented-but-not-live-validated changes;
-- confirmed bugs;
-- exact next engineering action.
+- implemented-but-not-runtime-validated changes;
+- confirmed current blockers;
+- exact next action.
 
-Do not automatically repeat an acceptance scenario already recorded as PASS unless a relevant change could have regressed it.
+Do not repeat an old PASS unless a relevant change can regress it.
 
-## During the chat: checkpoint after work-units
+## During work — checkpoint by work-unit
 
-A **work-unit** is a meaningful state transition, for example:
+A work-unit is a meaningful state transition:
 
-- diagnosis -> confirmed root cause;
-- code change -> CI green;
-- deploy -> services healthy;
-- live test -> PASS/FAIL;
-- bug fix -> runtime accepted;
-- product/architecture choice -> durable decision;
-- current stage -> next stage.
+```text
+diagnosis -> confirmed root cause
+code -> CI green
+deploy -> live state changed
+acceptance -> PASS/FAIL
+fix -> runtime accepted
+decision -> durable constraint changed
+stage -> next stage changed
+```
 
-After a completed work-unit, update the appropriate durable files before a large amount of new work accumulates in chat.
+Do not wait for chat migration.
 
-### Mandatory immediate checkpoint triggers
+### Immediate checkpoint triggers
 
-Checkpoint without waiting for session end when any of these occurs:
+#### Live PASS / FAIL
 
-1. **Live PASS/FAIL**
-   - update `EVIDENCE_LEDGER.md`;
-   - update `ACTIVE_WORK.md` if it changes current stage;
-   - update `CURRENT_STATE.md` when product-level status changes.
+- update `EVIDENCE_LEDGER.md`;
+- update `ACTIVE_WORK.md` if the result changes current work;
+- update `CURRENT_STATE.md` when product-level truth changed;
+- remove the accepted blocker from `NEXT_WORK.md` when its whole acceptance item is complete.
 
-2. **Confirmed bug/root cause**
-   - record it in `EVIDENCE_LEDGER.md`;
-   - add it to `ACTIVE_WORK.md` until fixed/accepted;
-   - do not record an unproven guess as confirmed.
+#### Confirmed bug / root cause
 
-3. **Code + CI completes a meaningful fix**
-   - update `ACTIVE_WORK.md` with head/status;
-   - label it `IMPLEMENTED, NOT VALIDATED` until runtime acceptance if behavior is environment-dependent;
-   - update active release draft if user-facing/release-relevant.
+- add durable evidence to `EVIDENCE_LEDGER.md`;
+- keep it in `ACTIVE_WORK.md` while it blocks current work;
+- do not record a guess as confirmed.
 
-4. **Deployment changes live truth**
-   - update `ACTIVE_WORK.md` with what is actually deployed and rollback point if useful;
-   - do not equate branch head with deployed head without evidence.
+#### Code + CI completes a meaningful fix
 
-5. **Durable decision**
-   - update `DECISIONS.md` immediately;
-   - update `PROJECT_HANDOFF.md` only if the architecture/product vector materially changed.
+- update `ACTIVE_WORK.md` with current branch/head and `IMPLEMENTED, NOT VALIDATED` where runtime acceptance is still needed;
+- update release draft if release-facing;
+- CI does not promote environment-dependent behavior to runtime PASS.
 
-6. **Acceptance queue changes**
-   - update `NEXT_WORK.md` when priorities/stages materially change;
-   - remove completed items rather than leaving stale TODOs indefinitely.
+#### Deployment changes live truth
 
-### Safety checkpoint rule
+- update `ACTIVE_WORK.md` with deployed vs branch-only state;
+- record rollback/backup point when useful;
+- do not equate branch head with deployed head without evidence.
+
+#### Durable decision
+
+- update `DECISIONS.md` immediately;
+- retire/supersede the incompatible old decision;
+- update `PROJECT_HANDOFF.md` only when product/architecture understanding materially changed.
+
+#### Acceptance queue changes
+
+- rewrite `NEXT_WORK.md` to remove completed stages and reorder remaining work;
+- do not keep completed TODOs for historical purposes.
+
+## Safety checkpoint rule
 
 Do not let many meaningful changes exist only in chat.
 
-If several work-units happen close together, combine them into one compact checkpoint. The goal is not to commit after every command; the goal is to ensure that losing the last 10–20 messages would not erase important project truth.
+If several work-units happen close together, combine them into one compact checkpoint. Losing the last 10–20 chat messages should not erase an important project-state transition.
 
-Good checkpoint:
+Record outcomes, not command transcripts.
 
-```text
-- endpoint false-positive root cause confirmed
-- server-side listener truth implemented + CI PASS
-- deployed + OFF=CLOSED / ON=OPEN live PASS
-- next: RDP channel split
-```
+## Continuous stale-context retirement
 
-Bad checkpoint:
+After updating new truth, check whether the new truth makes old context stale.
 
-```text
-- ran command A
-- copied file B
-- clicked refresh
-- typo happened
-```
+Examples:
 
-## File responsibilities
+- a bug becomes live-accepted -> remove it from `ACTIVE_WORK` and remaining TODOs;
+- a new PR replaces an old workstream -> remove old branch/head from HOT files;
+- endpoint CLOSED becomes measured PASS -> remove old “not separately proven” wording from current files;
+- an architecture decision changes -> mark the old decision `SUPERSEDED`, do not leave both active;
+- a newer deep audit exists -> archive the old audit instead of stacking both in `LATEST_AUDIT`.
 
-### `ACTIVE_WORK.md` — hot operational state
+See `CONTEXT_LIFECYCLE.md` for lifecycle, archive and size rules.
 
-Rewrite frequently. It should answer in under a minute:
+## Canonical-owner rule
 
-- active PR/branch/head;
-- release target;
-- what is deployed;
-- current confirmed blockers;
-- what is implemented but not accepted;
-- exact next step;
-- what must not be repeated.
+Before adding detailed text, ask: **which file owns this fact?**
 
-This is the main protection against chat compression.
+- operational truth -> `ACTIVE_WORK`;
+- evidence -> `EVIDENCE_LEDGER`;
+- consolidated state -> `CURRENT_STATE`;
+- architecture -> `PROJECT_HANDOFF`;
+- remaining work -> `NEXT_WORK`;
+- durable choice -> `DECISIONS`;
+- release-facing result -> release draft;
+- historical reasoning -> archive.
 
-### `EVIDENCE_LEDGER.md` — durable proof index
+Other files should summarize/link instead of carrying another independently maintained copy.
 
-Update immediately after acceptance/root-cause events.
+## File-specific behavior
 
-Each entry should preserve:
+### `ACTIVE_WORK.md`
 
-- scenario;
-- status;
-- evidence boundary;
-- relevant environment/build when needed.
+Frequently rewritten. Contains only current work:
 
-Never promote CI-only evidence to runtime PASS.
+- active PR/head/release target;
+- deployment truth/rollback point;
+- current blockers;
+- implemented-not-accepted work;
+- exact next action;
+- baseline checks that should not be repeated.
 
-### `CURRENT_STATE.md` — consolidated product truth
+Remove completed blockers promptly.
 
-Rewrite when enough state changes that the snapshot becomes materially stale.
+### `EVIDENCE_LEDGER.md`
 
-It should not need updating after every small commit, but it must not remain weeks behind while `ACTIVE_WORK` has moved on.
+Durable evidence index. Preserve historical PASS/bug evidence, but rotate/compact by release as defined in `CONTEXT_LIFECYCLE.md`.
 
-### `PROJECT_HANDOFF.md` — architecture/product vector
+Never rewrite an old failure as if it never happened; add resolution/new acceptance.
 
-Update only for meaningful architectural/product understanding changes.
+### `CURRENT_STATE.md`
 
-### `NEXT_WORK.md` — active roadmap / acceptance queue
+Consolidated current product truth. Rewrite when materially stale. It must not carry old TODO/status just because the text once existed.
 
-Update when stages complete, new blockers appear or priorities change.
+### `PROJECT_HANDOFF.md`
 
-### `DECISIONS.md` — durable constraints
+Stable architecture/product model. Avoid exact temporary PR/acceptance detail unless needed to understand architecture.
 
-Update as soon as a decision future chats must not casually reverse is accepted.
+### `NEXT_WORK.md`
 
-Do not put temporary debugging hypotheses here.
+Only remaining work. Completed items move out; history/release notes preserve what was done.
 
-### `HISTORY.md` — major milestones
+### `DECISIONS.md`
 
-Append only significant milestones. Not a work log.
+Only currently applicable durable decisions plus short supersession tombstones when necessary. Old incompatible rationale goes to history/archive/Git.
 
-### `LAST_SESSION.md` — optional boundary delta
+### `LATEST_AUDIT.md`
 
-Still useful when intentionally pausing/moving chats, but it is **not** the primary operational memory anymore.
+Exactly one current deep audit. Archive/replace when superseded. It is allowed to be a short pointer if no new deep audit is needed.
 
-A chat may disappear without a clean `LAST_SESSION` update; `ACTIVE_WORK + EVIDENCE_LEDGER + CURRENT_STATE` must still be enough to continue.
+### `LAST_SESSION.md`
 
-### Release draft
+Optional disposable chat-boundary delta. Never primary truth. Compact it after its facts are promoted into HOT/WARM files.
 
-During an active stabilization/release cycle, maintain a draft under `docs/releases/`.
+### `HISTORY.md`
 
-Only move items to the confirmed section when evidence supports them. Keep `IMPLEMENTED, NOT VALIDATED` separate.
+Major milestones only. Do not log every PR commit or acceptance command.
 
-## Branch policy for context
+## Context health / garbage collection triggers
 
-Product code changes normally live in feature branches/PRs.
+Run a compact health review when:
 
-Context-only checkpoint commits may go directly to default `main` even while product PRs are open. This is intentional because default-branch context must describe unmerged active work for future chats.
+- a release is published;
+- a major PR/workstream closes;
+- project phase changes;
+- HOT/WARM file exceeds its soft budget;
+- two current files contradict each other;
+- old blockers/TODOs are visibly lingering;
+- active evidence becomes hard to scan;
+- `LATEST_AUDIT` is no longer latest.
 
-Rules:
+Health review questions:
 
-- context-only commits must not silently alter product runtime;
-- refer to open PR/branch/head explicitly;
-- distinguish deployed vs branch-only state;
-- never claim an unmerged fix is production simply because context on `main` mentions it.
+1. Can a new chat identify the exact next step quickly?
+2. Does `ACTIVE_WORK` match actual GitHub/deployment truth?
+3. Are resolved bugs removed from current blockers?
+4. Does `NEXT_WORK` contain only remaining work?
+5. Does `CURRENT_STATE` agree with `EVIDENCE_LEDGER`?
+6. Are superseded decisions retired?
+7. Are release claims evidence-backed?
+8. Is historical detail outside the default reading path?
+9. Would losing this chat now still be safe?
+10. Are secrets absent?
 
-Recommended commit prefixes:
+## Release boundary protocol
 
-```text
-context: checkpoint <milestone>
-context: record <confirmed bug/pass>
-context: update active work after <event>
-```
+At `vX.Y.Z`:
 
-## Evidence language
+1. freeze relevant evidence to `context/archive/releases/vX.Y.Z-evidence.md`;
+2. finalize release notes from evidence + release draft;
+3. compact `EVIDENCE_LEDGER` to current guarantees + open next-cycle acceptance;
+4. rewrite `CURRENT_STATE` to released truth;
+5. reset `ACTIVE_WORK` for the next workstream;
+6. remove completed items from `NEXT_WORK`;
+7. retire superseded decisions;
+8. archive obsolete deep audit;
+9. append one meaningful `HISTORY` milestone;
+10. compact/replace `LAST_SESSION` if needed.
+
+The next release cycle should start with a small accurate working set.
+
+## Before risky live changes
+
+Before a deploy/migration/update that could break access, ensure `ACTIVE_WORK.md` contains enough recovery state:
+
+- current live state;
+- what is about to change;
+- known rollback/backup point when useful;
+- exact acceptance target.
+
+Never put secrets into context.
+
+## Before intentionally moving chat
+
+A final handoff is still useful, but it is consolidation, not the first persistence point:
+
+- ensure HOT context is current;
+- compact stale material;
+- refresh `CURRENT_STATE/NEXT_WORK` as needed;
+- update decisions/history/release notes only where appropriate;
+- optionally rewrite `LAST_SESSION` with a very short delta.
+
+If the chat disappears before this, continuous checkpoints must still be sufficient.
+
+## Evidence vocabulary
 
 Use consistently:
 
 - **PASS / CONFIRMED** — real evidence exists;
 - **IMPLEMENTED, NOT VALIDATED** — code exists, runtime acceptance absent;
 - **FAIL / CONFIRMED BUG** — reproduced/established failure;
-- **HYPOTHESIS / LIKELY** — suspected but not proven;
-- **PLANNED** — not implemented.
+- **HYPOTHESIS / LIKELY** — suspected, not proven;
+- **PLANNED** — not implemented;
+- **SUPERSEDED** — historically true/accepted text that no longer describes current truth.
 
-When a fix may invalidate an older PASS, preserve the baseline evidence and create a fresh acceptance requirement for the new build.
+## Sensitive information
 
-## Before risky live changes
+Never store passwords, bot tokens, private keys, device tokens, pairing codes, secret configs/fingerprints, unnecessary production IPs, numeric personal IDs or secret-bearing logs.
 
-Before a deploy/migration/update that could break access, make sure `ACTIVE_WORK.md` contains enough information to recover:
-
-- current live state;
-- what is about to change;
-- known rollback/backup point when available;
-- exact acceptance target.
-
-Do not put secrets into the checkpoint.
-
-## Before intentionally moving to another chat
-
-A final handoff is still useful, but now it is a **consolidation**, not the first time facts are saved.
-
-1. ensure `ACTIVE_WORK.md` is current;
-2. ensure new live evidence is in `EVIDENCE_LEDGER.md`;
-3. rewrite stale parts of `CURRENT_STATE.md`;
-4. refresh `NEXT_WORK.md`;
-5. update `DECISIONS.md` / `PROJECT_HANDOFF.md` only if needed;
-6. append `HISTORY.md` for a meaningful milestone;
-7. rewrite `LAST_SESSION.md` as a compact delta if useful;
-8. update release draft/final notes.
-
-If the chat disappears before this step, the project must still be recoverable from the continuous checkpoints.
-
-## Sensitive information policy
-
-Never write into public context:
-
-- passwords;
-- bot tokens;
-- private keys;
-- device tokens;
-- pairing codes;
-- secret-bearing fingerprints/configs;
-- unnecessary production IPs;
-- personal numeric Telegram IDs;
-- full secret logs.
-
-## Interaction conventions worth preserving
+## Interaction conventions
 
 - Russian;
 - one live infrastructure stage at a time;
-- copy-paste commands;
-- avoid manual nano/vim when a command can do the work;
-- explicit PASS/FAIL after output;
+- whole copy-paste commands;
+- avoid manual nano/vim when unnecessary;
+- explicit PASS/FAIL from output;
 - rollback plan where practical;
 - do not weaken Defender;
 - do not reintroduce FRP casually;
-- finish coherent product behavior before cosmetic expansion.
+- finish coherent behavior before cosmetic expansion.
