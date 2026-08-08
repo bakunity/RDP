@@ -320,7 +320,7 @@ function Get-RdpConnectionSummary {
     # 127.0.0.1:3389. Direct LAN/VPN RDP keeps the real remote address.
     # Loopback alone is not enough: the reverse-side peer must belong to this
     # device's Hermes ssh.exe process, identified by its unique key path.
-    $LoopbackAddresses = @('127.0.0.1', '::1', '::ffff:127.0.0.1')
+    $LoopbackAddresses = @('127.0.0.1', '::1')
     $Established = @(
         Get-NetTCPConnection -State Established -ErrorAction SilentlyContinue
     )
@@ -457,7 +457,7 @@ function Get-Telemetry {
     $Os = Get-CimInstance Win32_OperatingSystem
     $Disk = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'"
     $RamTotal = [int64]$Os.TotalVisibleMemorySize * 1KB
-    $RamFree = [int64]$Os.FreePhysicalMemory * 1KB
+    $RamFree = [int64]$Os.FreePhysicalMemorySize * 1KB
     $RamUsed = [math]::Max(0, [int64]($RamTotal - $RamFree))
     $DiskTotal = [int64]$Disk.Size
     $DiskFree = [int64]$Disk.FreeSpace
