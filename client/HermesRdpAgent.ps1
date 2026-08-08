@@ -7,7 +7,14 @@ $StatePath = Join-Path $BaseDir 'agent-state.json'
 $LogPath = Join-Path $BaseDir 'agent.log'
 $SshErrorLog = Join-Path $BaseDir 'ssh-error.log'
 $PollSeconds = 3
+$SlowTelemetrySeconds = 15
+$TopProcessesSeconds = 6
 $script:Http = $null
+$script:LiveTelemetry = $false
+$script:SlowTelemetry = $null
+$script:SlowTelemetryCapturedAt = 0
+$script:TopProcesses = @()
+$script:TopProcessesCapturedAt = 0
 
 $PinnedHttpClientSource = @'
 using System;
@@ -160,15 +167,16 @@ function Invoke-ApiPost {
 }
 
 function Get-SshProcesses {
-    # The private key path is unique per Hermes device and is more reliable
-    # than matching the exact rendered -R command line on every Windows build.
+    # Query only ssh.exe instead of scanning every Win32_Process row.
+    # The private key path is unique per Hermes device.
     $KeyPath = [string]$Config.ssh_key_path
     return @(
-        Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+        Get-CimInstance `
+            Win32_Process `
+            -Filter "Name='ssh.exe'" `
+            -ErrorAction SilentlyContinue |
             Where-Object {
-                $_.Name -eq 'ssh.exe' -and
-                $_.CommandLine -and
-                $_.CommandLine.Contains($KeyPath)
+                $_.CommandLine -and $_.CommandLine.Contains($KeyPath)
             }
     )
 }
@@ -285,6 +293,7 @@ function Get-Sessions {
 }
 
 function Get-InteractiveUser {
+    param([object[]]$Sessions = @())
     try {
         $User = (Get-CimInstance Win32_ComputerSystem).UserName
         if ($User) {
@@ -293,7 +302,6 @@ function Get-InteractiveUser {
     }
     catch {
     }
-    $Sessions = @(Get-Sessions)
     if ($Sessions.Count -gt 0) {
         return $Sessions[0]
     }
@@ -315,21 +323,19 @@ function Get-NetworkTotals {
 }
 
 function Get-RdpConnectionSummary {
-    # A real Hermes RDP connection reaches TermService from loopback because
-    # the dedicated Hermes ssh.exe forwards the public server port to
-    # 127.0.0.1:3389. Direct LAN/VPN RDP keeps the real remote address.
-    # Loopback alone is not enough: the reverse-side peer must belong to this
-    # device's Hermes ssh.exe process, identified by its unique key path.
+    param([object[]]$SshProcesses = @())
+
+    # Query only local RDP connections. A second exact-port query is made only
+    # for loopback sessions so we can prove that the peer PID is Hermes ssh.exe.
     $LoopbackAddresses = @('127.0.0.1', '::1')
-    $Established = @(
-        Get-NetTCPConnection -State Established -ErrorAction SilentlyContinue
-    )
     $RdpConnections = @(
-        $Established |
-            Where-Object { [int]($_.LocalPort) -eq 3389 }
+        Get-NetTCPConnection `
+            -LocalPort 3389 `
+            -State Established `
+            -ErrorAction SilentlyContinue
     )
     $HermesSshPids = @(
-        Get-SshProcesses |
+        $SshProcesses |
             ForEach-Object { [int]($_.ProcessId) }
     )
 
@@ -357,12 +363,14 @@ function Get-RdpConnectionSummary {
         }
 
         $Peer = @(
-            $Established |
+            Get-NetTCPConnection `
+                -LocalPort ([int]$Connection.RemotePort) `
+                -RemotePort 3389 `
+                -State Established `
+                -ErrorAction SilentlyContinue |
                 Where-Object {
                     $LoopbackAddresses -contains [string]($_.LocalAddress) -and
-                    $LoopbackAddresses -contains [string]($_.RemoteAddress) -and
-                    [int]($_.LocalPort) -eq [int]($Connection.RemotePort) -and
-                    [int]($_.RemotePort) -eq 3389
+                    $LoopbackAddresses -contains [string]($_.RemoteAddress)
                 } |
                 Select-Object -First 1
         )
@@ -453,7 +461,7 @@ function Get-TopProcesses {
     )
 }
 
-function Get-Telemetry {
+function Get-SlowTelemetry {
     $Os = Get-CimInstance Win32_OperatingSystem
     $Disk = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'"
     $RamTotal = [int64]$Os.TotalVisibleMemorySize * 1KB
@@ -463,7 +471,6 @@ function Get-Telemetry {
     $DiskFree = [int64]$Disk.FreeSpace
     $DiskUsed = [math]::Max(0, [int64]($DiskTotal - $DiskFree))
     $Network = Get-NetworkTotals
-    $Rdp = Get-RdpConnectionSummary
     $Sessions = @(Get-Sessions)
     $Boot = if ($Os.LastBootUpTime -is [datetime]) {
         [datetime]$Os.LastBootUpTime
@@ -474,15 +481,12 @@ function Get-Telemetry {
         )
     }
     $Uptime = [int]((Get-Date) - $Boot).TotalSeconds
-    $State = Get-AgentState
-    $SshProcesses = @(Get-SshProcesses)
-    $TunnelRunning = $SshProcesses.Count -gt 0
 
     return [ordered]@{
-        captured_at = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+        resource_captured_at = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
         computer_name = $env:COMPUTERNAME
         os = $Os.Caption
-        interactive_user = Get-InteractiveUser
+        interactive_user = Get-InteractiveUser -Sessions $Sessions
         sessions = $Sessions
         cpu_percent = Get-CpuPercent
         ram_total_bytes = $RamTotal
@@ -500,6 +504,60 @@ function Get-Telemetry {
         network_received_bytes = [int64]$Network[0]
         network_sent_bytes = [int64]$Network[1]
         route = Get-RouteName
+        uptime_seconds = $Uptime
+    }
+}
+
+function Get-Telemetry {
+    param(
+        [object]$State,
+        [object[]]$SshProcesses = @(),
+        [bool]$LiveTelemetry = $false
+    )
+
+    $Now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    $SlowInterval = if ($LiveTelemetry) { $PollSeconds } else { $SlowTelemetrySeconds }
+    if (
+        -not $script:SlowTelemetry -or
+        ($Now - [int64]$script:SlowTelemetryCapturedAt) -ge $SlowInterval
+    ) {
+        $script:SlowTelemetry = Get-SlowTelemetry
+        $script:SlowTelemetryCapturedAt = [int64]$script:SlowTelemetry.resource_captured_at
+    }
+
+    if (
+        $LiveTelemetry -and
+        (
+            $script:TopProcessesCapturedAt -eq 0 -or
+            ($Now - [int64]$script:TopProcessesCapturedAt) -ge $TopProcessesSeconds
+        )
+    ) {
+        $script:TopProcesses = @(Get-TopProcesses)
+        $script:TopProcessesCapturedAt = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    }
+
+    $Rdp = Get-RdpConnectionSummary -SshProcesses $SshProcesses
+    $TunnelRunning = $SshProcesses.Count -gt 0
+    $Slow = $script:SlowTelemetry
+
+    return [ordered]@{
+        captured_at = $Now
+        telemetry_profile = if ($LiveTelemetry) { 'live' } else { 'background' }
+        resource_captured_at = [int64]$Slow.resource_captured_at
+        computer_name = $Slow.computer_name
+        os = $Slow.os
+        interactive_user = $Slow.interactive_user
+        sessions = @($Slow.sessions)
+        cpu_percent = $Slow.cpu_percent
+        ram_total_bytes = [int64]$Slow.ram_total_bytes
+        ram_used_bytes = [int64]$Slow.ram_used_bytes
+        ram_percent = $Slow.ram_percent
+        disk_total_bytes = [int64]$Slow.disk_total_bytes
+        disk_used_bytes = [int64]$Slow.disk_used_bytes
+        disk_percent = $Slow.disk_percent
+        network_received_bytes = [int64]$Slow.network_received_bytes
+        network_sent_bytes = [int64]$Slow.network_sent_bytes
+        route = $Slow.route
         access_enabled = [bool]$State.enabled
         ssh_tunnel_running = $TunnelRunning
         ssh_process_count = [int]$SshProcesses.Count
@@ -509,8 +567,12 @@ function Get-Telemetry {
         rdp_other_local_connections = [int]$Rdp.other_local
         rdp_remote_addresses = @($Rdp.remote_addresses)
         rdp_direct_remote_addresses = @($Rdp.direct_remote_addresses)
-        uptime_seconds = $Uptime
-        top_processes = @(Get-TopProcesses)
+        uptime_seconds = [int]$Slow.uptime_seconds
+        top_processes = if ($LiveTelemetry) { @($script:TopProcesses) } else { @() }
+        top_processes_captured_at = if ($LiveTelemetry) {
+            [int64]$script:TopProcessesCapturedAt
+        }
+        else { 0 }
     }
 }
 
@@ -592,18 +654,33 @@ while ($true) {
     $Cycle = [Diagnostics.Stopwatch]::StartNew()
     try {
         $State = Get-AgentState
-        if ($State.enabled -and (Get-SshProcesses).Count -eq 0) {
+        $SshProcesses = @(Get-SshProcesses)
+
+        if ($State.enabled -and $SshProcesses.Count -eq 0) {
             [void](Start-SshTunnel)
+            $SshProcesses = @(Get-SshProcesses)
         }
-        if (-not $State.enabled -and (Get-SshProcesses).Count -gt 0) {
+        elseif (-not $State.enabled -and $SshProcesses.Count -gt 0) {
             [void](Stop-SshTunnel)
+            $SshProcesses = @()
         }
 
-        $Telemetry = Get-Telemetry
+        $Telemetry = Get-Telemetry `
+            -State $State `
+            -SshProcesses $SshProcesses `
+            -LiveTelemetry $script:LiveTelemetry
+
         $Response = Invoke-ApiPost `
             -Url "$($Config.api_base_url)/v1/devices/$($Config.device_id)/telemetry" `
             -Token $Config.device_token `
             -Body @{ telemetry = $Telemetry }
+
+        if (
+            $Response -and
+            $Response.PSObject.Properties['telemetry_live']
+        ) {
+            $script:LiveTelemetry = [bool]$Response.telemetry_live
+        }
 
         if ($Response.command) {
             Invoke-CommandAction -Command $Response.command
