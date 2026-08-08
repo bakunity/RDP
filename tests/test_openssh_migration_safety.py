@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from hermes_rdp.db import Registry
+from hermes_rdp.tunnel import _proc_net_has_listener
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -84,6 +85,21 @@ class OpenSshMigrationSafetyTests(unittest.TestCase):
         self.assertIn('readlink -f "/proc/$PID/exe"', installer)
         self.assertIn('"$EXE" == /usr/sbin/sshd', installer)
         self.assertNotIn('COMMAND="$(tr', installer)
+
+    def test_proc_net_listener_parser_uses_listen_state(self) -> None:
+        proc_net = """\
+  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
+   0: 00000000:D08D 00000000:0000 0A 00000000:00000000 00:00000000 00000000 0 0 1
+   1: 0100007F:D08E 0100007F:1234 01 00000000:00000000 00:00000000 00000000 0 0 2
+"""
+        self.assertTrue(_proc_net_has_listener(proc_net, 53389))
+        self.assertFalse(_proc_net_has_listener(proc_net, 53390))
+
+    def test_api_overwrites_client_endpoint_with_server_listener(self) -> None:
+        api = (ROOT / "server/hermes_rdp/api.py").read_text(encoding="utf-8")
+        self.assertIn("endpoint_listener_state", api)
+        self.assertIn('telemetry["endpoint_available"] = endpoint_state', api)
+        self.assertIn('telemetry["endpoint_source"] = "server_listener"', api)
 
 
 if __name__ == "__main__":
