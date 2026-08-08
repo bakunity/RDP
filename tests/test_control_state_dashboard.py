@@ -14,6 +14,7 @@ class ControlStateDashboardTests(unittest.TestCase):
         block = text[start:end]
         self.assertIn("$KeyPath", block)
         self.assertIn("Contains($KeyPath)", block)
+        self.assertIn('-Filter "Name=\'ssh.exe\'"', block)
         self.assertNotIn("0.0.0.0:$($Config.rdp_port):127.0.0.1:3389", block)
         self.assertIn("access_enabled", text)
         self.assertIn("ssh_process_count", text)
@@ -21,6 +22,7 @@ class ControlStateDashboardTests(unittest.TestCase):
     def test_agent_classifies_rdp_channel_without_public_endpoint_probe(self) -> None:
         text = (ROOT / "client/HermesRdpAgent.ps1").read_text(encoding="utf-8-sig")
         self.assertIn("function Get-RdpConnectionSummary", text)
+        self.assertIn("-LocalPort 3389", text)
         self.assertIn("rdp_hermes_connections", text)
         self.assertIn("rdp_direct_connections", text)
         self.assertIn("rdp_other_local_connections", text)
@@ -28,8 +30,43 @@ class ControlStateDashboardTests(unittest.TestCase):
         self.assertIn("OwningProcess", text)
         self.assertIn("127.0.0.1", text)
         self.assertIn("::1", text)
+        self.assertNotIn("Get-NetTCPConnection -State Established", text)
         self.assertNotIn("function Test-TcpPort", text)
         self.assertNotIn("$EndpointAvailable", text)
+
+    def test_agent_splits_fast_and_slow_telemetry(self) -> None:
+        text = (ROOT / "client/HermesRdpAgent.ps1").read_text(encoding="utf-8-sig")
+        for value in (
+            "$PollSeconds = 3",
+            "$SlowTelemetrySeconds = 15",
+            "$TopProcessesSeconds = 6",
+            "function Get-SlowTelemetry",
+            "telemetry_profile",
+            "resource_captured_at",
+            "top_processes_captured_at",
+            "telemetry_live",
+        ):
+            self.assertIn(value, text)
+        telemetry_start = text.index("function Get-Telemetry")
+        command_start = text.index("function Invoke-CommandAction", telemetry_start)
+        telemetry_block = text[telemetry_start:command_start]
+        self.assertIn("Get-TopProcesses", telemetry_block)
+        self.assertIn("$LiveTelemetry", telemetry_block)
+
+    def test_dashboard_uses_expiring_observation_mode(self) -> None:
+        text = (ROOT / "server/hermes_rdp/bot.py").read_text(encoding="utf-8")
+        api = (ROOT / "server/hermes_rdp/api.py").read_text(encoding="utf-8")
+        for value in (
+            "LIVE_SECONDS = 60",
+            "live_until",
+            "НАБЛЮДАТЬ 60с",
+            "Наблюдение выключено",
+            "Ресурсы:",
+        ):
+            self.assertIn(value, text)
+        self.assertNotIn("АВТО 3с", text)
+        self.assertIn('"telemetry_live": telemetry_live', api)
+        self.assertIn('get_setting("selected_device"', api)
 
     def test_dashboard_separates_control_states(self) -> None:
         text = (ROOT / "server/hermes_rdp/bot.py").read_text(encoding="utf-8")
@@ -56,7 +93,6 @@ class ControlStateDashboardTests(unittest.TestCase):
             "КОМАНДА ВЫПОЛНЯЕТСЯ",
             "ПЕРЕЗАПУСК",
             "ОБНОВИТЬ",
-            "АВТО 3с",
         ):
             self.assertIn(value, text)
         for value in (
