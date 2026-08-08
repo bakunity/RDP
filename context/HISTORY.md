@@ -18,7 +18,7 @@ Hermes RDP evolved from a single reverse-RDP setup into a multi-PC system with:
 
 ## 2026-08-06 — FRP deployment problem discovered
 
-The official FRP Windows archive triggered Microsoft Defender detection/quarantine in real installation testing.
+The official FRP Windows archive triggered Microsoft Defender detection/quarantine problems in real installation testing.
 
 The upstream archive hash matched the expected pinned hash, but the operational experience was unacceptable. The project decision was to remove FRP from the core Windows transport instead of requiring Defender exclusions.
 
@@ -127,7 +127,7 @@ The acceptance matrix now distinguishes user-visible access behavior from a sepa
 
 ## 2026-08-07 — Latest-session handoff protocol added
 
-Added `context/LAST_SESSION.md` as the compact per-chat delta. `context/README.md` and `SESSION_PROTOCOL.md` now require future long chats to refresh this file before migration, and to propagate real PASS/FAIL changes into the durable context files.
+Added `context/LAST_SESSION.md` as the compact per-chat delta. `context/README.md` and `SESSION_PROTOCOL.md` initially required future long chats to refresh this file before migration.
 
 ## 2026-08-07 — Windows 10 x86 PowerShell compatibility bug confirmed
 
@@ -143,3 +143,34 @@ A second Windows test exposed a real installer compatibility defect:
 The required product fix is an architecture-aware native-system resolver: use `Sysnative` when a 32-bit PowerShell process runs on 64-bit Windows, otherwise use `System32`. Add regression tests and keep Microsoft system OpenSSH as the only supported transport binary source.
 
 This was added to the `v1.2.0 — Stabilization` work as a Windows compatibility layer item.
+
+## 2026-08-08 — State truth, endpoint truth and RDP-channel acceptance
+
+PR #19 stabilization work reached several live acceptance milestones:
+
+- agent heartbeat / desired access / applied access / SSH / endpoint were separated;
+- Linux server listener became the authoritative public endpoint truth;
+- OFF showed endpoint CLOSED and ON showed endpoint OPEN in live testing;
+- direct LAN/VPN RDP and Hermes RDP were distinguished and both channel signatures were live-confirmed;
+- existing-install guard was live-tested without changing identity/key/port.
+
+## 2026-08-08 — Telemetry performance regression identified
+
+Real Windows timing showed that the richer 3-second telemetry loop could spend most of its interval on TCP/process diagnostics, matching observed RDP micro-freezes.
+
+The stabilization branch was redesigned around fast/background/on-demand telemetry, with a 60-second explicit observation lease and no background TOP-process polling. Windows Server ProductType support was also added after a real installer rejection exposed the old blanket client-only gate.
+
+These newest fixes remained runtime acceptance items at the checkpoint.
+
+## 2026-08-08 — Continuous project-memory model introduced
+
+The context architecture was changed so it no longer depends on a clean end-of-chat handoff.
+
+Added:
+
+- `ACTIVE_WORK.md` for frequently refreshed operational truth;
+- `EVIDENCE_LEDGER.md` for durable PASS/FAIL/root-cause evidence;
+- event-driven checkpoint rules in `SESSION_PROTOCOL.md`;
+- permission for context-only checkpoint commits directly on `main` while product work remains in an open PR.
+
+`LAST_SESSION.md` is now only a boundary delta, not the primary project memory. The design goal is that losing the last 10–20 chat messages must not erase important engineering state.
