@@ -91,14 +91,15 @@ Latest branch CI at this checkpoint is green. CI is not runtime acceptance.
 
 - A **pre-performance-refactor** PR build is live on the working server and passed state/endpoint/RDP-channel acceptance.
 - The newest low-cost telemetry / observation / Windows Server changes are **not yet considered live-deployed or accepted**.
-- MIPC is still the live acceptance device for the next agent update.
+- MIPC remains the live acceptance device for the next agent update.
+- The current updater does not record resolved SHA when given a mutable branch ref; upcoming acceptance should deploy the immutable PR head SHA directly.
 
 ## Current-head revalidation gate
 
 After deploying/updating the newest build, revalidate only behavior touched by the refactor:
 
 1. exactly one Hermes `ssh.exe` in normal ON state;
-2. OFF command is still received/applied and endpoint becomes CLOSED;
+2. OFF command still received/applied and endpoint CLOSED;
 3. ON restores one tunnel and endpoint OPEN;
 4. direct LAN/VPN RDP still reports Hermes=0/direct=1;
 5. Hermes RDP still reports Hermes=1/direct=0;
@@ -108,8 +109,8 @@ These are regression smoke tests, not a re-run of the whole historical acceptanc
 
 ## Exact next engineering stage
 
-1. deploy latest PR server-side code with updater + backup;
-2. update MIPC agent with backup while preserving `device.json`, device ID, SSH key and assigned RDP port;
+1. deploy exact immutable PR head `586e9446ea41262f1ed0d9c84ba72838a47d9bc5` server-side with updater + backup;
+2. update MIPC agent from the same immutable SHA while preserving `device.json`, device ID, SSH key and assigned RDP port;
 3. re-measure telemetry cost and subjectively verify RDP micro-freezes disappear or materially reduce;
 4. run the current-head regression smoke above;
 5. test `НАБЛЮДАТЬ 60с`: detailed resources/processes appear, then heavy telemetry + 3s Telegram redraw stop automatically;
@@ -120,24 +121,19 @@ These are regression smoke tests, not a re-run of the whole historical acceptanc
 
 ## PR/base drift note
 
-Continuous context-only commits have advanced `main` while PR #19 remains based on older `main`.
+Continuous context-only commits have advanced `main` while PR #19 remains on an older base. A live comparison confirms the branches are diverged and GitHub currently reports the PR as not mergeable.
 
-Current comparison at this checkpoint:
+Do **not** store exact ahead/behind counts as durable context: they change with every context checkpoint.
 
-```text
-main vs fix/control-state-dashboard: diverged
-PR branch ahead: 33 commits
-PR branch behind: 39 commits
-```
+Before merge:
 
-GitHub currently reports PR `mergeable: false`. Do **not** treat that alone as a confirmed product-code conflict yet. Before merge:
-
+- query current divergence again;
 - reconcile current `main` into/rebase the feature branch;
-- resolve any actual conflicts if present;
+- resolve actual conflicts if present;
 - rerun CI on the reconciled branch;
 - recheck mergeability.
 
-Future context checkpoints should batch related multi-file context changes into one commit where possible to reduce default-branch history noise/base drift.
+Future context checkpoints should batch related multi-file context changes into one commit where tooling permits, reducing default-branch history noise/base drift without delaying persistence.
 
 ## Do not repeat without regression reason
 
@@ -151,14 +147,17 @@ For behavior explicitly listed in the current-head revalidation gate, perform on
 
 ## Context state
 
-The project-memory system now has:
+The project-memory subsystem now includes:
 
 - continuous event-driven checkpoints;
 - HOT/WARM/COLD layers;
+- canonical owner per fact;
 - evidence scoping + revalidation obligations;
 - stale/superseded context retirement;
 - soft size budgets + release-boundary compaction;
-- archive policy;
-- canonical owner per fact.
+- archive policy/index;
+- concurrent-writer reconciliation;
+- batched checkpoint preference;
+- open-PR/base-drift reconciliation before merge.
 
-See `CONTEXT_LIFECYCLE.md`. Context itself is now a maintained subsystem, not an append-only notebook.
+See `CONTEXT_LIFECYCLE.md`. Context is a maintained subsystem, not an append-only notebook.
