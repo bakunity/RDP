@@ -18,6 +18,19 @@ class ControlStateDashboardTests(unittest.TestCase):
         self.assertIn("access_enabled", text)
         self.assertIn("ssh_process_count", text)
 
+    def test_agent_classifies_rdp_channel_without_public_endpoint_probe(self) -> None:
+        text = (ROOT / "client/HermesRdpAgent.ps1").read_text(encoding="utf-8-sig")
+        self.assertIn("function Get-RdpConnectionSummary", text)
+        self.assertIn("rdp_hermes_connections", text)
+        self.assertIn("rdp_direct_connections", text)
+        self.assertIn("rdp_other_local_connections", text)
+        self.assertIn("$HermesSshPids", text)
+        self.assertIn("OwningProcess", text)
+        self.assertIn("127.0.0.1", text)
+        self.assertIn("::1", text)
+        self.assertNotIn("function Test-TcpPort", text)
+        self.assertNotIn("$EndpointAvailable", text)
+
     def test_dashboard_separates_control_states(self) -> None:
         text = (ROOT / "server/hermes_rdp/bot.py").read_text(encoding="utf-8")
         for value in (
@@ -26,6 +39,8 @@ class ControlStateDashboardTests(unittest.TestCase):
             "Агент применил:",
             "SSH-туннель:",
             "Endpoint:",
+            "RDP через Hermes:",
+            "RDP напрямую (LAN/VPN):",
             "UNKNOWN",
             "MULTIPLE",
             "INCONSISTENT",
@@ -36,6 +51,7 @@ class ControlStateDashboardTests(unittest.TestCase):
         ):
             self.assertIn(value, text)
         self.assertNotIn("Внешние клиенты:", text)
+        self.assertNotIn("RDP-соединений:", text)
 
     def test_bot_does_not_split_desired_state_from_queue(self) -> None:
         text = (ROOT / "server/hermes_rdp/bot.py").read_text(encoding="utf-8")
