@@ -253,6 +253,41 @@ if ($Os.Caption -notmatch 'Pro|Enterprise|Education|Server') {
     throw "Редакция '$($Os.Caption)' не поддерживает входящие RDP-подключения."
 }
 
+# "Добавить ПК" is a fresh-pairing flow. Never stop a working Hermes client
+# when its durable local identity is already present. Repair/update is a
+# separate operation and must preserve the existing server registration.
+$ExistingConfigPath = Join-Path $BaseDir 'device.json'
+$ExistingPrivateKeyPath = Join-Path $BaseDir 'id_ed25519'
+$ExistingPublicKeyPath = "$ExistingPrivateKeyPath.pub"
+if (
+    (Test-Path -LiteralPath $ExistingConfigPath) -and
+    (Test-Path -LiteralPath $ExistingPrivateKeyPath) -and
+    (Test-Path -LiteralPath $ExistingPublicKeyPath)
+) {
+    try {
+        $ExistingConfig = Get-Content `
+            -LiteralPath $ExistingConfigPath `
+            -Raw |
+            ConvertFrom-Json
+    }
+    catch {
+        $ExistingConfig = $null
+    }
+    if (
+        $ExistingConfig -and
+        -not [string]::IsNullOrWhiteSpace([string]$ExistingConfig.device_id) -and
+        [int]$ExistingConfig.rdp_port -gt 0 -and
+        -not [string]::IsNullOrWhiteSpace([string]$ExistingConfig.ssh_key_path)
+    ) {
+        throw (
+            "Hermes RDP уже установлен на этом ПК (RDP-порт " +
+            "$($ExistingConfig.rdp_port)). Команда 'Добавить ПК' ничего " +
+            'не изменила. Для восстановления или обновления используйте ' +
+            'отдельный repair/update flow.'
+        )
+    }
+}
+
 if (-not $Name) {
     $Name = Read-Host 'Название компьютера в Telegram'
 }
