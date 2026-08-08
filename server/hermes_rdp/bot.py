@@ -17,6 +17,7 @@ from .tunnel import close_tunnel
 
 
 LOG = logging.getLogger("hermes_rdp.bot")
+LIVE_SECONDS = 60
 
 
 def escape(value: Any) -> str:
@@ -121,6 +122,24 @@ class TelegramBot:
         )
         return chat_id == self.config.telegram_chat_id and actor_id == self.config.telegram_chat_id
 
+    def _live_until(self) -> int:
+        try:
+            return int(self.registry.get_setting("live_until", "0") or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    def _live_remaining(self) -> int:
+        return max(0, self._live_until() - int(time.time()))
+
+    def _live_active(self) -> bool:
+        return self._live_remaining() > 0
+
+    def _set_live(self, enabled: bool) -> None:
+        if enabled:
+            self.registry.set_setting("live_until", str(int(time.time()) + LIVE_SECONDS))
+        else:
+            self.registry.set_setting("live_until", "0")
+
     def _handle_update(self, update: dict[str, Any]) -> None:
         if not self._authorized(update):
             callback = update.get("callback_query")
@@ -130,6 +149,7 @@ class TelegramBot:
         if "message" in update:
             text = str(update["message"].get("text", "")).split("@", 1)[0].lower()
             if text in {"/start", "/menu", "/status"}:
+                self._set_live(False)
                 self.registry.set_setting("screen", "home")
                 self.registry.set_setting("selected_device", "")
                 self.render()
@@ -151,12 +171,14 @@ class TelegramBot:
         data = str(callback.get("data", "home"))
         callback_id = str(callback.get("id", ""))
         if data == "home":
+            self._set_live(False)
             self.registry.set_setting("screen", "home")
             self.registry.set_setting("selected_device", "")
             self._answer(callback_id)
             self.render()
             return
         if data == "add":
+            self._set_live(False)
             code = self.registry.create_pair_code(ttl_seconds=self.config.pair_ttl_seconds)
             self.registry.set_setting("pair_code", code)
             self.registry.set_setting("screen", "pair")
@@ -168,11 +190,13 @@ class TelegramBot:
             self.render()
             return
         if data == "live":
-            enabled = self.registry.get_setting("live", "1") != "1"
-            self.registry.set_setting("live", "1" if enabled else "0")
+            enabled = not self._live_active()
+            self._set_live(enabled)
             self._answer(
                 callback_id,
-                "Автообновление включено" if enabled else "Автообновление выключено",
+                "Наблюдение включено на 60 секунд"
+                if enabled
+                else "Наблюдение остановлено",
             )
             self.render()
             return
@@ -184,6 +208,7 @@ class TelegramBot:
                 self._answer(callback_id, "Устройство не найдено")
                 self.render()
                 return
+            self._set_live(False)
             self.registry.set_setting("selected_device", device_id)
             self.registry.set_setting("screen", "device")
             self._answer(callback_id)
@@ -205,6 +230,7 @@ class TelegramBot:
             self.render()
             return
         if data.startswith("delete:"):
+            self._set_live(False)
             device_id = data.split(":", 1)[1]
             self.registry.set_setting("selected_device", device_id)
             self.registry.set_setting("screen", "delete")
@@ -212,6 +238,7 @@ class TelegramBot:
             self.render()
             return
         if data.startswith("delete_yes:"):
+            self._set_live(False)
             device_id = data.split(":", 1)[1]
             try:
                 device = self.registry.get_device(device_id)
@@ -230,13 +257,19 @@ class TelegramBot:
         self._answer(callback_id)
 
     def _live_loop(self) -> None:
+        was_active = False
         while not self.stop_event.wait(3):
             try:
-                if self.registry.get_setting("live", "1") != "1":
+                active = self._live_active()
+                if active:
+                    if self.registry.get_setting("screen", "home") == "device":
+                        self.render()
+                    was_active = True
                     continue
-                if self.registry.get_setting("screen", "home") not in {"home", "device"}:
-                    continue
-                self.render()
+                if was_active:
+                    was_active = False
+                    if self.registry.get_setting("screen", "home") == "device":
+                        self.render()
             except Exception as exc:
                 LOG.debug("live render failed: %s", exc)
 
@@ -266,17 +299,7 @@ class TelegramBot:
                 ]
             )
         rows.append([{"text": "➕ ДОБАВИТЬ ПК", "callback_data": "add"}])
-        rows.append(
-            [
-                {"text": "🔄 ОБНОВИТЬ", "callback_data": "refresh"},
-                {
-                    "text": "⏸ АВТО 3с"
-                    if self.registry.get_setting("live", "1") == "1"
-                    else "▶️ АВТО 3с",
-                    "callback_data": "live",
-                },
-            ]
-        )
+        rows.append([{"text": "🔄 ОБНОВИТЬ", "callback_data": "refresh"}])
         return text, {"inline_keyboard": rows}
 
     def _pair(self) -> tuple[str, dict[str, Any]]:
@@ -307,23 +330,48 @@ class TelegramBot:
     def _device(self, device: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         online = self._online(device)
         telemetry = device.get("telemetry") or {}
-        age = max(0, int(time.time()) - int(device.get("last_seen") or 0)) if device.get("last_seen") else None
+        now = int(time.time())
+        age = max(0, now - int(device.get("last_seen") or 0)) if device.get("last_seen") else None
+        try:
+            resource_age = max(0, now - int(telemetry.get("resource_captured_at") or 0))
+        except (TypeError, ValueError):
+            resource_age = None
+        if not telemetry.get("resource_captured_at"):
+            resource_age = None
+
         cpu = float(telemetry.get("cpu_percent", 0) or 0)
         ram = float(telemetry.get("ram_percent", 0) or 0)
         disk = float(telemetry.get("disk_percent", 0) or 0)
         sessions = telemetry.get("sessions") or []
         user = telemetry.get("interactive_user") or (sessions[0] if sessions else "нет")
-        processes = telemetry.get("top_processes") or []
+        live_remaining = self._live_remaining()
+        live_active = live_remaining > 0
+
         process_lines = []
-        for index, process in enumerate(processes[:5], 1):
-            process_lines.append(
-                f"{index}. {escape(process.get('name', '?'))} · "
-                f"{process.get('cpu_percent', 0)}% · "
-                f"{format_bytes(process.get('memory_bytes', 0))} · "
-                f"PID {process.get('pid', '?')}"
-            )
-        if not process_lines:
-            process_lines.append("—")
+        process_status = "Наблюдение выключено."
+        if live_active:
+            processes = telemetry.get("top_processes") or []
+            try:
+                process_age = max(
+                    0,
+                    now - int(telemetry.get("top_processes_captured_at") or 0),
+                )
+            except (TypeError, ValueError):
+                process_age = None
+            if processes:
+                process_status = (
+                    f"Наблюдение: 🟢 ещё {live_remaining} сек."
+                    + (f" · снимок {process_age} сек. назад" if process_age is not None else "")
+                )
+                for index, process in enumerate(processes[:5], 1):
+                    process_lines.append(
+                        f"{index}. {escape(process.get('name', '?'))} · "
+                        f"{process.get('cpu_percent', 0)}% · "
+                        f"{format_bytes(process.get('memory_bytes', 0))} · "
+                        f"PID {process.get('pid', '?')}"
+                    )
+            else:
+                process_status = f"Наблюдение: 🟢 ещё {live_remaining} сек. · ждём первый снимок"
 
         desired_access = bool(device.get("enabled", True))
         if online and "access_enabled" in telemetry:
@@ -372,9 +420,7 @@ class TelegramBot:
                 telemetry.get("rdp_other_local_connections", 0) or 0
             )
             if rdp_other_connections > 0:
-                rdp_other_line = (
-                    f"RDP локально (другое): {rdp_other_connections}\n"
-                )
+                rdp_other_line = f"RDP локально (другое): {rdp_other_connections}\n"
 
         pending_action = str(device.get("pending_command") or "")
         last_result = device.get("last_result") or {}
@@ -384,11 +430,7 @@ class TelegramBot:
             "restart": "перезапуск туннеля",
         }
         if pending_action:
-            command_line = (
-                "⏳ Команда: "
-                + action_names.get(pending_action, pending_action)
-                + "…"
-            )
+            command_line = "⏳ Команда: " + action_names.get(pending_action, pending_action) + "…"
         elif last_result:
             result_icon = "✅" if last_result.get("ok") else "❌"
             result_action = action_names.get(
@@ -400,6 +442,14 @@ class TelegramBot:
                 command_line += f" · {escape(last_result['message'])}"
         else:
             command_line = "Последняя команда: —"
+
+        resource_line = (
+            f"Ресурсы: {resource_age} сек. назад\n"
+            if resource_age is not None
+            else "Ресурсы: ещё не поступили\n"
+        )
+        process_body = "\n".join(process_lines) if process_lines else "—"
+
         text = (
             f"{'🟢' if online else '🔴'} {escape(device['display_name']).upper()} · "
             f"{'В СЕТИ' if online else 'НЕ В СЕТИ'}\n\n"
@@ -407,6 +457,7 @@ class TelegramBot:
             f"Система: {escape(telemetry.get('os', '—'))}\n"
             f"Пользователь: {escape(user)}\n"
             f"Данные: {str(age) + ' сек. назад' if age is not None else 'ещё не поступили'}\n"
+            f"{resource_line}"
             f"RDP: {self.config.public_host}:{device['rdp_port']}\n\n"
             f"CPU: {cpu:.1f}%\n{bar(cpu)}\n\n"
             f"RAM: {ram:.1f}%\n{bar(ram)}\n"
@@ -429,9 +480,12 @@ class TelegramBot:
             f"{command_line}\n"
             f"Сессии Windows: {escape(', '.join(sessions) or 'нет')}\n"
             f"Аптайм Windows: {format_duration(telemetry.get('uptime_seconds'))}\n\n"
-            "🔝 Процессы\n" + "\n".join(process_lines) + "\n\n"
+            "🔝 Процессы\n"
+            f"{process_status}\n"
+            f"{process_body}\n\n"
             f"Обновлено: {datetime.now().strftime('%H:%M:%S')}"
         )
+
         if pending_action:
             control_rows = [
                 [{"text": "⏳ КОМАНДА ВЫПОЛНЯЕТСЯ", "callback_data": "refresh"}]
@@ -445,16 +499,17 @@ class TelegramBot:
             control_rows = [[
                 {"text": "🟢 ВКЛЮЧИТЬ ДОСТУП", "callback_data": f"cmd:on:{device['id']}"},
             ]]
+
+        live_text = (
+            f"⏸ СТОП · {live_remaining}с"
+            if live_active
+            else "▶️ НАБЛЮДАТЬ 60с"
+        )
         keyboard = {
             "inline_keyboard": control_rows + [
                 [
                     {"text": "🔄 ОБНОВИТЬ", "callback_data": "refresh"},
-                    {
-                        "text": "⏸ АВТО 3с"
-                        if self.registry.get_setting("live", "1") == "1"
-                        else "▶️ АВТО 3с",
-                        "callback_data": "live",
-                    },
+                    {"text": live_text, "callback_data": "live"},
                 ],
                 [
                     {"text": "🗑 УДАЛИТЬ", "callback_data": f"delete:{device['id']}"},
