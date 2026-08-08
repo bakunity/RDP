@@ -190,9 +190,6 @@ class TelegramBot:
             _, action, device_id = data.split(":", 2)
             try:
                 device = self.registry.get_device(device_id)
-                if device.get("pending_command"):
-                    raise ValueError("Предыдущая команда ещё выполняется")
-                self.registry.set_enabled(device_id, action != "off")
                 self.registry.queue_command(device_id, action)
                 if action == "off":
                     try:
@@ -324,9 +321,39 @@ class TelegramBot:
             )
         if not process_lines:
             process_lines.append("—")
-        ssh_tunnel = bool(telemetry.get("ssh_tunnel_running", False))
-        endpoint = bool(telemetry.get("endpoint_available", False))
-        access_enabled = bool(device.get("enabled", True))
+
+        desired_access = bool(device.get("enabled", True))
+        if online and "access_enabled" in telemetry:
+            applied_access = "🟢 ВКЛЮЧЕН" if bool(telemetry["access_enabled"]) else "⚪ ВЫКЛЮЧЕН"
+        else:
+            applied_access = "⚪ UNKNOWN"
+
+        ssh_status = "⚪ UNKNOWN"
+        if online and "ssh_tunnel_running" in telemetry and "ssh_process_count" in telemetry:
+            try:
+                ssh_process_count = int(telemetry.get("ssh_process_count") or 0)
+            except (TypeError, ValueError):
+                ssh_process_count = -1
+            ssh_running = bool(telemetry.get("ssh_tunnel_running"))
+            if ssh_process_count > 1:
+                ssh_status = f"🟠 MULTIPLE ({ssh_process_count})"
+            elif ssh_running and ssh_process_count == 1:
+                ssh_status = "🟢 CONNECTED"
+            elif not ssh_running and ssh_process_count == 0:
+                ssh_status = "⚪ DISCONNECTED"
+            else:
+                ssh_status = "🟠 INCONSISTENT"
+
+        if online and "endpoint_available" in telemetry:
+            endpoint_status = "🟢 OPEN" if bool(telemetry["endpoint_available"]) else "⚪ CLOSED"
+        else:
+            endpoint_status = "⚪ UNKNOWN"
+
+        if online and "rdp_connections" in telemetry:
+            rdp_connections = str(int(telemetry.get("rdp_connections", 0) or 0))
+        else:
+            rdp_connections = "UNKNOWN"
+
         pending_action = str(device.get("pending_command") or "")
         last_result = device.get("last_result") or {}
         action_names = {
@@ -347,6 +374,8 @@ class TelegramBot:
                 "последняя команда",
             )
             command_line = f"{result_icon} Последняя команда: {result_action}"
+            if not last_result.get("ok") and last_result.get("message"):
+                command_line += f" · {escape(last_result['message'])}"
         else:
             command_line = "Последняя команда: —"
         text = (
@@ -368,10 +397,11 @@ class TelegramBot:
             f"Маршрут: {escape(telemetry.get('route', '—'))}\n\n"
             "СОСТОЯНИЕ\n"
             f"Агент: {'🟢 ONLINE' if online else '🔴 OFFLINE'}\n"
-            f"RDP-доступ: {'🟢 ВКЛЮЧЕН' if access_enabled else '⚪ ВЫКЛЮЧЕН'}\n"
-            f"SSH-туннель: {'🟢 CONNECTED' if ssh_tunnel else '⚪ DISCONNECTED'}\n"
-            f"Endpoint: {'🟢 OPEN' if endpoint else '⚪ CLOSED'}\n"
-            f"RDP-соединений: {int(telemetry.get('rdp_connections', 0) or 0)}\n"
+            f"RDP-доступ (цель): {'🟢 ВКЛЮЧЕН' if desired_access else '⚪ ВЫКЛЮЧЕН'}\n"
+            f"Агент применил: {applied_access}\n"
+            f"SSH-туннель: {ssh_status}\n"
+            f"Endpoint: {endpoint_status}\n"
+            f"RDP-соединений: {rdp_connections}\n"
             f"{command_line}\n"
             f"Сессии Windows: {escape(', '.join(sessions) or 'нет')}\n"
             f"Аптайм Windows: {format_duration(telemetry.get('uptime_seconds'))}\n\n"
@@ -382,7 +412,7 @@ class TelegramBot:
             control_rows = [
                 [{"text": "⏳ КОМАНДА ВЫПОЛНЯЕТСЯ", "callback_data": "refresh"}]
             ]
-        elif access_enabled:
+        elif desired_access:
             control_rows = [[
                 {"text": "🔴 ВЫКЛЮЧИТЬ ДОСТУП", "callback_data": f"cmd:off:{device['id']}"},
                 {"text": "♻️ RESTART", "callback_data": f"cmd:restart:{device['id']}"},
