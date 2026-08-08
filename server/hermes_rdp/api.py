@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import ssl
+import time
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
@@ -174,7 +175,27 @@ class ApiHandler(BaseHTTPRequestHandler):
             telemetry["endpoint_source"] = "server_listener"
 
         command = self.server.registry.update_telemetry(device_id, telemetry)
-        self._json(HTTPStatus.OK, {"ok": True, "command": command})
+
+        # Heavy telemetry is leased only for the currently opened device view.
+        # Agents still poll every 3s for commands/heartbeat in background mode.
+        try:
+            live_until = int(self.server.registry.get_setting("live_until", "0") or 0)
+        except (TypeError, ValueError):
+            live_until = 0
+        telemetry_live = (
+            live_until > int(time.time())
+            and self.server.registry.get_setting("screen", "home") == "device"
+            and self.server.registry.get_setting("selected_device", "") == device_id
+        )
+
+        self._json(
+            HTTPStatus.OK,
+            {
+                "ok": True,
+                "command": command,
+                "telemetry_live": telemetry_live,
+            },
+        )
 
     def _command_result(self, device_id: str) -> None:
         if not self._device_auth(device_id):
