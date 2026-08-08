@@ -180,3 +180,18 @@ Preferred stabilization sequence:
 6. acceptance/release.
 
 Do not combine unrelated refactors into one risky change.
+
+### 27. Project context is continuous, not end-of-chat only
+
+Do not rely on `LAST_SESSION.md` or the current chat retaining all intermediate facts.
+
+Durable project memory is event-driven:
+
+- `ACTIVE_WORK.md` stores the hot operational checkpoint;
+- `EVIDENCE_LEDGER.md` stores live PASS/FAIL and confirmed root causes;
+- `CURRENT_STATE.md` stores the consolidated product snapshot;
+- release-facing changes are accumulated while the release is being built, not reconstructed afterward.
+
+Context-only checkpoint commits may go directly to `main` while product code remains in a feature PR. This is intentional so a future chat can recover active work from the default branch even before the product PR is merged.
+
+Checkpoint after meaningful work-units such as confirmed diagnosis, code+CI, deploy, live acceptance, durable decision or change of exact next target. Do not create a transcript of every command.
