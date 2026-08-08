@@ -1,48 +1,44 @@
 # Hermes RDP — persistent project context
 
-This folder is the durable project memory. It exists specifically so development does **not** depend on the current ChatGPT conversation retaining every detail.
+This folder is the durable project memory. Development must not depend on the current ChatGPT conversation retaining every detail.
 
-> **New chat / recovered session:** read this file first, then follow the order below. Before changing code or infrastructure, compare the context with current GitHub PRs/branches/releases and real runtime evidence.
+> **New chat / recovered session:** read this file first, then follow the order below. Before changing code or infrastructure, compare context with current GitHub PRs/branches/releases and real runtime evidence.
 
-## Core rule
-
-Do **not** wait until the end of a chat to save important context.
-
-The conversation is temporary working memory. GitHub context is durable project memory.
-
-Context updates are **event-driven**, not message-count-driven:
+## Core model
 
 ```text
-meaningful engineering event
-        ↓
-checkpoint durable facts in context/
-        ↓
-continue development
+chat                  = temporary working memory
+runtime / CI           = evidence
+GitHub context         = durable working memory
+Git history / archive  = historical memory
 ```
 
-A meaningful event includes a live PASS/FAIL, confirmed bug/root cause, code+CI work-unit, deployment state change, durable decision, or a change to the exact next engineering target.
+Do **not** wait until the end of a chat to save important state. Context updates are event-driven after meaningful engineering work-units.
+
+Also do **not** let context grow forever. Active context is a working set: stale/completed/superseded material is compacted or archived according to [`CONTEXT_LIFECYCLE.md`](CONTEXT_LIFECYCLE.md).
 
 ## Reading order
 
-### Hot operational context — always read
+### HOT — always read
 
-1. [`ACTIVE_WORK.md`](ACTIVE_WORK.md) — what is happening **right now**: active PR/head, deployment truth, confirmed blockers, implemented-but-unvalidated work and exact next step.
-2. [`EVIDENCE_LEDGER.md`](EVIDENCE_LEDGER.md) — durable acceptance ledger: what is actually PASS/FAIL/CONFIRMED and what must not be repeatedly re-proved.
-3. [`CURRENT_STATE.md`](CURRENT_STATE.md) — current product-level snapshot.
+1. [`ACTIVE_WORK.md`](ACTIVE_WORK.md) — active PR/head, deployment truth, current blockers, implemented-but-unvalidated work, exact next step.
+2. [`EVIDENCE_LEDGER.md`](EVIDENCE_LEDGER.md) — durable PASS/FAIL/confirmed-root-cause ledger.
+3. [`CURRENT_STATE.md`](CURRENT_STATE.md) — consolidated current product state.
 
-### Stable project context — read before changing direction
+### WARM — read before changing direction
 
-4. [`PROJECT_HANDOFF.md`](PROJECT_HANDOFF.md) — architecture, product vector and major engineering context.
-5. [`NEXT_WORK.md`](NEXT_WORK.md) — priorities, remaining acceptance and target release direction.
-6. [`DECISIONS.md`](DECISIONS.md) — durable architectural/product constraints that future work should not casually reverse.
+4. [`PROJECT_HANDOFF.md`](PROJECT_HANDOFF.md) — stable architecture/product vector.
+5. [`NEXT_WORK.md`](NEXT_WORK.md) — remaining roadmap and acceptance queue.
+6. [`DECISIONS.md`](DECISIONS.md) — currently applicable durable decisions.
+7. [`SESSION_PROTOCOL.md`](SESSION_PROTOCOL.md) — checkpoint rules during work.
+8. [`CONTEXT_LIFECYCLE.md`](CONTEXT_LIFECYCLE.md) — stale-context retirement, compaction, archive and size policy.
 
-### Historical / deep context — read when needed
+### COLD / historical — only when needed
 
-7. [`LATEST_AUDIT.md`](LATEST_AUDIT.md) — latest deep audit and reasoning snapshot.
-8. [`LAST_SESSION.md`](LAST_SESSION.md) — compact boundary handoff from a completed/paused long chat. **Useful, but no longer authoritative for active state.**
-9. [`HISTORY.md`](HISTORY.md) — major milestones only.
-10. [`SESSION_PROTOCOL.md`](SESSION_PROTOCOL.md) — exact continuous checkpoint rules.
-11. [`archive/`](archive/) — historical full snapshots; never assume archive TODO/status is current.
+9. [`LATEST_AUDIT.md`](LATEST_AUDIT.md) — latest deep audit only; may be a pointer if no current deep audit exists.
+10. [`LAST_SESSION.md`](LAST_SESSION.md) — optional latest chat-boundary delta; not authoritative.
+11. [`HISTORY.md`](HISTORY.md) — major milestones only.
+12. [`archive/README.md`](archive/README.md) — index/rules for historical snapshots.
 
 ## Truth priority
 
@@ -59,89 +55,96 @@ CURRENT_STATE.md
         ↓
 PROJECT_HANDOFF / NEXT_WORK / DECISIONS
         ↓
-LAST_SESSION / LATEST_AUDIT
+LATEST_AUDIT / LAST_SESSION
         ↓
-archive
+archive / old Git history
 ```
 
-`PASS` still requires evidence. A newer context file cannot turn an untested implementation into a PASS.
+A context edit cannot turn an untested implementation into a PASS.
 
-## What gets written where
+## Canonical ownership
 
-| Information | File |
+| Information | Primary owner |
 |---|---|
-| active PR/head, deployment truth, current blockers, exact next action | `ACTIVE_WORK.md` |
+| active PR/head, deployed truth, rollback point, exact next action | `ACTIVE_WORK.md` |
 | live PASS/FAIL, confirmed bug/root cause, evidence boundary | `EVIDENCE_LEDGER.md` |
-| consolidated product state | `CURRENT_STATE.md` |
+| consolidated current product state | `CURRENT_STATE.md` |
 | architecture / product vector | `PROJECT_HANDOFF.md` |
 | durable architectural/product decision | `DECISIONS.md` |
-| priorities / acceptance queue | `NEXT_WORK.md` |
+| remaining priorities / acceptance queue | `NEXT_WORK.md` |
 | release-facing changes | active release draft under `docs/releases/` |
 | large milestone | `HISTORY.md` |
-| chat-boundary delta | `LAST_SESSION.md` |
+| old detailed reasoning/evidence snapshot | `archive/` |
+| optional chat-boundary delta | `LAST_SESSION.md` |
 
-Do not duplicate raw logs everywhere. One fact may be summarized in `ACTIVE_WORK` and permanently indexed in `EVIDENCE_LEDGER`, while detailed raw evidence remains in the conversation/PR discussion when needed.
+Summaries may appear elsewhere, but one fact should have one detailed canonical owner so multiple copies cannot drift independently.
 
-## Continuous checkpoint policy
+## Continuous checkpoint triggers
 
-Checkpoint context **immediately after a completed work-unit**, especially after:
+Checkpoint context after a meaningful work-unit, especially when:
 
-- a live acceptance test;
-- a bug changes from hypothesis to confirmed;
-- a fix changes from implemented to live-accepted;
-- code + CI changes the active branch head materially;
+- a live acceptance becomes PASS/FAIL;
+- a hypothesis becomes a confirmed root cause;
+- a fix reaches code + green CI;
 - server/client deployment changes what is actually running;
-- rollback point changes;
-- a durable architecture/product decision is made;
-- the next engineering stage changes.
+- a rollback point changes;
+- a durable architecture/product decision changes;
+- the exact next engineering stage changes.
 
-Additional safety rule: do not allow a long sequence of meaningful state-changing work to accumulate only in chat. If several relevant changes happen close together, make one compact context checkpoint covering the resulting state.
+Do not checkpoint every command. Preserve the resulting engineering truth.
 
-## Context branch policy
+## Continuous cleanup triggers
 
-Product code should normally stay in feature branches/PRs.
+Compact/retire stale context when:
 
-Operational context files are allowed to receive **context-only commits directly on `main` while a product PR is still open**. This is intentional: a new chat must be able to reconstruct active work from the default branch even if the product PR is not merged yet.
+- a release is published;
+- a PR/workstream is merged, closed or abandoned;
+- architecture changes;
+- active files become difficult to scan or exceed soft budgets;
+- completed TODOs remain in current work files;
+- current files contradict one another;
+- `LATEST_AUDIT` is no longer latest;
+- the project enters a new phase.
 
-Context files may reference an unmerged PR/branch and must clearly label:
+See `CONTEXT_LIFECYCLE.md` for exact rules. Removing stale text from an active file is **not data loss**: Git history exists, and historically valuable snapshots go to `archive/`.
 
-- deployed vs not deployed;
-- confirmed vs implemented-not-validated;
-- current branch/head when useful.
+## Branch policy
 
-## Release tracking
+Product code normally stays in feature branches/PRs.
 
-During a release/stabilization cycle:
+Context-only checkpoint/compaction commits may go directly to `main` while a product PR is open. This is intentional so a future chat can reconstruct active work from the default branch.
+
+Context must clearly distinguish:
+
+- merged vs unmerged;
+- deployed vs branch-only;
+- PASS vs implemented-not-validated;
+- mutable current refs vs durable facts.
+
+## Release-cycle memory model
 
 ```text
-EVIDENCE_LEDGER      = engineering proof
-ACTIVE_WORK          = current operational checkpoint
-PR body              = live scope + acceptance gate
-release draft        = future user-facing changelog
-CURRENT_STATE        = consolidated project truth
+EVIDENCE_LEDGER = engineering proof
+ACTIVE_WORK     = operational checkpoint
+PR body         = live scope + merge gate
+release draft   = future changelog
+CURRENT_STATE   = consolidated truth
+archive         = retired historical detail
 ```
 
-This prevents release notes from being reconstructed from memory at the end.
-
-## Existing historical audit
-
-A detailed source snapshot exists at:
-
-- [`archive/2026-08-07-full-product-audit.md`](archive/2026-08-07-full-product-audit.md)
-
-It is historical evidence/reasoning, not current state.
+At a release boundary, freeze a release evidence snapshot, compact the active ledger/state/work queue, finalize release notes and start the next cycle with a small working set.
 
 ## Repository
 
 - Project: `bakunity/RDP`
 - Product: **Hermes RDP**
-- Current published OpenSSH transition release at context initialization: `v1.1.0`
-- Context system initialized: 2026-08-07
-- Continuous checkpoint model introduced: 2026-08-08
+- Context initialized: 2026-08-07
+- Continuous checkpoint model: 2026-08-08
+- Lifecycle/compaction model: 2026-08-08
 
 ## Suggested prompt for a new chat
 
-> Открой `context/README.md` в `bakunity/RDP`. Сначала прочитай `ACTIVE_WORK.md`, `EVIDENCE_LEDGER.md` и `CURRENT_STATE.md`, затем остальные файлы по порядку. Сверь это с текущим GitHub PR/release/ветками. Назови текущий активный этап, последние реальные PASS/FAIL, что реализовано, но ещё не проверено, и точный следующий шаг. Не повторяй уже подтверждённые проверки без причины.
+> Открой `context/README.md` в `bakunity/RDP`. Сначала прочитай `ACTIVE_WORK.md`, `EVIDENCE_LEDGER.md` и `CURRENT_STATE.md`, затем нужные WARM-файлы. Сверь их с текущим GitHub PR/release/ветками. Назови активный этап, последние реальные PASS/FAIL, что реализовано, но ещё не проверено, и точный следующий шаг. Не повторяй подтверждённые проверки без regression-причины и не используй архив как current truth.
 
 ## Sensitive information
 
@@ -154,6 +157,6 @@ Never store in public context:
 - device/API tokens;
 - ready-to-use secret fingerprints;
 - secret configs;
-- production public IPs when unnecessary.
+- unnecessary production public IPs.
 
 Use placeholders when an identifier is not required for understanding.
