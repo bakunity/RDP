@@ -170,7 +170,10 @@ class TelegramBot:
         if data == "live":
             enabled = self.registry.get_setting("live", "1") != "1"
             self.registry.set_setting("live", "1" if enabled else "0")
-            self._answer(callback_id, "LIVE ON" if enabled else "LIVE OFF")
+            self._answer(
+                callback_id,
+                "Автообновление включено" if enabled else "Автообновление выключено",
+            )
             self.render()
             return
         if data.startswith("device:"):
@@ -265,11 +268,11 @@ class TelegramBot:
         rows.append([{"text": "➕ ДОБАВИТЬ ПК", "callback_data": "add"}])
         rows.append(
             [
-                {"text": "🔄 REFRESH", "callback_data": "refresh"},
+                {"text": "🔄 ОБНОВИТЬ", "callback_data": "refresh"},
                 {
-                    "text": "⏸ LIVE 3s"
+                    "text": "⏸ АВТО 3с"
                     if self.registry.get_setting("live", "1") == "1"
-                    else "▶️ LIVE 3s",
+                    else "▶️ АВТО 3с",
                     "callback_data": "live",
                 },
             ]
@@ -326,9 +329,9 @@ class TelegramBot:
         if online and "access_enabled" in telemetry:
             applied_access = "🟢 ВКЛЮЧЕН" if bool(telemetry["access_enabled"]) else "⚪ ВЫКЛЮЧЕН"
         else:
-            applied_access = "⚪ UNKNOWN"
+            applied_access = "⚪ НЕИЗВЕСТНО"
 
-        ssh_status = "⚪ UNKNOWN"
+        ssh_status = "⚪ НЕИЗВЕСТНО"
         if online and "ssh_tunnel_running" in telemetry and "ssh_process_count" in telemetry:
             try:
                 ssh_process_count = int(telemetry.get("ssh_process_count") or 0)
@@ -336,32 +339,32 @@ class TelegramBot:
                 ssh_process_count = -1
             ssh_running = bool(telemetry.get("ssh_tunnel_running"))
             if ssh_process_count > 1:
-                ssh_status = f"🟠 MULTIPLE ({ssh_process_count})"
+                ssh_status = f"🟠 ДУБЛИ ({ssh_process_count})"
             elif ssh_running and ssh_process_count == 1:
-                ssh_status = "🟢 CONNECTED"
+                ssh_status = "🟢 ПОДКЛЮЧЕН"
             elif not ssh_running and ssh_process_count == 0:
-                ssh_status = "⚪ DISCONNECTED"
+                ssh_status = "⚪ ОТКЛЮЧЕН"
             else:
-                ssh_status = "🟠 INCONSISTENT"
+                ssh_status = "🟠 НЕСООТВЕТСТВИЕ"
 
         if online and "endpoint_available" in telemetry:
-            endpoint_status = "🟢 OPEN" if bool(telemetry["endpoint_available"]) else "⚪ CLOSED"
+            endpoint_status = "🟢 ОТКРЫТ" if bool(telemetry["endpoint_available"]) else "⚪ ЗАКРЫТ"
         else:
-            endpoint_status = "⚪ UNKNOWN"
+            endpoint_status = "⚪ НЕИЗВЕСТНО"
 
         if online and "rdp_hermes_connections" in telemetry:
             rdp_hermes_connections = str(
                 int(telemetry.get("rdp_hermes_connections", 0) or 0)
             )
         else:
-            rdp_hermes_connections = "UNKNOWN"
+            rdp_hermes_connections = "НЕИЗВЕСТНО"
 
         if online and "rdp_direct_connections" in telemetry:
             rdp_direct_connections = str(
                 int(telemetry.get("rdp_direct_connections", 0) or 0)
             )
         else:
-            rdp_direct_connections = "UNKNOWN"
+            rdp_direct_connections = "НЕИЗВЕСТНО"
 
         rdp_other_line = ""
         if online and "rdp_other_local_connections" in telemetry:
@@ -399,7 +402,7 @@ class TelegramBot:
             command_line = "Последняя команда: —"
         text = (
             f"{'🟢' if online else '🔴'} {escape(device['display_name']).upper()} · "
-            f"{'ONLINE' if online else 'OFFLINE'}\n\n"
+            f"{'В СЕТИ' if online else 'НЕ В СЕТИ'}\n\n"
             f"Компьютер: {escape(device['machine_name'])}\n"
             f"Система: {escape(telemetry.get('os', '—'))}\n"
             f"Пользователь: {escape(user)}\n"
@@ -415,11 +418,11 @@ class TelegramBot:
             f"⬆️ Отправлено: {format_bytes(telemetry.get('network_sent_bytes'))}\n"
             f"Маршрут: {escape(telemetry.get('route', '—'))}\n\n"
             "СОСТОЯНИЕ\n"
-            f"Агент: {'🟢 ONLINE' if online else '🔴 OFFLINE'}\n"
+            f"Агент: {'🟢 В СЕТИ' if online else '🔴 НЕ В СЕТИ'}\n"
             f"RDP-доступ (цель): {'🟢 ВКЛЮЧЕН' if desired_access else '⚪ ВЫКЛЮЧЕН'}\n"
             f"Агент применил: {applied_access}\n"
             f"SSH-туннель: {ssh_status}\n"
-            f"Endpoint: {endpoint_status}\n"
+            f"Публичный RDP: {endpoint_status}\n"
             f"🌐 RDP через Hermes: {rdp_hermes_connections}\n"
             f"🏠 RDP напрямую (LAN/VPN): {rdp_direct_connections}\n"
             f"{rdp_other_line}"
@@ -436,7 +439,7 @@ class TelegramBot:
         elif desired_access:
             control_rows = [[
                 {"text": "🔴 ВЫКЛЮЧИТЬ ДОСТУП", "callback_data": f"cmd:off:{device['id']}"},
-                {"text": "♻️ RESTART", "callback_data": f"cmd:restart:{device['id']}"},
+                {"text": "♻️ ПЕРЕЗАПУСК", "callback_data": f"cmd:restart:{device['id']}"},
             ]]
         else:
             control_rows = [[
@@ -445,11 +448,11 @@ class TelegramBot:
         keyboard = {
             "inline_keyboard": control_rows + [
                 [
-                    {"text": "🔄 REFRESH", "callback_data": "refresh"},
+                    {"text": "🔄 ОБНОВИТЬ", "callback_data": "refresh"},
                     {
-                        "text": "⏸ LIVE 3s"
+                        "text": "⏸ АВТО 3с"
                         if self.registry.get_setting("live", "1") == "1"
-                        else "▶️ LIVE 3s",
+                        else "▶️ АВТО 3с",
                         "callback_data": "live",
                     },
                 ],
