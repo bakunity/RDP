@@ -38,18 +38,42 @@ class ControlStateDashboardTests(unittest.TestCase):
             "RDP-доступ (цель):",
             "Агент применил:",
             "SSH-туннель:",
-            "Endpoint:",
+            "Публичный RDP:",
             "RDP через Hermes:",
             "RDP напрямую (LAN/VPN):",
-            "UNKNOWN",
-            "MULTIPLE",
-            "INCONSISTENT",
+            "В СЕТИ",
+            "НЕ В СЕТИ",
+            "ПОДКЛЮЧЕН",
+            "ОТКЛЮЧЕН",
+            "ОТКРЫТ",
+            "ЗАКРЫТ",
+            "НЕИЗВЕСТНО",
+            "ДУБЛИ",
+            "НЕСООТВЕТСТВИЕ",
             "Последняя команда:",
             "ВКЛЮЧИТЬ ДОСТУП",
             "ВЫКЛЮЧИТЬ ДОСТУП",
             "КОМАНДА ВЫПОЛНЯЕТСЯ",
+            "ПЕРЕЗАПУСК",
+            "ОБНОВИТЬ",
+            "АВТО 3с",
         ):
             self.assertIn(value, text)
+        for value in (
+            "ONLINE",
+            "OFFLINE",
+            "CONNECTED",
+            "DISCONNECTED",
+            "OPEN",
+            "CLOSED",
+            "UNKNOWN",
+            "MULTIPLE",
+            "INCONSISTENT",
+            "REFRESH",
+            "RESTART",
+            "LIVE 3s",
+        ):
+            self.assertNotIn(value, text)
         self.assertNotIn("Внешние клиенты:", text)
         self.assertNotIn("RDP-соединений:", text)
 
