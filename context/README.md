@@ -1,73 +1,159 @@
-# Hermes RDP — persistent chat context
+# Hermes RDP — persistent project context
 
-Эта папка — постоянная точка передачи контекста проекта между чатами/сессиями.
+This folder is the durable project memory. It exists specifically so development does **not** depend on the current ChatGPT conversation retaining every detail.
 
-> **Новому чату:** сначала прочитай этот файл, затем остальные файлы из блока «Порядок чтения». Не начинай менять код, документацию, сайт или production, пока не сверишь фактическое состояние GitHub с записанным здесь контекстом.
+> **New chat / recovered session:** read this file first, then follow the order below. Before changing code or infrastructure, compare the context with current GitHub PRs/branches/releases and real runtime evidence.
 
-## Порядок чтения
+## Core rule
 
-1. [`LAST_SESSION.md`](LAST_SESSION.md) — что произошло в самом последнем длинном чате и что делать следующим шагом.
-2. [`PROJECT_HANDOFF.md`](PROJECT_HANDOFF.md) — сжатый контекст всей работы и текущая архитектура.
-3. [`CURRENT_STATE.md`](CURRENT_STATE.md) — что подтверждено фактически, что только предполагается, какие баги открыты.
-4. [`LATEST_AUDIT.md`](LATEST_AUDIT.md) — последний подробный актуализированный аудит ON/OFF, dashboard, reliability, документации, README и сайта.
-5. [`NEXT_WORK.md`](NEXT_WORK.md) — вектор целей, приоритеты и критерий готового продукта.
-6. [`DECISIONS.md`](DECISIONS.md) — важные архитектурные решения и ограничения, которые нельзя потерять.
-7. [`SESSION_PROTOCOL.md`](SESSION_PROTOCOL.md) — как обновлять эту папку перед следующим переездом в новый чат.
-8. [`HISTORY.md`](HISTORY.md) — крупные этапы развития проекта.
+Do **not** wait until the end of a chat to save important context.
 
-## Полный исходный аудит
+The conversation is temporary working memory. GitHub context is durable project memory.
 
-Если новому чату нужен не только сжатый handoff, но и исходный подробный анализ из предыдущего длинного разговора, сохранён полный snapshot:
-
-- [`archive/2026-08-07-full-product-audit.md`](archive/2026-08-07-full-product-audit.md) — полный большой аудит архитектуры, ON/OFF, telemetry, Telegram UX, tests, reinstall/ACL, update/rollback, docs, README, Website v2, release plan и definition of done.
-
-Это **исторический первоисточник**, а не актуальный state-файл. Некоторые пункты, которые там были TODO, позже уже подтверждены как PASS. Поэтому при конфликте статусов приоритет такой:
+Context updates are **event-driven**, not message-count-driven:
 
 ```text
-реальная инфраструктура / текущий GitHub
+meaningful engineering event
         ↓
-LAST_SESSION.md
+checkpoint durable facts in context/
+        ↓
+continue development
+```
+
+A meaningful event includes a live PASS/FAIL, confirmed bug/root cause, code+CI work-unit, deployment state change, durable decision, or a change to the exact next engineering target.
+
+## Reading order
+
+### Hot operational context — always read
+
+1. [`ACTIVE_WORK.md`](ACTIVE_WORK.md) — what is happening **right now**: active PR/head, deployment truth, confirmed blockers, implemented-but-unvalidated work and exact next step.
+2. [`EVIDENCE_LEDGER.md`](EVIDENCE_LEDGER.md) — durable acceptance ledger: what is actually PASS/FAIL/CONFIRMED and what must not be repeatedly re-proved.
+3. [`CURRENT_STATE.md`](CURRENT_STATE.md) — current product-level snapshot.
+
+### Stable project context — read before changing direction
+
+4. [`PROJECT_HANDOFF.md`](PROJECT_HANDOFF.md) — architecture, product vector and major engineering context.
+5. [`NEXT_WORK.md`](NEXT_WORK.md) — priorities, remaining acceptance and target release direction.
+6. [`DECISIONS.md`](DECISIONS.md) — durable architectural/product constraints that future work should not casually reverse.
+
+### Historical / deep context — read when needed
+
+7. [`LATEST_AUDIT.md`](LATEST_AUDIT.md) — latest deep audit and reasoning snapshot.
+8. [`LAST_SESSION.md`](LAST_SESSION.md) — compact boundary handoff from a completed/paused long chat. **Useful, but no longer authoritative for active state.**
+9. [`HISTORY.md`](HISTORY.md) — major milestones only.
+10. [`SESSION_PROTOCOL.md`](SESSION_PROTOCOL.md) — exact continuous checkpoint rules.
+11. [`archive/`](archive/) — historical full snapshots; never assume archive TODO/status is current.
+
+## Truth priority
+
+When sources disagree:
+
+```text
+real runtime evidence / current GitHub
+        ↓
+ACTIVE_WORK.md
+        ↓
+EVIDENCE_LEDGER.md
         ↓
 CURRENT_STATE.md
         ↓
-LATEST_AUDIT.md
+PROJECT_HANDOFF / NEXT_WORK / DECISIONS
         ↓
-архивные полные аудиты
+LAST_SESSION / LATEST_AUDIT
+        ↓
+archive
 ```
 
-Архив не обязательно читать целиком при каждом старте нового чата. Он нужен, когда требуется восстановить подробную аргументацию, дизайн dashboard, старые наблюдения или детали последнего большого анализа.
+`PASS` still requires evidence. A newer context file cannot turn an untested implementation into a PASS.
 
-## Репозиторий
+## What gets written where
+
+| Information | File |
+|---|---|
+| active PR/head, deployment truth, current blockers, exact next action | `ACTIVE_WORK.md` |
+| live PASS/FAIL, confirmed bug/root cause, evidence boundary | `EVIDENCE_LEDGER.md` |
+| consolidated product state | `CURRENT_STATE.md` |
+| architecture / product vector | `PROJECT_HANDOFF.md` |
+| durable architectural/product decision | `DECISIONS.md` |
+| priorities / acceptance queue | `NEXT_WORK.md` |
+| release-facing changes | active release draft under `docs/releases/` |
+| large milestone | `HISTORY.md` |
+| chat-boundary delta | `LAST_SESSION.md` |
+
+Do not duplicate raw logs everywhere. One fact may be summarized in `ACTIVE_WORK` and permanently indexed in `EVIDENCE_LEDGER`, while detailed raw evidence remains in the conversation/PR discussion when needed.
+
+## Continuous checkpoint policy
+
+Checkpoint context **immediately after a completed work-unit**, especially after:
+
+- a live acceptance test;
+- a bug changes from hypothesis to confirmed;
+- a fix changes from implemented to live-accepted;
+- code + CI changes the active branch head materially;
+- server/client deployment changes what is actually running;
+- rollback point changes;
+- a durable architecture/product decision is made;
+- the next engineering stage changes.
+
+Additional safety rule: do not allow a long sequence of meaningful state-changing work to accumulate only in chat. If several relevant changes happen close together, make one compact context checkpoint covering the resulting state.
+
+## Context branch policy
+
+Product code should normally stay in feature branches/PRs.
+
+Operational context files are allowed to receive **context-only commits directly on `main` while a product PR is still open**. This is intentional: a new chat must be able to reconstruct active work from the default branch even if the product PR is not merged yet.
+
+Context files may reference an unmerged PR/branch and must clearly label:
+
+- deployed vs not deployed;
+- confirmed vs implemented-not-validated;
+- current branch/head when useful.
+
+## Release tracking
+
+During a release/stabilization cycle:
+
+```text
+EVIDENCE_LEDGER      = engineering proof
+ACTIVE_WORK          = current operational checkpoint
+PR body              = live scope + acceptance gate
+release draft        = future user-facing changelog
+CURRENT_STATE        = consolidated project truth
+```
+
+This prevents release notes from being reconstructed from memory at the end.
+
+## Existing historical audit
+
+A detailed source snapshot exists at:
+
+- [`archive/2026-08-07-full-product-audit.md`](archive/2026-08-07-full-product-audit.md)
+
+It is historical evidence/reasoning, not current state.
+
+## Repository
 
 - Project: `bakunity/RDP`
 - Product: **Hermes RDP**
-- Public site: `https://hermes-rdp.vercel.app/`
-- Base product `main` immediately before context initialization: `6cecc33d520e8bd07c322d660c200a454d17e93f`
-- Latest published GitHub Release at context initialization: `v1.1.0`
-- Context initialized: **2026-08-07**
-- Latest session handoff refreshed: **2026-08-07** after real reboot + Telegram OFF/ON validation and Windows 10 x64/x86-PowerShell compatibility diagnosis.
+- Current published OpenSSH transition release at context initialization: `v1.1.0`
+- Context system initialized: 2026-08-07
+- Continuous checkpoint model introduced: 2026-08-08
 
-## Фраза для нового чата
+## Suggested prompt for a new chat
 
-Достаточно написать:
+> Открой `context/README.md` в `bakunity/RDP`. Сначала прочитай `ACTIVE_WORK.md`, `EVIDENCE_LEDGER.md` и `CURRENT_STATE.md`, затем остальные файлы по порядку. Сверь это с текущим GitHub PR/release/ветками. Назови текущий активный этап, последние реальные PASS/FAIL, что реализовано, но ещё не проверено, и точный следующий шаг. Не повторяй уже подтверждённые проверки без причины.
 
-> Открой `context/README.md` в репозитории `bakunity/RDP`, прочитай основной context по указанному порядку и продолжай проект с текущего состояния. Сначала сверь актуальный GitHub/release/ветки и коротко подтверди, что понял последние подтверждённые тесты, открытые баги и следующий этап. Не повторяй уже пройденные проверки без причины. Если для решения нужна подробная аргументация последнего большого аудита — прочитай `context/archive/2026-08-07-full-product-audit.md`.
+## Sensitive information
 
-## Перед следующим переездом
+Never store in public context:
 
-В конце каждого длинного рабочего чата новый ассистент должен:
+- passwords;
+- Telegram bot tokens or unnecessary numeric owner IDs;
+- pairing codes;
+- private SSH keys;
+- device/API tokens;
+- ready-to-use secret fingerprints;
+- secret configs;
+- production public IPs when unnecessary.
 
-1. перезаписать `LAST_SESSION.md` свежим компактным delta-контекстом;
-2. обновить `CURRENT_STATE.md`, если появились новые PASS/FAIL;
-3. обновить `PROJECT_HANDOFF.md`, если изменились архитектура или ключевой вектор;
-4. обновить `NEXT_WORK.md`, если завершились этапы или изменились приоритеты;
-5. обновить `LATEST_AUDIT.md`, если был новый глубокий анализ;
-6. при действительно крупном новом анализе сохранить его полный snapshot в `context/archive/`, а в актуальных context-файлах оставить сжатые выводы;
-7. добавить короткую запись в `HISTORY.md` для значимого milestone;
-8. не записывать секреты.
-
-## Правило актуальности
-
-GitHub и реальная инфраструктура всегда важнее snapshot. Перед конкретным изменением нужно проверить актуальный `main`, release, нужные файлы и открытые PR/ветки.
-
-Эта папка **не должна содержать секреты**: bot token, pairing code, TLS/API fingerprint, SSH private key, device token, реальные production IP, Telegram numeric IDs и содержимое secret config.
+Use placeholders when an identifier is not required for understanding.
