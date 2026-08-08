@@ -160,15 +160,15 @@ function Invoke-ApiPost {
 }
 
 function Get-SshProcesses {
+    # The private key path is unique per Hermes device and is more reliable
+    # than matching the exact rendered -R command line on every Windows build.
+    $KeyPath = [string]$Config.ssh_key_path
     return @(
         Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
             Where-Object {
                 $_.Name -eq 'ssh.exe' -and
                 $_.CommandLine -and
-                $_.CommandLine.Contains([string]$Config.ssh_key_path) -and
-                $_.CommandLine.Contains(
-                    "0.0.0.0:$($Config.rdp_port):127.0.0.1:3389"
-                )
+                $_.CommandLine.Contains($KeyPath)
             }
     )
 }
@@ -433,7 +433,9 @@ function Get-Telemetry {
         )
     }
     $Uptime = [int]((Get-Date) - $Boot).TotalSeconds
-    $TunnelRunning = (Get-SshProcesses).Count -gt 0
+    $State = Get-AgentState
+    $SshProcesses = @(Get-SshProcesses)
+    $TunnelRunning = $SshProcesses.Count -gt 0
     $EndpointAvailable = Test-TcpPort `
         -HostName $Config.server `
         -Port ([int]$Config.rdp_port) `
@@ -461,7 +463,9 @@ function Get-Telemetry {
         network_received_bytes = [int64]$Network[0]
         network_sent_bytes = [int64]$Network[1]
         route = Get-RouteName
+        access_enabled = [bool]$State.enabled
         ssh_tunnel_running = $TunnelRunning
+        ssh_process_count = [int]$SshProcesses.Count
         endpoint_available = [bool]$EndpointAvailable
         rdp_connections = $RdpConnections.Count
         rdp_remote_addresses = $RemoteAddresses
