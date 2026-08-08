@@ -1,176 +1,99 @@
 # Hermes RDP — Milestone History
 
-This is a compact project history, not a transcript.
+Updated: 2026-08-08
 
-## 2026-08-05 — First public product shape
+Compact project milestones only. Detailed evidence belongs in `EVIDENCE_LEDGER.md`; current work belongs in `ACTIVE_WORK.md`; deep historical reasoning belongs in Git history/archive.
 
-Hermes RDP evolved from a single reverse-RDP setup into a multi-PC system with:
+## 2026-08-05 — Multi-PC product shape
 
-- Linux controller;
-- FRP gateway;
-- per-device ports;
-- Telegram dashboard;
-- pairing;
-- telemetry;
-- ON/OFF/RESTART;
-- install/update scripts;
-- first public releases `v1.0.x`.
+Hermes RDP evolved from a single reverse-RDP setup into a self-hosted multi-device system with a Linux controller, per-device endpoints, Telegram pairing/control, telemetry and first `v1.0.x` releases.
 
-## 2026-08-06 — FRP deployment problem discovered
+## 2026-08-06 — FRP deployment problem -> OpenSSH redesign
 
-The official FRP Windows archive triggered Microsoft Defender detection/quarantine problems in real installation testing.
+Real Windows deployment exposed Microsoft Defender friction with the FRP binary. Product direction changed instead of requiring Defender exclusions.
 
-The upstream archive hash matched the expected pinned hash, but the operational experience was unacceptable. The project decision was to remove FRP from the core Windows transport instead of requiring Defender exclusions.
+Active transport became:
 
-## 2026-08-06 — OpenSSH redesign
+- Microsoft system OpenSSH on Windows;
+- isolated Hermes sshd on Linux;
+- per-device Ed25519 identity;
+- server-side endpoint restriction;
+- pinned API/SSH trust path.
 
-The transport architecture was rewritten around system OpenSSH:
+FRP left the active runtime architecture.
 
-- Windows built-in `ssh.exe` and `ssh-keygen.exe`;
-- isolated server sshd on the tunnel port;
-- per-device Ed25519 keypair;
-- public key stored server-side;
-- private key retained on Windows;
-- `AuthorizedKeysCommand` + `permitlisten` per endpoint;
-- pinned SSH host key delivered through pinned HTTPS API;
-- FRP service/binary removed from the active architecture.
+## 2026-08-06 — First clean OpenSSH installation + external RDP PASS
 
-## 2026-08-06 — Clean server validation
+A Windows device paired successfully, received a persistent endpoint, started its Scheduled Task/reverse tunnel and was reached through standard RDP from an external mobile network.
 
-A test server was fully reset without touching system administrative SSH, then installed with the OpenSSH version.
+This established the OpenSSH architecture as a working real-world baseline.
 
-Confirmed:
+## 2026-08-06 — Legacy Windows ACL migration defect discovered
 
-- Hermes controller active/enabled;
-- Hermes dedicated sshd active/enabled;
-- API listening;
-- tunnel sshd listening;
-- RDP pool closed before device pairing;
-- FRP absent.
+Upgrade over an old protected Hermes/WinMon/FRP directory exposed a recursive-backup ACL failure. Future migration direction became whole-directory archival/rename with scoped ACL fallback.
 
-## 2026-08-06 — Windows legacy ACL failure found
+## 2026-08-06 — v1.1.0 published
 
-First Windows upgrade test over an old Hermes/WinMon/FRP directory failed because recursive backup tried to read a protected legacy private-key file.
+`v1.1.0` became the first published OpenSSH transport release.
 
-Manual scoped cleanup/archival allowed the test to continue. The required permanent installer design became whole-directory legacy archival with ACL fallback only when needed.
+## 2026-08-07 — Reboot + Telegram OFF/ON behavioral PASS
 
-## 2026-08-06 — First successful OpenSSH Windows install
+Live testing confirmed:
 
-A clean Windows OpenSSH client installation completed successfully:
+- tested Windows reboot -> Hermes recovered -> RDP usable;
+- Telegram OFF interrupted active RDP access;
+- Telegram ON restored access.
 
-- device paired;
-- persistent RDP port allocated;
-- Scheduled Task created;
-- reverse SSH started;
-- installer printed successful completion.
+The focus shifted from “does transport work?” to truthful observability/control and reliability.
 
-## 2026-08-06 — Real external RDP PASS
+## 2026-08-07 — Win10 x64 / x86 PowerShell compatibility bug confirmed
 
-Microsoft Remote Desktop connected from a phone using mobile data. This confirmed full end-to-end external access through the Linux server and reverse OpenSSH tunnel.
+Real Win10 x64 launched from 32-bit PowerShell exposed WOW64 redirection: native Microsoft OpenSSH required `Sysnative` probing instead of blindly using `System32` or PATH/Git SSH.
 
-This is the key proof that the transport architecture works in the intended real-world topology.
+This became a v1.2.0 compatibility item.
 
-## 2026-08-06 — Documentation/site refresh PR
+## 2026-08-07 — Persistent cross-chat context initialized
 
-A large docs/site refresh was merged and Vercel production updated.
+Created repository `context/` so project continuity no longer depends entirely on old chat availability.
 
-It correctly replaced public FRP marketing content with OpenSSH terminology, but later review found that documentation quality/architecture explanation regressed compared with `v1.0.7`, and several documentation files remained internally stale.
+## 2026-08-08 — State truth + endpoint truth + RDP-channel acceptance
 
-The user does not consider this site/docs version final.
+PR #19 stabilization live-validated:
 
-## 2026-08-06 — `v1.1.0` published
-
-GitHub Release `v1.1.0` was successfully published. It is the first published OpenSSH transport release.
-
-## 2026-08-07 — Multi-device use and control-state audit
-
-The user reported that devices are adding successfully and assigned ports work.
-
-During ON/OFF testing the Telegram dashboard showed contradictory state such as:
-
-- device ONLINE;
-- SSH tunnel reported stopped;
-- endpoint/RDP actually usable.
-
-This triggered a full product audit.
-
-Main conclusion: core transport works, but the control plane/state model must be stabilized before calling the project finished.
-
-The next target became a stabilization cycle focused on:
-
-1. truthful state and deterministic command lifecycle;
-2. remaining reboot/network recovery;
-3. safe update/rollback;
-4. Dashboard v2;
-5. full documentation/README rebuild;
-6. Website v2;
-7. final acceptance.
-
-## 2026-08-07 — Persistent cross-chat context created
-
-Created repository folder `context/` so future conversations can reconstruct the project without relying on the previous long chat.
-
-The context intentionally excludes secrets and stores architecture, current state, durable decisions, audit conclusions and next-work protocol.
-
-## 2026-08-07 — Windows reboot + Telegram OFF/ON PASS
-
-Further live acceptance closed several previously open questions:
-
-- the tested Windows PC was rebooted and Hermes recovered automatically enough for RDP to work again;
-- pressing OFF in Telegram disconnected the active RDP session / made access unusable;
-- pressing ON restored RDP access;
-- the user explicitly confirmed the functionality works.
-
-The remaining `SSH tunnel: stopped` inconsistency is therefore treated as a telemetry/state-representation bug rather than proof of a broken transport.
-
-The acceptance matrix now distinguishes user-visible access behavior from a separate low-level endpoint-listener measurement.
-
-## 2026-08-07 — Latest-session handoff protocol added
-
-Added `context/LAST_SESSION.md` as the compact per-chat delta. `context/README.md` and `SESSION_PROTOCOL.md` initially required future long chats to refresh this file before migration.
-
-## 2026-08-07 — Windows 10 x86 PowerShell compatibility bug confirmed
-
-A second Windows test exposed a real installer compatibility defect:
-
-- OS is Windows 10 Pro x64 build 19045;
-- OpenSSH.Client is installed;
-- installer was launched from 32-bit PowerShell under `SysWOW64`;
-- hard-coded `System32\OpenSSH` lookup failed because of WOW64 filesystem redirection;
-- native Microsoft OpenSSH binaries were visible via `Sysnative\OpenSSH`;
-- `Get-Command ssh.exe` could resolve Git SSH, which Hermes must not use as a fallback.
-
-The required product fix is an architecture-aware native-system resolver: use `Sysnative` when a 32-bit PowerShell process runs on 64-bit Windows, otherwise use `System32`. Add regression tests and keep Microsoft system OpenSSH as the only supported transport binary source.
-
-This was added to the `v1.2.0 — Stabilization` work as a Windows compatibility layer item.
-
-## 2026-08-08 — State truth, endpoint truth and RDP-channel acceptance
-
-PR #19 stabilization work reached several live acceptance milestones:
-
-- agent heartbeat / desired access / applied access / SSH / endpoint were separated;
-- Linux server listener became the authoritative public endpoint truth;
-- OFF showed endpoint CLOSED and ON showed endpoint OPEN in live testing;
-- direct LAN/VPN RDP and Hermes RDP were distinguished and both channel signatures were live-confirmed;
-- existing-install guard was live-tested without changing identity/key/port.
+- independent heartbeat / desired / applied / SSH / endpoint state;
+- Linux listener as authoritative public endpoint truth;
+- OFF=CLOSED / ON=OPEN;
+- direct LAN/VPN vs Hermes RDP channel classification;
+- existing-install safety guard without identity/key/port loss.
 
 ## 2026-08-08 — Telemetry performance regression identified
 
-Real Windows timing showed that the richer 3-second telemetry loop could spend most of its interval on TCP/process diagnostics, matching observed RDP micro-freezes.
+Real timing showed that heavy 3-second TCP/process diagnostics could consume most of the agent interval and coincided with RDP micro-freezes.
 
-The stabilization branch was redesigned around fast/background/on-demand telemetry, with a 60-second explicit observation lease and no background TOP-process polling. Windows Server ProductType support was also added after a real installer rejection exposed the old blanket client-only gate.
+The branch moved to fast/background/on-demand telemetry and an explicit 60-second observation lease. A Windows Server installer ProductType blocker was also found and fixed in code pending live acceptance.
 
-These newest fixes remained runtime acceptance items at the checkpoint.
+## 2026-08-08 — Continuous project-memory model
 
-## 2026-08-08 — Continuous project-memory model introduced
+Project memory stopped depending on end-of-chat handoff:
 
-The context architecture was changed so it no longer depends on a clean end-of-chat handoff.
+- `ACTIVE_WORK.md` became hot operational state;
+- `EVIDENCE_LEDGER.md` became durable acceptance evidence;
+- checkpoints became event-driven during work;
+- context-only checkpoints may be persisted independently of an open product PR.
 
-Added:
+## 2026-08-08 — Context lifecycle / garbage collection model
 
-- `ACTIVE_WORK.md` for frequently refreshed operational truth;
-- `EVIDENCE_LEDGER.md` for durable PASS/FAIL/root-cause evidence;
-- event-driven checkpoint rules in `SESSION_PROTOCOL.md`;
-- permission for context-only checkpoint commits directly on `main` while product work remains in an open PR.
+The memory system was completed with long-term hygiene rules:
 
-`LAST_SESSION.md` is now only a boundary delta, not the primary project memory. The design goal is that losing the last 10–20 chat messages must not erase important engineering state.
+- HOT / WARM / COLD context layers;
+- semantic staleness and `SUPERSEDED` retirement;
+- evidence scoping and `REVALIDATION REQUIRED` after relevant code changes;
+- release evidence rotation;
+- soft size budgets and compaction triggers;
+- disposable `LAST_SESSION` and single-current `LATEST_AUDIT`;
+- archive index/rules;
+- concurrent-writer reconciliation;
+- batched context checkpoints where tooling permits;
+- feature-branch/base drift must be reconciled before merge.
+
+The design goal is now stronger than cross-chat handoff: **losing the current chat, accumulating months of history, or changing implementation should not make current project truth ambiguous.**
