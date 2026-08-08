@@ -156,6 +156,30 @@ class RegistryTests(unittest.TestCase):
             self.registry.pending_command(device["id"])
         )
 
+    def test_command_queue_changes_desired_state_atomically(self):
+        device, _ = self.pair()
+        device_id = device["id"]
+
+        off_seq = self.registry.queue_command(device_id, "off")
+        after_off = self.registry.get_device(device_id)
+        self.assertFalse(after_off["enabled"])
+        self.assertEqual(after_off["pending_command"], "off")
+        self.assertEqual(after_off["command_seq"], off_seq)
+
+        with self.assertRaises(ValueError):
+            self.registry.queue_command(device_id, "on")
+        still_off = self.registry.get_device(device_id)
+        self.assertFalse(still_off["enabled"])
+        self.assertEqual(still_off["pending_command"], "off")
+        self.assertEqual(still_off["command_seq"], off_seq)
+
+        self.registry.complete_command(device_id, off_seq, True, "off applied")
+        on_seq = self.registry.queue_command(device_id, "on")
+        after_on = self.registry.get_device(device_id)
+        self.assertTrue(after_on["enabled"])
+        self.assertEqual(after_on["pending_command"], "on")
+        self.assertEqual(after_on["command_seq"], on_seq)
+
 
 if __name__ == "__main__":
     unittest.main()
