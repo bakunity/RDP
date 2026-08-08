@@ -1,190 +1,159 @@
 # Hermes RDP — Next Work / Goal Vector
 
+Updated: 2026-08-08
+
+For the exact current step read `ACTIVE_WORK.md`. This file is the product-level work queue and should be refreshed whenever stages materially move.
+
 ## North-star goal
 
 Ship a stable self-hosted product where a user can:
 
 1. install Hermes on a clean Debian/Ubuntu server;
-2. add Windows PCs through Telegram;
+2. add supported Windows/Windows Server machines through Telegram;
 3. paste one generated command into elevated PowerShell;
-4. get a persistent endpoint per PC;
+4. get a persistent endpoint per device;
 5. connect through standard Microsoft Remote Desktop from another network;
-6. trust every status shown in Telegram;
+6. trust every Telegram status;
 7. survive reboots/network interruptions automatically;
 8. update safely without losing access;
-9. understand and operate the system from clear documentation.
+9. understand the system from coherent documentation.
 
 ## Already confirmed — do not redo without a regression reason
 
 ```text
-Fresh OpenSSH Windows install                    PASS
+OpenSSH reverse RDP baseline                     PASS
 External RDP over another network                PASS
-Tested Windows reboot -> access recovers         PASS
-Telegram OFF -> active RDP access interrupted    PASS
-Telegram ON  -> RDP access restored              PASS
+Windows reboot -> access recovers                PASS
+Telegram OFF -> active RDP interrupted           PASS
+Telegram ON -> RDP restored                      PASS
+OFF -> server endpoint measured CLOSED           PASS
+ON -> server endpoint measured OPEN              PASS
+Direct LAN/VPN RDP classification                PASS
+Hermes RDP classification                        PASS
+Existing-install safety guard                    PASS
+Win10 x86 PowerShell -> Sysnative native probe   PASS
 ```
 
-Low-level `OFF -> endpoint CLOSED` still deserves an explicit listener/port measurement, but the user-visible OFF/ON behavior is already confirmed.
+## Current release target
 
-## Priority 0 — do not expand scope yet
+**Hermes RDP v1.2.0 — Stabilization**
 
-The transport works. The next risks are Windows installer compatibility and whether the control plane tells the truth under real state transitions and failures.
+Active implementation lives in PR #19 (`fix/control-state-dashboard`).
 
-## Stage 1 — Windows compatibility + native OpenSSH resolution
+## Stage 1 — finish PR #19 acceptance
 
-### Confirmed bug to fix
+### 1. Telemetry performance
 
-On Windows 10 Pro x64, the installer can be launched from a 32-bit PowerShell process:
+Implemented, still live-test:
 
 ```text
-Is64BitOS      = True
-Is64BitProcess = False
-PowerShell     = C:\Windows\SysWOW64\WindowsPowerShell\v1.0\powershell.exe
+FAST ~3s
+heartbeat + commands + access + SSH + RDP channel
+
+BACKGROUND ~15s
+CPU + RAM + disk + network + sessions + route + uptime
+
+OBSERVE 60s
+resources ~3s
+TOP processes ~6s
+Telegram refresh ~3s
+auto-off after 60s
 ```
 
-In that context, hard-coded `System32\OpenSSH` lookup is wrong because filesystem redirection hides the intended native 64-bit Microsoft OpenSSH binaries.
+Acceptance:
 
-Required resolver:
+- deploy latest server-side branch state with backup;
+- update MIPC agent preserving identity/key/port;
+- measure timing again;
+- verify RDP micro-freezes disappear or materially reduce;
+- verify `НАБЛЮДАТЬ 60с` enables heavy telemetry;
+- verify automatic stop after 60 seconds and no endless Telegram live redraw.
 
-```powershell
-if ([Environment]::Is64BitOperatingSystem -and -not [Environment]::Is64BitProcess) {
-    $NativeSystem = "$env:WINDIR\Sysnative"
-} else {
-    $NativeSystem = "$env:WINDIR\System32"
-}
-```
+### 2. Windows Server installer
 
-Use only:
+Confirmed old bug: blanket `ProductType != 1` rejection.
 
-```text
-$NativeSystem\OpenSSH\ssh.exe
-$NativeSystem\OpenSSH\ssh-keygen.exe
-```
+Fix exists for ProductType 2/3.
 
-Do not use PATH/`Get-Command ssh.exe` as fallback because Git SSH may be present and must not silently replace Windows Microsoft OpenSSH.
+Acceptance:
 
-### Required behavior
+- real fresh Windows Server installation;
+- task/tunnel/endpoint come online;
+- RDP works through assigned endpoint;
+- no client-only rejection remains.
 
-```text
-OpenSSH installed + native binaries found      -> continue
-OpenSSH not installed                          -> install, re-check
-OpenSSH installed but native binaries missing  -> clear diagnostic error
-x86 PowerShell on x64 Windows                  -> transparently use Sysnative
-```
+### 3. Win10 x64 + x86 PowerShell final acceptance
 
-### Regression coverage
+Resolver/runtime behavior is already proven.
 
-Add tests for:
+Still required:
 
-- x64 OS + x64 PowerShell -> System32 path;
-- x64 OS + x86 PowerShell -> Sysnative path;
-- Git SSH present in PATH -> still use Microsoft OpenSSH;
-- OpenSSH absent -> install then resolve;
-- capability installed but native binary unavailable -> deterministic failure message.
+- genuinely fresh patched install launched from x86 PowerShell on x64 Win10;
+- Microsoft system OpenSSH chosen without PATH/Git fallback;
+- keys/task/tunnel/endpoint complete successfully.
 
-User should not need to manually relaunch a 64-bit PowerShell after this fix.
+### Merge gate
 
-## Stage 2 — State & tunnel correctness
+Do not merge PR #19 until the three acceptance groups above are complete or consciously split into a follow-up PR with explicit evidence boundaries.
 
-### Immediate objective
+## Stage 2 — recovery / lifecycle matrix
 
-Make Telegram and the registry reflect reality.
+After PR #19:
 
-### Next concrete actions
-
-1. inspect the actual Hermes `ssh.exe` process and full command line on the tested Windows PC;
-2. compare it with agent `Get-SshProcesses` matching logic;
-3. fix/replace unreliable `ssh_tunnel_running` detection;
-4. expose actual server endpoint/listener state;
-5. separate desired access state from agent heartbeat;
-6. expose command pending/result/timeout state;
-7. detect/avoid duplicate or orphan Hermes SSH processes;
-8. verify listener-level OFF -> CLOSED -> ON -> OPEN.
-
-### Target state model
-
-```text
-Agent:        ONLINE | OFFLINE
-Access:       ENABLED | DISABLED
-Command:      IDLE | PENDING | SUCCESS | FAILED | TIMEOUT
-SSH:          CONNECTED | DISCONNECTED | UNKNOWN
-Endpoint:     OPEN | CLOSED | UNKNOWN
-RDP sessions: N
-```
-
-Rule: `ONLINE` means agent/API heartbeat only. A device may correctly be `Agent ONLINE + Access OFF + SSH disconnected + Endpoint closed`.
-
-## Stage 3 — Remaining reliability / recovery
-
-Still test:
-
-- temporary Windows network disconnect -> reconnect;
+- RESTART actually recreates/reconnects transport;
+- temporary Windows network loss -> reconnect;
 - Linux server reboot -> controller + dedicated sshd recover -> clients reconnect;
 - controller restart;
 - dedicated sshd restart;
-- repeated reconnect without duplicate/orphan processes;
-- two or more devices simultaneously;
+- repeated reconnect without duplicate/orphan Hermes SSH processes;
+- two+ devices simultaneously;
 - one device failure does not affect another.
 
-Windows reboot recovery is already PASS.
+Windows reboot baseline is already PASS.
 
-## Stage 4 — Device/security lifecycle acceptance
+## Stage 3 — device/security lifecycle
 
-Verify:
+Verify formally:
 
-- each device has a unique Ed25519 key;
-- first device key cannot bind second device endpoint;
+- unique Ed25519 identity per device;
+- first device key cannot claim second endpoint;
 - private key never reaches server;
 - revoked key cannot authenticate;
-- DELETE revokes device API token and SSH key;
+- DELETE revokes API token and SSH key;
 - DELETE closes endpoint;
 - freed port is safely reusable only after cleanup;
 - administrative SSH stays independent;
 - Telegram authorization remains owner-limited;
 - no Defender exclusions are required.
 
-Also verify `RESTART` means a real transport restart rather than only changing a flag.
+## Stage 4 — safe migration / update / rollback
 
-## Stage 5 — Safe installation / migration / updates
+### Legacy Windows migration
 
-### Legacy Windows reinstall
+Replace fragile recursive backup of protected legacy directories with whole-directory archival/rename and scoped ACL fallback only when needed.
 
-Replace fragile recursive old-directory backup with whole-directory archival:
-
-```text
-HermesRDP
- -> rename/move -> HermesRDP-legacy-TIMESTAMP
- -> create clean HermesRDP
-```
-
-Use scoped ACL takeover only when the move itself is denied. Pair only after local filesystem preparation succeeds.
-
-### Pairing UX
-
-Expired pairing codes should produce a concise, understandable retry message instead of a confusing PowerShell exception wall.
-
-### Server update target
+### Server updater target
 
 ```text
 backup
- -> stage update
- -> syntax/config checks
+ -> stage
+ -> checks
  -> restart
  -> health checks
  -> reconnect/endpoint smoke test
- -> COMMIT
+ -> commit
 
 failure
- -> rollback
+ -> automatic rollback
  -> restart previous version
  -> verify previous health
 ```
 
-### Windows client update target
+### Windows client updater target
 
 ```text
-backup current agent
- -> install new agent
+backup current agent/config state
+ -> stage new agent
  -> parse/start checks
  -> heartbeat/tunnel health check
  -> keep update
@@ -195,130 +164,59 @@ failure
  -> verify previous access
 ```
 
-## Stage 6 — Telegram Dashboard v2
+## Stage 5 — command timeout / UX polish
 
-Only after state measurement is trustworthy.
+Current branch has stronger command lifecycle/pending/result semantics. Remaining polish:
 
-Recommended device view:
+- deterministic command timeout;
+- concise pairing-code-expired UX;
+- clear repair/update flow instead of abusing `Добавить ПК`;
+- confirm Russian dashboard terminology after live deployment.
 
-```text
-DEVICE NAME
+## Stage 6 — documentation rebuild
 
-STATUS
-Agent            ONLINE
-RDP access       ENABLED
-SSH tunnel       CONNECTED
-Endpoint         OPEN :PORT
-RDP sessions     1
+After behavior stabilizes:
 
-Last command
-ON · SUCCESS · 2 sec ago
+- restore rich architecture diagrams and lifecycle explanations;
+- use v1.0.7 only as structural inspiration, never restore FRP implementation details;
+- document server/client responsibilities, pairing, ON/OFF/RESTART, state model, trust chain, failure/recovery and multi-device isolation;
+- sweep stale FRP/version claims;
+- restore polished README structure/badges/links.
 
-RESOURCES
-CPU / RAM / Disk / Network / Uptime
-```
-
-Buttons:
-
-- enabled: `DISABLE ACCESS`, `RESTART TUNNEL`;
-- disabled: `ENABLE ACCESS`;
-- pending: `WORKING…` and block contradictory commands;
-- active session + OFF/RESTART: confirmation because the session will be disconnected.
-
-Do not label Windows-side `127.0.0.1` as an external client.
-
-## Stage 7 — Documentation rebuild
-
-Use old `v1.0.7` documentation quality as the structural baseline, not its obsolete FRP implementation.
-
-`ARCHITECTURE.md` should include:
-
-- goals and boundaries;
-- large architecture diagram;
-- server/client responsibilities;
-- pairing lifecycle;
-- ON/OFF/RESTART lifecycle;
-- state machine;
-- trust chain;
-- SQLite model;
-- failure/recovery model;
-- multi-device isolation;
-- subsystem modification map.
-
-README should restore polished badges/buttons and prominently state:
+Core statement:
 
 > All Windows devices are equal clients. Only the Hermes Linux server has a special infrastructure role.
 
-Sweep all docs for stale FRP/version claims.
-
-## Stage 8 — Website v2
-
-Do not keep cosmetically patching the current page.
+## Stage 7 — Website v2
 
 Explain product first:
 
 ```text
-Windows PCs -> one Hermes server -> remote RDP clients
-                    |
-                    -> Telegram control
+Windows devices -> one Hermes server -> standard RDP clients
+                         |
+                         -> Telegram control
 ```
 
-Then explain OpenSSH, per-device Ed25519 isolation, pinning, persistent endpoints, telemetry and self-hosted security.
+Then explain OpenSSH, per-device Ed25519 isolation, pinning, persistent endpoints and telemetry.
 
-## Stage 9 — Final acceptance matrix
+## Stage 8 — final acceptance / release
 
-```text
-Clean server install                  PASS
-Windows fresh install                 PASS
-Win10 x64 + x86 PowerShell install    TODO FIX + REGRESSION TEST
-Legacy Windows reinstall              TODO
-External RDP over another network     PASS
-Device #1                             PASS
-Device #2                             PARTIAL / formal acceptance TODO
-Unique ports                          OBSERVED / formal isolation TODO
-Unique SSH keys                       TODO formal proof
-Cross-port key isolation              TODO
+Before publishing v1.2.0:
 
-OFF -> RDP access interrupted         PASS
-ON -> RDP access restored             PASS
-OFF -> endpoint measured closed       TODO
-ON -> endpoint measured open          TODO
-RESTART -> transport recreated        TODO
-DELETE -> token/key revoked           TODO
-DELETE -> endpoint closed             TODO
-Freed port reuse                      TODO
+- all release-facing fixes moved from `IMPLEMENTED, NOT VALIDATED` to PASS or explicitly excluded;
+- release draft reconciled with `EVIDENCE_LEDGER.md`;
+- `CURRENT_STATE.md` and `ACTIVE_WORK.md` updated;
+- docs/README consistent with actual runtime;
+- published tag immutable;
+- rollback/recovery story documented.
 
-Windows reboot                        PASS
-Server reboot                         TODO
-Network loss/reconnect                TODO
-Controller restart                    TODO
-SSHD restart                          TODO
+## Context discipline during all stages
 
-Server update                         TODO
-Server automatic rollback             TODO
-Client update                         TODO
-Client automatic rollback             TODO
+Do not wait for chat migration.
 
-Docs consistency                      TODO
-README                                TODO
-Website                               TODO
-Linux CI                              verify current
-Windows PowerShell CI                 verify current
-Release automation                    verify current
-```
+After meaningful work-units:
 
-## Release target
-
-**Hermes RDP v1.2.0 — Stabilization**
-
-Implementation order:
-
-1. Windows native OpenSSH compatibility resolver;
-2. truthful state + command lifecycle;
-3. remaining recovery/security/delete/update acceptance;
-4. Dashboard v2;
-5. docs/README rebuild;
-6. Website v2;
-7. full acceptance + release.
-
-Critical correctness fixes may ship as `v1.1.x` patches first.
+- update `ACTIVE_WORK.md`;
+- update `EVIDENCE_LEDGER.md` for real evidence;
+- update release draft for release-facing changes;
+- refresh this work queue when priorities materially change.
