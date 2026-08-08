@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Net.Http
 
 $BaseDir = 'C:\ProgramData\HermesRDP'
@@ -457,7 +457,7 @@ function Get-Telemetry {
     $Os = Get-CimInstance Win32_OperatingSystem
     $Disk = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'"
     $RamTotal = [int64]$Os.TotalVisibleMemorySize * 1KB
-    $RamFree = [int64]$Os.FreePhysicalMemorySize * 1KB
+    $RamFree = [int64]$Os.FreePhysicalMemory * 1KB
     $RamUsed = [math]::Max(0, [int64]($RamTotal - $RamFree))
     $DiskTotal = [int64]$Disk.Size
     $DiskFree = [int64]$Disk.FreeSpace
