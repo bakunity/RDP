@@ -246,11 +246,22 @@ if ([Environment]::Is64BitOperatingSystem -ne $true) {
 }
 
 $Os = Get-CimInstance Win32_OperatingSystem
-if ($Os.ProductType -ne 1) {
-    throw 'Установщик предназначен для клиентской Windows.'
+$IsClientWindows = [int]$Os.ProductType -eq 1
+$IsServerWindows = [int]$Os.ProductType -in @(2, 3)
+if (-not ($IsClientWindows -or $IsServerWindows)) {
+    throw "Неподдерживаемый тип Windows: ProductType=$($Os.ProductType)."
 }
-if ($Os.Caption -notmatch 'Pro|Enterprise|Education|Server') {
+if (
+    $IsClientWindows -and
+    $Os.Caption -notmatch 'Pro|Enterprise|Education'
+) {
     throw "Редакция '$($Os.Caption)' не поддерживает входящие RDP-подключения."
+}
+if (
+    $IsServerWindows -and
+    $Os.Caption -notmatch 'Windows Server'
+) {
+    throw "Серверная редакция '$($Os.Caption)' не распознана как Windows Server."
 }
 
 # "Добавить ПК" is a fresh-pairing flow. Never stop a working Hermes client
@@ -338,6 +349,7 @@ if (Test-Path -LiteralPath $BaseDir) {
             -Force `
             -ErrorAction SilentlyContinue
 }
+
 New-Item -ItemType Directory -Path $BaseDir -Force | Out-Null
 
 $AgentPath = Join-Path $BaseDir 'HermesRdpAgent.ps1'
@@ -530,9 +542,9 @@ try {
 
     $TunnelProcess = Get-CimInstance `
         Win32_Process `
+        -Filter "Name='ssh.exe'" `
         -ErrorAction SilentlyContinue |
         Where-Object {
-            $_.Name -eq 'ssh.exe' -and
             $_.CommandLine -and
             $_.CommandLine.Contains($SshKeyPath)
         } |
