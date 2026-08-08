@@ -32,6 +32,15 @@ class WindowsNativeOpenSshTests(unittest.TestCase):
         self.assertIn("Hermes RDP уже установлен на этом ПК", text)
         self.assertIn("repair/update flow", text)
 
+    def test_installer_supports_client_and_windows_server_product_types(self) -> None:
+        text = (ROOT / "scripts/install-client.ps1").read_text(encoding="utf-8-sig")
+        self.assertIn("$IsClientWindows", text)
+        self.assertIn("$IsServerWindows", text)
+        self.assertIn("ProductType -in @(2, 3)", text)
+        self.assertIn("Windows Server", text)
+        self.assertNotIn("$Os.ProductType -ne 1", text)
+        self.assertNotIn("Установщик предназначен для клиентской Windows", text)
+
 
 if __name__ == "__main__":
     unittest.main()
