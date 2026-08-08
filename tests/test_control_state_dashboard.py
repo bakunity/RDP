@@ -22,9 +22,13 @@ class ControlStateDashboardTests(unittest.TestCase):
         text = (ROOT / "server/hermes_rdp/bot.py").read_text(encoding="utf-8")
         for value in (
             "Агент:",
-            "RDP-доступ:",
+            "RDP-доступ (цель):",
+            "Агент применил:",
             "SSH-туннель:",
             "Endpoint:",
+            "UNKNOWN",
+            "MULTIPLE",
+            "INCONSISTENT",
             "Последняя команда:",
             "ВКЛЮЧИТЬ ДОСТУП",
             "ВЫКЛЮЧИТЬ ДОСТУП",
@@ -32,6 +36,14 @@ class ControlStateDashboardTests(unittest.TestCase):
         ):
             self.assertIn(value, text)
         self.assertNotIn("Внешние клиенты:", text)
+
+    def test_bot_does_not_split_desired_state_from_queue(self) -> None:
+        text = (ROOT / "server/hermes_rdp/bot.py").read_text(encoding="utf-8")
+        start = text.index('if data.startswith("cmd:")')
+        end = text.index('if data.startswith("delete:")', start)
+        block = text[start:end]
+        self.assertIn("self.registry.queue_command(device_id, action)", block)
+        self.assertNotIn("set_enabled", block)
 
     def test_completed_result_keeps_action(self) -> None:
         text = (ROOT / "server/hermes_rdp/db.py").read_text(encoding="utf-8")
