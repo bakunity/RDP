@@ -34,30 +34,34 @@ Do not repeat these checks without a concrete regression reason.
 
 ## Windows Server acceptance — ACTIVE STAGE
 
-Real clean machine baseline:
+Real clean baseline/fresh install:
 
 - Windows Server 2019 Datacenter;
 - ProductType `3`;
 - x64 OS + x64 PowerShell 5.1;
-- no pre-existing `C:\ProgramData\HermesRDP`;
-- no pre-existing `Hermes RDP Agent` Scheduled Task.
-
-Fresh install then completed successfully with immutable ref `586e9446ea41262f1ed0d9c84ba72838a47d9bc5`:
-
+- no pre-existing Hermes directory/task;
+- fresh immutable `586e944...` install reached `=== ГОТОВО ===`;
 - old client-only ProductType rejection did not occur;
-- installer reached `=== ГОТОВО ===`;
-- OpenSSH tunnel and Scheduled Task were created;
-- a persistent RDP endpoint was assigned;
-- user confirmed the added Windows Server works.
+- OpenSSH tunnel/task were created and the user confirmed the newly added Server worked.
 
-Important provenance boundary: `scripts/install-client.ps1` has the **same blob** on `586e944...` and current PR head `c51ed8...`, so the real fresh-install proves the current Windows Server ProductType fix. However `RepositoryRef=586e944...` means this new Server currently runs the `586e944...` agent, not the newest `c51ed8...` agent.
+`scripts/install-client.ps1` is byte-identical at `586e944...` and current PR head `c51ed8...`, therefore the Windows Server installer/ProductType fix itself is **PASS**.
 
-Therefore:
+The Server agent has now been updated in place to immutable `c51ed8fa2c090dbc731a0c06f357d899846e90ae` with a local backup. Live post-update evidence:
 
-- **Windows Server installer/ProductType fix: PASS**;
-- **current-head Windows Server agent runtime: one small revalidation still required**.
+- Scheduled Task = `Running`;
+- device ID preserved;
+- assigned RDP port preserved;
+- config hash unchanged;
+- private-key hash unchanged;
+- exactly one Hermes `ssh.exe`;
+- .NET TCP fast path present;
+- SSH PID cache present with 15-second discovery interval;
+- loopback peer helper present;
+- executable old `Get-NetTCPConnection` RDP path absent.
 
-Exact next action: update only `HermesRdpAgent.ps1` on this Windows Server to immutable `c51ed8...`, preserving its device identity/key/port, then verify Task=`Running`, exactly one Hermes `ssh.exe`, and endpoint remains usable.
+This is **current-head agent update PASS**. One final Windows Server acceptance check remains: prove the assigned RDP endpoint is still usable after this `c51ed8...` update. Do not infer endpoint usability from process state alone.
+
+Exact next action: connect to this Windows Server through its assigned Hermes RDP endpoint after the `c51ed8...` update and confirm the session opens. If yes, Windows Server current-head acceptance is complete.
 
 ## Stable live baseline
 
@@ -71,11 +75,12 @@ Do not re-prove wholesale:
 - MIPC fast-path/performance acceptance;
 - RV-001..RV-006 current-head smoke;
 - PF-008 observation-mode acceptance;
-- Windows Server ProductType=3 fresh-installer acceptance.
+- Windows Server ProductType=3 fresh-installer acceptance;
+- Windows Server `c51ed8...` in-place agent update preserving identity/key/port and one-SSH state.
 
 ## Remaining PR #19 acceptance
 
-1. current-head `c51ed8...` agent smoke on the newly installed Windows Server;
+1. confirm the newly updated Windows Server endpoint is actually usable over RDP;
 2. fresh patched Win10 x64 full install launched from PowerShell x86;
 3. reconcile PR #19 with current `main`, rerun CI and recheck mergeability;
 4. merge only after acceptance is green or remaining scenarios are explicitly split with evidence boundaries.
