@@ -1,6 +1,6 @@
 # Hermes RDP — Current State Snapshot
 
-Updated: 2026-08-08
+Updated: 2026-08-09
 
 For immediate operational truth read `ACTIVE_WORK.md`; for scenario-level proof/revalidation read `EVIDENCE_LEDGER.md`.
 
@@ -9,10 +9,10 @@ For immediate operational truth read `ACTIVE_WORK.md`; for scenario-level proof/
 - Repository: `bakunity/RDP`.
 - Published release: `v1.1.0` — OpenSSH transition release.
 - Active stabilization PR: **#19**, branch `fix/control-state-dashboard`.
-- Current PR head at this snapshot: `586e9446ea41262f1ed0d9c84ba72838a47d9bc5`.
+- Current PR head: `c51ed8fa2c090dbc731a0c06f357d899846e90ae`.
 - Target release: **v1.2.0 — Stabilization**.
 - Product changes from PR #19 are not merged to `main` yet.
-- Context-only commits have advanced `main`; feature branch must be reconciled with current base + CI before merge.
+- Context-only commits continue to advance `main`; feature branch must be reconciled with current base + CI before merge.
 
 ## Architecture — current
 
@@ -37,104 +37,48 @@ Durable boundaries:
 - admin SSH remains independent;
 - FRP is not active runtime transport;
 - private per-device SSH key stays on Windows;
-- server restricts public key to assigned endpoint;
+- server restricts public key to the assigned endpoint;
 - Telegram is control plane, not RDP transport;
 - agent heartbeat continues while RDP access is OFF.
 
-## Stable live baseline
+## Deployment truth
+
+Server is live on immutable head:
+
+`586e9446ea41262f1ed0d9c84ba72838a47d9bc5`
+
+MIPC Windows agent is live on immutable head:
+
+`c51ed8fa2c090dbc731a0c06f357d899846e90ae`
+
+The split is intentional: changes after `586e944...` in the active PR are Windows-agent/test only, so no Linux redeploy was required.
+
+Current-head MIPC update preserved device ID, assigned RDP port, config and private key; Scheduled Task remained Running and exactly one Hermes `ssh.exe` was present immediately after update. The installed agent contains the .NET TCP fast path, 15-second SSH PID cache and loopback peer helper, with the old executable `Get-NetTCPConnection` RDP path removed.
+
+## Stable accepted baseline
 
 Real testing has confirmed on accepted builds:
 
-- fresh normal-path OpenSSH Windows install;
+- OpenSSH reverse RDP end-to-end;
 - external-network RDP;
 - Windows reboot -> automatic Hermes recovery -> RDP usable;
 - Telegram OFF interrupts access and ON restores it;
 - OFF can correctly remain `agent online + desired/applied off + SSH disconnected + endpoint closed`;
-- Linux server listener can authoritatively report assigned endpoint CLOSED/OPEN;
+- Linux server listener authoritatively reports assigned endpoint CLOSED/OPEN;
 - existing-install guard preserves working identity/key/port;
 - Win10 x64 under x86 PowerShell reaches native Microsoft OpenSSH through `Sysnative`.
 
-These are real facts, not hypotheses.
+Do not re-run these wholesale without a concrete regression reason.
 
-## State / endpoint truth
+## Performance stabilization — accepted for current working path
 
-PR #19 separates:
+The original micro-freeze regression was traced to expensive work inside the old 3-second agent loop, including NetTCPIP and WMI queries.
 
-- agent heartbeat;
-- desired access;
-- agent-applied access;
-- SSH process/transport;
-- server public listener;
-- RDP channel/activity;
-- pending/last command result.
-
-The earlier contradiction `ONLINE + tunnel stopped while RDP actually works` was addressed by measured state rather than changing transport.
-
-Public endpoint truth moved from a Windows self-probe (which could false-positive through VPN/TUN/proxy routing) to the Linux listener. Baseline live acceptance proved OFF=CLOSED and ON=OPEN.
-
-## RDP channel classification — baseline PASS, latest-head revalidation pending
-
-Pre-optimization live acceptance proved:
-
-```text
-direct LAN/VPN RDP -> Hermes=0, direct=1
-Hermes RDP         -> Hermes=1, direct=0
-open endpoint alone -> Hermes=0
-```
-
-Underlying signatures were:
-
-- non-loopback Windows `:3389` remote address -> direct LAN/VPN;
-- loopback `:3389` whose peer belongs to this device's Hermes `ssh.exe` -> Hermes.
-
-The latest performance refactor changed `Get-RdpConnectionSummary` from a full Established-TCP scan to limited RDP/exact-peer queries. Therefore the old PASS remains valid baseline evidence but **the newest agent must revalidate these three counters** before they are claimed PASS for current head.
-
-## Windows compatibility
-
-### Win10 x64 + x86 PowerShell
-
-Confirmed runtime environment/behavior:
-
-- 64-bit Windows;
-- 32-bit PowerShell under `SysWOW64`;
-- direct `System32` view redirected;
-- `Sysnative` reaches native Microsoft OpenSSH;
-- no PATH/Git-SSH fallback should be used.
-
-PR #19 implements native resolution and stores canonical `System32` SSH path in config.
-
-Status:
-
-- Sysnative runtime/probe behavior — PASS;
-- existing-install guard — PASS;
-- genuinely fresh full patched install launched from x86 PowerShell — **IMPLEMENTED, NOT VALIDATED**.
-
-### Windows Server
-
-Confirmed old bug: installer blocked `ProductType != 1` before its later Server edition check.
-
-Current PR allows ProductType 2/3 with regression coverage.
-
-Status: **IMPLEMENTED, NOT LIVE VALIDATED**. Real fresh Windows Server install is required.
-
-## Performance stabilization
-
-Before optimization on MIPC:
-
-```text
-all Established TCP connections   ~1059 ms
-RDP-only TCP query                ~516 ms
-full Win32_Process query          ~357 ms
-TOP-process sampling window       800 ms minimum
-```
-
-The old 3-second telemetry loop could spend most of its interval collecting diagnostics, matching observed RDP micro-freezes.
-
-Current PR implements:
+Current PR separates work into:
 
 ```text
 FAST ~3s
-heartbeat + commands + access + SSH + RDP channel
+heartbeat + commands + access + cached SSH state + lightweight RDP classification
 
 BACKGROUND ~15s
 CPU + RAM + disk + network + sessions + route + uptime
@@ -146,81 +90,91 @@ Telegram render ~3s
 then automatic stop
 ```
 
-Also:
+Live current-head timing on MIPC:
 
-- no full Established-TCP scan for normal RDP classification;
-- no background TOP-process polling;
-- narrowed/reused SSH process query;
-- no endless Telegram 3-second auto-render by default.
+```text
+SSH cached PID        avg 21.63 ms, max 73.51 ms
+.NET RDP snapshot     avg 19.68 ms, max 71.04 ms
+FAST core combined    avg 27.46 ms, max 43.69 ms
+SSH full refresh      avg 312.72 ms, max 401.56 ms
+```
 
-Status: **IMPLEMENTED + CI PASS, RUNTIME PERFORMANCE ACCEPTANCE PENDING**.
+The full SSH WMI refresh is periodic rather than ordinary per-cycle work.
 
-## Current-head targeted regression requirements
+Subjective acceptance on the current working Hermes path is now **PASS**: user reports smooth normal work, no noticeable lag/micro-freezes, and clear improvement over the previous build. Direct RDP inside the local network still feels somewhat more immediate, but Hermes RDP is accepted as good for normal work. No noticeable ~15-second periodic stall was reported during the acceptance window.
 
-Because latest code changed agent loop/classification/process detection, revalidate:
+Performance regression status: **RESOLVED FOR THE CURRENT TESTED WORKING PATH**.
 
-- exactly one Hermes `ssh.exe` in normal ON state;
-- OFF -> applied OFF + endpoint CLOSED;
-- ON -> one tunnel + endpoint OPEN;
-- direct RDP -> Hermes=0/direct=1;
-- Hermes RDP -> Hermes=1/direct=0;
-- endpoint open/no Hermes client -> Hermes=0.
+## Network/routing finding
 
-Do not re-run unrelated historical baselines without a regression reason.
+A temporary host-specific route bypassed Karing and proved real direct Wi-Fi RTT to Hermes around 85–95 ms. However, after recreating the reverse SSH tunnel on that direct route, subjective RDP became materially worse and the Windows RDP quality indicator dropped.
 
-## Telegram UX on current PR
+Therefore Karing cannot currently be treated as the sole/main cause of steady-state RDP lag, and direct routing is not automatically better in this environment. The accepted current working path should remain the baseline while regression smoke continues.
 
-Implemented:
+## RDP channel classification — current-head smoke still required
 
-- Russian user-facing state vocabulary;
-- separate Hermes and LAN/VPN RDP counters;
-- contextual ON/OFF/RESTART controls;
-- pending command state;
-- `НАБЛЮДАТЬ 60с` instead of permanent LIVE 3s.
+Pre-optimization live acceptance proved:
 
-Localization/observation behavior on the latest head still belongs to current live acceptance.
+```text
+direct LAN/VPN RDP  -> Hermes=0, direct=1
+Hermes RDP          -> Hermes=1, direct=0
+open endpoint alone -> Hermes=0
+```
+
+The newest agent changed implementation to .NET TCP snapshots plus conditional loopback peer correlation. Historical classification remains valid baseline evidence, but current head still needs explicit smoke for:
+
+- **RV-002:** active Hermes RDP -> `Hermes=1/direct=0`;
+- **RV-003:** endpoint/tunnel open with no Hermes client -> `Hermes=0`;
+- **RV-001:** direct LAN/VPN RDP -> `Hermes=0/direct=1`.
+
+## Control/current-head smoke still required
+
+Because process-cache/main-loop behavior changed, also revalidate:
+
+- **RV-004/RV-006:** OFF -> applied OFF + endpoint CLOSED; ON -> one tunnel + endpoint OPEN;
+- **RV-005:** exactly one Hermes `ssh.exe` in normal ON state.
+
+## Windows compatibility
+
+### Win10 x64 + x86 PowerShell
+
+Confirmed runtime behavior:
+
+- 64-bit Windows;
+- 32-bit PowerShell under `SysWOW64`;
+- direct `System32` view redirected;
+- `Sysnative` reaches native Microsoft OpenSSH;
+- no PATH/Git-SSH fallback should be used.
+
+PR #19 implements native resolution and stores canonical `System32` SSH path in config.
+
+Status:
+
+- Sysnative runtime/probe behavior — **PASS**;
+- existing-install guard — **PASS**;
+- genuinely fresh full patched install launched from x86 PowerShell — **IMPLEMENTED, NOT VALIDATED**.
+
+### Windows Server
+
+Confirmed old bug: installer blocked `ProductType != 1` before its later Server edition check.
+
+Current PR allows ProductType 2/3 with regression coverage.
+
+Status: **IMPLEMENTED, NOT LIVE VALIDATED**. Real fresh Windows Server install is required.
 
 ## CI
 
-PR head `586e944...` has green CI (#110) for Linux release checks, Python/static tests, PowerShell 5.1 parse and certificate pinning.
+Current PR head `c51ed8fa...` has green CI (#139), including Linux release checks and Windows PowerShell 5.1 parse/certificate pinning.
 
-CI proves source/static checks, not Windows Server install or live performance/observation/revalidation.
-
-## Deployment truth / provenance
-
-A pre-latest PR build is live and passed state/endpoint/RDP-channel baseline acceptance.
-
-The latest low-cost telemetry / observation / Windows Server head is not yet live-accepted.
-
-Current updater accepts a supplied repository ref but does not resolve/print/store the downloaded commit SHA. Therefore upcoming acceptance should deploy the **immutable PR head SHA directly** rather than mutable branch name. Resolved deployed-SHA recording belongs to the later updater/reliability stage.
+CI proves source/static checks, not remaining live acceptance scenarios.
 
 ## Immediate blockers before PR #19 merge
 
-1. immutable-head server deploy;
-2. identity-preserving MIPC agent update from same SHA;
-3. timing + subjective RDP performance acceptance;
-4. targeted current-head regression smoke;
-5. `НАБЛЮДАТЬ 60с` + auto-off acceptance;
-6. real Windows Server fresh install;
-7. fresh Win10 x64/x86-PowerShell e2e install;
-8. reconcile feature branch with advanced `main`, rerun CI, recheck mergeability.
+1. targeted current-head smoke RV-001..RV-006, one scenario at a time;
+2. `НАБЛЮДАТЬ 60с` + automatic stop acceptance;
+3. real Windows Server fresh install;
+4. fresh Win10 x64/x86-PowerShell full install;
+5. reconcile feature branch with advanced `main`, rerun CI, recheck mergeability;
+6. merge only after acceptance is green or remaining scenarios are explicitly split with evidence boundaries.
 
-After PR #19, continue recovery/device lifecycle/update/rollback, then docs/README, Website v2 and final release acceptance. Exact queue is in `NEXT_WORK.md`.
-
-## Context subsystem state
-
-As of 2026-08-08 project memory uses:
-
-- continuous event-driven checkpoints;
-- HOT/WARM/COLD layers;
-- canonical owner per fact;
-- evidence scope + `REVALIDATION REQUIRED`;
-- semantic staleness / `SUPERSEDED` retirement;
-- release evidence rotation;
-- soft size budgets / garbage collection;
-- archive index;
-- concurrent-writer reconciliation;
-- batched checkpoint preference;
-- PR/base-drift reconciliation before merge.
-
-`LAST_SESSION.md` is not authoritative. `LATEST_AUDIT.md` is retired to a pointer until a genuinely new deep audit is needed.
+Exact current order is maintained in `ACTIVE_WORK.md` / `NEXT_WORK.md`.
