@@ -53,8 +53,8 @@ A PASS proves the tested scenario/build boundary only. Relevant later code chang
 | WI-004 | Existing valid installation protected from duplicate Add destructive actions | PASS | Task remained Running, one Hermes SSH process remained, identity/port preserved. |
 | WI-005 | Old duplicate-add behavior could stop working task before pair failure | CONFIRMED BUG / RESOLVED ON TESTED BUILD | Reproduced before guard; later guard live-accepted. |
 | WI-006 | Windows Server incorrectly rejected by installer ProductType gate | CONFIRMED BUG | Real Windows Server reproduced the old client-only rejection; source logic confirmed contradiction. |
-| WI-007 | Windows Server ProductType fix allows real fresh install | PASS | Clean Windows Server 2019 Datacenter, ProductType=3, x64, PowerShell 5.1, no Hermes dir/task. Fresh immutable `586e944...` install reached `=== ГОТОВО ===`, created OpenSSH tunnel/task, assigned endpoint, and user confirmed it worked. `scripts/install-client.ps1` is byte-identical on `586e944...` and current PR head `c51ed8...`, directly validating the current ProductType fix. |
-| WI-008 | New Windows Server runs newest `c51ed8...` agent after install | PARTIAL PASS | Agent-only update to immutable `c51ed8...` completed with Task=`Running`; device ID, RDP port, config hash and private-key hash preserved; exactly one Hermes `ssh.exe`; .NET TCP fast path, 15-second SSH PID cache and loopback peer helper present; old executable `Get-NetTCPConnection` RDP path absent. Final proof that the assigned endpoint remains usable after this update is still required. |
+| WI-007 | Windows Server ProductType fix allows real fresh install | PASS | Clean Windows Server 2019 Datacenter, ProductType=3, x64, PowerShell 5.1, no Hermes dir/task. Fresh immutable install reached `=== ГОТОВО ===`, created OpenSSH tunnel/task and assigned endpoint; old client-only rejection did not occur. Installer code matched current PR implementation. |
+| WI-008 | Windows Server newest `c51ed8...` agent stack works end-to-end | PASS | Agent-only update to immutable `c51ed8...` preserved device ID, RDP port, config and private key; Task=`Running`; exactly one Hermes `ssh.exe`; expected fast-path markers present; real RDP connection through the assigned Hermes endpoint succeeded after the update. |
 
 ## Agent / telemetry performance
 
@@ -92,7 +92,7 @@ A PASS proves the tested scenario/build boundary only. Relevant later code chang
 | SV-003 | Immutable head `586e944...` deployed server-side | PASS | Both services active and rollback backup created. |
 | SV-004 | MIPC updated to `586e944...` without identity loss | PASS | Task Running; device ID, config hash, private-key hash and assigned port unchanged; exactly one Hermes `ssh.exe`; local backup created. |
 | SV-005 | MIPC updated to current agent head `c51ed8fa...` without identity loss | PASS | Task Running; identity/config/key/port unchanged; .NET TCP path, 15-second SSH PID cache and loopback peer helper present; executable `Get-NetTCPConnection` absent; rollback copy created. |
-| SV-006 | Windows Server updated in place to current agent head `c51ed8fa...` without identity loss | PASS | Task Running; device ID/port/config/key preserved; one Hermes SSH process; expected current-head fast-path markers present; rollback copy created. Endpoint usability is tracked separately in WI-008. |
+| SV-006 | Windows Server updated in place to current agent head `c51ed8fa...` without identity loss | PASS | Task Running; device ID/port/config/key preserved; one Hermes SSH process; expected current-head fast-path markers present; rollback copy created; subsequent real RDP connection succeeded. |
 
 ## Current-head revalidation obligations
 
@@ -123,10 +123,9 @@ Targeted current-head smoke RV-001..RV-006 is **COMPLETE**. Do not re-run wholes
 
 ## Remaining acceptance before merge
 
-1. prove the newly updated Windows Server endpoint remains usable over RDP on `c51ed8...`;
-2. fresh Win10 x64 full install launched from PowerShell x86;
-3. reconcile feature branch with current `main`, rerun CI and recheck mergeability;
-4. merge only after acceptance is green or remaining scenarios are explicitly split with evidence boundaries.
+1. fresh Win10 x64 full install launched from PowerShell x86;
+2. reconcile feature branch with current `main`, rerun CI and recheck mergeability;
+3. merge only after acceptance is green or remaining scenarios are explicitly split with evidence boundaries.
 
 ## Update triggers
 
