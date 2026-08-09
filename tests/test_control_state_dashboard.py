@@ -15,22 +15,29 @@ class ControlStateDashboardTests(unittest.TestCase):
         self.assertIn("$KeyPath", block)
         self.assertIn("Contains($KeyPath)", block)
         self.assertIn('-Filter "Name=\'ssh.exe\'"', block)
+        self.assertIn("$script:HermesSshPids", block)
+        self.assertIn("Get-Process -Id", block)
+        self.assertIn("$SshDiscoverySeconds", block)
         self.assertNotIn("0.0.0.0:$($Config.rdp_port):127.0.0.1:3389", block)
         self.assertIn("access_enabled", text)
         self.assertIn("ssh_process_count", text)
 
-    def test_agent_classifies_rdp_channel_without_public_endpoint_probe(self) -> None:
+    def test_agent_classifies_rdp_channel_without_heavy_nettcpip_probe(self) -> None:
         text = (ROOT / "client/HermesRdpAgent.ps1").read_text(encoding="utf-8-sig")
         self.assertIn("function Get-RdpConnectionSummary", text)
-        self.assertIn("-LocalPort 3389", text)
+        self.assertIn("IPGlobalProperties", text)
+        self.assertIn("GetActiveTcpConnections", text)
+        self.assertIn("TcpState]::Established", text)
+        self.assertIn("LocalEndPoint.Port -eq 3389", text)
+        self.assertIn("function Get-LoopbackPeerPid", text)
+        self.assertIn("netstat.exe", text)
         self.assertIn("rdp_hermes_connections", text)
         self.assertIn("rdp_direct_connections", text)
         self.assertIn("rdp_other_local_connections", text)
         self.assertIn("$HermesSshPids", text)
-        self.assertIn("OwningProcess", text)
         self.assertIn("127.0.0.1", text)
         self.assertIn("::1", text)
-        self.assertNotIn("Get-NetTCPConnection -State Established", text)
+        self.assertNotIn("Get-NetTCPConnection", text)
         self.assertNotIn("function Test-TcpPort", text)
         self.assertNotIn("$EndpointAvailable", text)
 
@@ -40,6 +47,7 @@ class ControlStateDashboardTests(unittest.TestCase):
             "$PollSeconds = 3",
             "$SlowTelemetrySeconds = 15",
             "$TopProcessesSeconds = 6",
+            "$SshDiscoverySeconds = 15",
             "function Get-SlowTelemetry",
             "telemetry_profile",
             "resource_captured_at",
