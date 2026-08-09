@@ -47,7 +47,11 @@ Server is live on immutable head `586e9446ea41262f1ed0d9c84ba72838a47d9bc5`.
 
 MIPC Windows agent is live on immutable head `c51ed8fa2c090dbc731a0c06f357d899846e90ae`.
 
-A newly added Windows Server 2019 Datacenter device was fresh-installed successfully using immutable ref `586e944...`. It currently runs the `586e944...` agent because that ref was passed as `RepositoryRef`. The installer script itself is byte-identical at `586e944...` and current PR head `c51ed8...`, so the ProductType fix is directly validated; only an agent-only update/smoke remains to put this Server on the newest current-head agent.
+A newly added Windows Server 2019 Datacenter device was first fresh-installed successfully using immutable ref `586e944...`. The installer script is byte-identical at `586e944...` and current PR head `c51ed8...`, so the Windows Server ProductType fix is directly live-validated.
+
+That Windows Server agent has now been updated in place to immutable `c51ed8...`. The update preserved device ID, assigned RDP port, config and private key; Scheduled Task is Running; exactly one Hermes `ssh.exe` is present; current-head .NET TCP/SSH-cache/loopback-peer markers are present and the old executable `Get-NetTCPConnection` RDP path is absent.
+
+One boundary remains: the assigned public RDP endpoint must still be proved usable after the current-head agent update.
 
 ## Stabilization acceptance — current
 
@@ -82,19 +86,21 @@ Old bug: installer rejected `ProductType != 1` before its later Server edition c
 
 Current implementation accepts ProductType 2/3 for recognized Windows Server editions.
 
-Real clean acceptance now proves:
+Live acceptance now proves:
 
 - Windows Server 2019 Datacenter, ProductType=3, x64, PowerShell 5.1;
-- no pre-existing Hermes directory/task;
+- no pre-existing Hermes directory/task before fresh install;
 - fresh installer completed to `=== ГОТОВО ===`;
-- OpenSSH tunnel/task created and persistent endpoint assigned;
-- user confirmed the added Server works;
-- old client-only rejection is gone.
+- old client-only rejection is gone;
+- current-head agent update to `c51ed8...` preserved identity/key/port/config;
+- Task=`Running` and one Hermes `ssh.exe` after update;
+- expected current-head fast-path implementation is installed.
 
 Status:
 
 - Windows Server installer/ProductType fix — **PASS**;
-- newest `c51ed8...` agent on that Server — **REVALIDATION REQUIRED** only because the successful fresh install used `RepositoryRef=586e944...`.
+- Windows Server current-head agent update — **PASS**;
+- post-update assigned RDP endpoint usability — **PENDING FINAL LIVE CONFIRMATION**.
 
 ## Stable accepted baseline
 
@@ -109,6 +115,7 @@ Do not re-run wholesale without a concrete regression reason:
 - MIPC fast-path/performance acceptance;
 - PF-008 observation auto-stop;
 - Windows Server ProductType=3 fresh installer acceptance;
+- Windows Server current-head agent update preserving identity/key/port and one-SSH state;
 - Win10 x64/x86 PowerShell Sysnative OpenSSH probe behavior.
 
 ## CI / PR state
@@ -117,7 +124,7 @@ Current PR head `c51ed8fa...` has green CI #139 from before the latest context-o
 
 ## Immediate blockers before PR #19 merge
 
-1. update the new Windows Server agent to immutable `c51ed8...` and smoke task/one-SSH/endpoint while preserving identity/key/port;
+1. prove the newly updated Windows Server endpoint remains usable over RDP;
 2. fresh Win10 x64 full install launched from PowerShell x86;
 3. reconcile feature branch with current `main`, rerun CI and recheck mergeability;
 4. merge only after acceptance is green or remaining scenarios are explicitly split with evidence boundaries.
