@@ -64,10 +64,10 @@ A PASS proves the tested scenario/build boundary only. Relevant later code chang
 | PF-004 | TOP-process sample has an 800 ms sampling window | CONFIRMED | Agent implementation. |
 | PF-005 | Old 3-second telemetry loop could consume most of its interval | CONFIRMED REGRESSION | Measured heavy operations aligned with observed RDP micro-freezes. |
 | PF-006 | First split fast/background/on-demand telemetry fully removes regression | FAIL / INCOMPLETE FIX | Heavy CPU/RAM/process work moved off 3s path, but RDP NetTCPIP + SSH WMI remained too expensive. |
-| PF-007 | Background resources ~15s, observe resources ~3s/TOP ~6s | IMPLEMENTED, NOT VALIDATED | Runtime cadence still needs observation. |
+| PF-007 | Background resources ~15s, observe resources ~3s/TOP ~6s | IMPLEMENTED, PARTIAL LIVE ACCEPTANCE | User did not notice periodic ~15-second stalls during the accepted current working RDP session; exact cadence/data correctness still belongs to observation-mode validation. |
 | PF-008 | `НАБЛЮДАТЬ 60с` automatically stops heavy telemetry/live render | IMPLEMENTED, NOT VALIDATED | Live 60-second lease acceptance required. |
-| PF-009 | Second fast-path optimization removes NetTCPIP/WMI bottleneck from ordinary 3s loop | PASS | Live on MIPC head `c51ed8fa...`: cached SSH PID avg 21.63 ms, .NET RDP snapshot avg 19.68 ms, combined FAST core avg 27.46 ms / max 43.69 ms. Full SSH WMI refresh remained ~312.72 ms avg but is no longer ordinary per-cycle work. Direct RDP was active, loopback count 0, so conditional netstat peer lookup was not exercised. |
-| PF-010 | Overall subjective RDP performance after second optimization | PARTIAL PASS / REVALIDATION REQUIRED | User reports RDP is better than before the fast-path refactor. Full smoothness and possible 15-second spikes are not yet accepted. |
+| PF-009 | Second fast-path optimization removes NetTCPIP/WMI bottleneck from ordinary 3s loop | PASS | Live on MIPC head `c51ed8fa...`: cached SSH PID avg 21.63 ms, .NET RDP snapshot avg 19.68 ms, combined FAST core avg 27.46 ms / max 43.69 ms. Full SSH WMI refresh remained ~312.72 ms avg but is no longer ordinary per-cycle work. Direct RDP was active, loopback count 0, so conditional netstat peer lookup was not exercised by this benchmark. |
+| PF-010 | Overall subjective RDP performance after second optimization | PASS | On the current working Hermes path, user reported normal work is comfortable, smooth and free of noticeable micro-freezes; clearly better than before. Direct RDP inside the local network still feels somewhat more immediate, but Hermes RDP is accepted as good for normal work. No noticeable ~15-second periodic stall was reported during the acceptance window. |
 
 ## Network / latency evidence
 
@@ -78,7 +78,8 @@ A PASS proves the tested scenario/build boundary only. Relevant later code chang
 | NW-003 | New SSH connection / remote banner timing through Karing | CONFIRMED WITH SCOPE | 10 remote SSH-banner samples: min 783.2 ms, avg 804.7 ms, max 870.9 ms. This is not RTT: it includes new TCP/proxy setup and waiting for the remote sshd banner. It proves high new-connection response cost through that path, not steady-state tunnel latency. |
 | NW-004 | End-to-end RDP negotiation through established Hermes tunnel | CONFIRMED | 10 samples from an external client: TCP connect median ~92 ms with one 1092.7 ms outlier; RDP response min 302.7 ms, median 332.4 ms, avg 350.1 ms, max 471.2 ms. This measures the client -> Hermes listener -> existing reverse tunnel -> MIPC RDP response path more directly than ICMP. |
 | NW-005 | Temporary Hermes-only direct-route bypass actually bypasses Karing | PASS | Host-specific route selected the physical Wi-Fi interface. Real Hermes ICMP became 85–95 ms, avg 89 ms, TTL 52 instead of local-TUN 0–3 ms / TTL 128. |
-| NW-006 | Direct Wi-Fi route improves steady-state Hermes RDP | FAIL | After deliberately recreating the Hermes SSH tunnel on the direct Wi-Fi route, dashboard briefly showed offline during the intentional transport break then recovered. User then reported RDP became substantially more laggy and Windows RDP connection-quality bars dropped. Therefore direct routing was worse in this environment; Karing cannot currently be blamed as the sole/main steady-state lag source. Revert the temporary bypass and restore the previous route before further acceptance. |
+| NW-006 | Direct Wi-Fi route improves steady-state Hermes RDP | FAIL | After deliberately recreating the Hermes SSH tunnel on the direct Wi-Fi route, dashboard briefly showed offline during the intentional transport break then recovered. User then reported RDP became substantially more laggy and Windows RDP connection-quality bars dropped. Therefore direct routing was worse in this environment; Karing cannot currently be blamed as the sole/main steady-state lag source. |
+| NW-007 | Current restored/working Hermes path is usable for normal RDP work | PASS | After returning to the working path, user reported smooth operation with no noticeable lag/micro-freezes and clear improvement over the pre-optimization behavior. |
 
 ## Deployment / provenance
 
@@ -95,10 +96,10 @@ A PASS proves the tested scenario/build boundary only. Relevant later code chang
 | ID | Scenario on newest fast-path head | Status | Why revalidate |
 |---|---|---|---|
 | RV-001 | Direct LAN/VPN RDP -> Hermes=0/direct=1 | REVALIDATION REQUIRED | New .NET classifier is installed; dashboard counter still needs explicit current-head smoke. |
-| RV-002 | Hermes RDP -> Hermes=1/direct=0 | REVALIDATION REQUIRED | Conditional native netstat loopback peer correlation has not yet been exercised live. |
+| RV-002 | Hermes RDP -> Hermes=1/direct=0 | REVALIDATION REQUIRED | Conditional native netstat loopback peer correlation has not yet been explicitly confirmed by current-head dashboard evidence. |
 | RV-003 | Open endpoint with no Hermes RDP client -> Hermes=0 | REVALIDATION REQUIRED | Confirms optimized classifier avoids false active-session count. |
 | RV-004 | Telegram OFF/ON command delivery and tunnel transition | REVALIDATION REQUIRED | Agent process-cache/main-loop behavior changed. |
-| RV-005 | Exactly one Hermes `ssh.exe` in normal ON state | PARTIAL PASS | Immediately after current-head update exactly one Hermes SSH process was present; repeat after restored routing and during ON smoke. |
+| RV-005 | Exactly one Hermes `ssh.exe` in normal ON state | PARTIAL PASS | Immediately after current-head update exactly one Hermes SSH process was present; repeat during ON smoke. |
 | RV-006 | Endpoint CLOSED/OFF and OPEN/ON on newest head | REVALIDATION REQUIRED | Full control path smoke still required after latest agent update. |
 
 ## Pairing behavior
