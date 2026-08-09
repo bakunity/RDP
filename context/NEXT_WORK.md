@@ -32,19 +32,9 @@ Already accepted and removed from the active test queue:
 - fast-path timing and subjective performance;
 - RV-001..RV-006 current-head regression smoke;
 - `НАБЛЮДАТЬ 60с` including automatic stop;
-- real clean Windows Server 2019 ProductType=3 fresh installer path and removal of the old client-only rejection;
-- in-place Windows Server agent update to immutable `c51ed8...` preserving identity/key/port/config with Task Running, one Hermes SSH process and expected fast-path markers.
+- full Windows Server 2019 ProductType=3 acceptance: clean install, current-head agent update preserving identity/key/port/config, one Hermes SSH process and successful real RDP connection through the assigned endpoint.
 
-### A. Windows Server final endpoint confirmation
-
-Only one Server acceptance item remains:
-
-- connect through the Server's assigned Hermes RDP endpoint after the `c51ed8...` agent update;
-- confirm a real RDP session opens successfully.
-
-Do not repeat the fresh installer or update-only checks unless this endpoint test fails.
-
-### B. Win10 x64 + x86 PowerShell final e2e
+### A. Win10 x64 + x86 PowerShell final e2e
 
 Runtime `Sysnative` resolver behavior is already proven.
 
@@ -52,9 +42,12 @@ Still required:
 
 - genuinely fresh patched installation launched from x86 PowerShell on x64 Win10;
 - Microsoft system OpenSSH selected without PATH/Git fallback;
-- key/task/tunnel/endpoint complete successfully.
+- key/task/tunnel/endpoint complete successfully;
+- real RDP connection through the assigned endpoint.
 
-### C. PR merge preparation
+Do not repeat the standalone Sysnative probe unless the fresh-install result contradicts it.
+
+### B. PR merge preparation
 
 Continuous context-only commits advanced `main` while PR #19 stayed on its older base.
 
@@ -68,7 +61,7 @@ Before merge:
 
 ### PR #19 merge gate
 
-Merge only when A–C are accepted, or consciously split a remaining scenario into a follow-up with explicit evidence boundary.
+Merge only when A–B are accepted, or consciously split a remaining scenario into a follow-up with explicit evidence boundary.
 
 ## Stage 2 — recovery / lifecycle matrix
 
