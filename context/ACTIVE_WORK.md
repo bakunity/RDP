@@ -52,11 +52,23 @@ FAST core combined    avg 27.46 ms, max 43.69 ms
 SSH full refresh      avg 312.72 ms, max 401.56 ms
 ```
 
-During this benchmark one non-loopback/direct RDP connection was present, so conditional native `netstat` peer correlation was not invoked.
+During this benchmark one non-loopback/direct RDP connection was present, so conditional native `netstat` peer correlation was not invoked by that benchmark.
 
 Conclusion: **ordinary fast-path timing PASS**. The confirmed NetTCPIP/WMI bottleneck has been removed from the normal 3-second path.
 
-Subjective result after the second optimization: user reported RDP is **better**, but not yet fully smooth.
+### Subjective runtime acceptance
+
+After the second optimization and route experiments, the current working Hermes RDP session was used normally for an extended short acceptance window. User reported:
+
+- work is comfortable;
+- no noticeable lag/micro-freezes;
+- motion/interaction is smooth;
+- Hermes RDP is clearly better than before the optimization;
+- direct RDP inside the local network still feels somewhat more immediate, as expected, but Hermes RDP is now considered good for normal work.
+
+No noticeable ~15-second periodic stall was reported during this acceptance window.
+
+Conclusion: **subjective RDP performance PASS for the current working Hermes path**. The original user-visible micro-freeze regression is considered resolved for this scenario.
 
 ### Network latency diagnosis
 
@@ -91,20 +103,19 @@ RDP response avg 350.1 ms
 RDP response max 471.2 ms
 ```
 
-A temporary host-specific route was then added on MIPC to bypass Karing for Hermes only. Route selection moved to the physical Wi-Fi interface; real ICMP to Hermes became `85–95 ms`, avg `89 ms`, TTL 52, confirming the bypass.
+A temporary host-specific route was added on MIPC to bypass Karing for Hermes only. Route selection moved to the physical Wi-Fi interface; real ICMP to Hermes became `85–95 ms`, avg `89 ms`, TTL 52, confirming the bypass.
 
 The Hermes `ssh.exe` transport was deliberately killed once so the agent would reconnect over that direct route. Dashboard briefly showed MIPC offline during the intentional transport break, then recovered when the agent created a new tunnel.
 
 Important A/B result: **after the tunnel reconnected over the direct Wi-Fi route, subjective RDP became substantially worse and the Windows RDP connection-quality indicator dropped**. Therefore the working hypothesis “Karing is the main cause of the steady-state RDP lag” is weakened; direct routing is not an improvement in this environment.
 
-Current action: revert the temporary `/32` bypass, recreate the Hermes SSH tunnel back on the prior Karing route, confirm service recovery, then continue performance acceptance from the restored baseline.
+The current subjective acceptance establishes that the restored/working Hermes path is smooth enough for normal use. No further routing experiment is required before continuing current-head regression smoke.
 
-Overall performance regression is **not yet fully closed** until:
+Remaining performance-related validation is narrower:
 
-1. restored-route subjective RDP smoothness is accepted;
-2. the 15-second background telemetry cadence is checked for noticeable periodic spikes;
-3. Hermes loopback RDP exercises the conditional `netstat` peer path;
-4. current end-to-end latency is separated into network/TUN vs Windows/RDP vs Hermes-agent components without assuming direct routing is better.
+1. explicitly exercise and verify Hermes loopback RDP classification (`Hermes=1/direct=0`) on current head;
+2. verify endpoint-open/no-client classification remains `Hermes=0`;
+3. test `НАБЛЮДАТЬ 60с` cadence + automatic stop.
 
 ## Stable live baseline
 
@@ -115,9 +126,10 @@ Do not re-prove wholesale:
 - tested Windows reboot recovery;
 - existing-install guard;
 - raw Win10 x64 + x86 PowerShell `Sysnative` visibility/probe;
-- earlier state/endpoint/RDP classification baseline.
+- earlier state/endpoint/RDP classification baseline;
+- current-head ordinary fast-path timing and subjective smoothness on the accepted working Hermes path.
 
-Relevant behavior touched by the newest fast-path refactor remains under targeted revalidation.
+Relevant classifier/control behavior touched by the newest fast-path refactor still needs targeted revalidation only.
 
 ## Windows Server
 
@@ -129,17 +141,13 @@ Status: **IMPLEMENTED; REAL FRESH WINDOWS SERVER INSTALL PENDING**.
 
 ## Exact next engineering stage
 
-1. remove the temporary Hermes-only direct route and restore prior Karing routing;
-2. recreate the Hermes SSH tunnel and confirm dashboard/endpoint recovery with exactly one Hermes `ssh.exe`;
-3. re-check subjective RDP behavior on the restored route;
-4. check whether 15-second background telemetry causes a visible/measurable periodic spike;
-5. targeted current-head smoke:
-   - one Hermes `ssh.exe`;
-   - OFF -> applied OFF + endpoint CLOSED;
-   - ON -> one tunnel + endpoint OPEN;
-   - direct LAN/VPN RDP -> Hermes=0/direct=1;
-   - Hermes RDP -> Hermes=1/direct=0 and exercises loopback peer correlation;
-   - endpoint open with no Hermes RDP client -> Hermes=0;
+Targeted current-head smoke, one scenario at a time. Because a Hermes RDP session is currently usable, start with:
+
+1. **RV-002:** while connected through Hermes, dashboard must report `Hermes=1/direct=0`; this also exercises the loopback peer-correlation path;
+2. **RV-003:** keep endpoint/tunnel open with no Hermes RDP client; dashboard must report `Hermes=0`;
+3. **RV-001:** direct LAN/VPN RDP must report `Hermes=0/direct=1`;
+4. **RV-004/RV-006:** OFF -> applied OFF + endpoint CLOSED; ON -> one tunnel + endpoint OPEN;
+5. **RV-005:** exactly one Hermes `ssh.exe` in normal ON state;
 6. test `НАБЛЮДАТЬ 60с` + automatic stop;
 7. real fresh Windows Server install;
 8. fresh patched install from Win10 x64 + PowerShell x86;
