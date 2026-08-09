@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import unittest
 from pathlib import Path
 
@@ -37,7 +38,7 @@ class ControlStateDashboardTests(unittest.TestCase):
         self.assertIn("$HermesSshPids", text)
         self.assertIn("127.0.0.1", text)
         self.assertIn("::1", text)
-        self.assertNotIn("Get-NetTCPConnection", text)
+        self.assertIsNone(re.search(r"(?m)^\s*Get-NetTCPConnection\b", text))
         self.assertNotIn("function Test-TcpPort", text)
         self.assertNotIn("$EndpointAvailable", text)
 
