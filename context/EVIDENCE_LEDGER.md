@@ -52,8 +52,9 @@ A PASS proves the tested scenario/build boundary only. Relevant later code chang
 | WI-003 | Patched fresh full install from x86 PowerShell | IMPLEMENTED, NOT VALIDATED | Resolver exists; final clean e2e install remains. |
 | WI-004 | Existing valid installation protected from duplicate Add destructive actions | PASS | Task remained Running, one Hermes SSH process remained, identity/port preserved. |
 | WI-005 | Old duplicate-add behavior could stop working task before pair failure | CONFIRMED BUG / RESOLVED ON TESTED BUILD | Reproduced before guard; later guard live-accepted. |
-| WI-006 | Windows Server incorrectly rejected by installer ProductType gate | CONFIRMED BUG | Real Windows Server reproduced the client-only rejection; source logic confirmed contradiction. |
-| WI-007 | Windows Server support after ProductType fix | IMPLEMENTED, NOT VALIDATED | ProductType 2/3 support + regression test exist; real fresh install remains. |
+| WI-006 | Windows Server incorrectly rejected by installer ProductType gate | CONFIRMED BUG | Real Windows Server reproduced the old client-only rejection; source logic confirmed contradiction. |
+| WI-007 | Windows Server ProductType fix allows real fresh install | PASS | Clean Windows Server 2019 Datacenter, ProductType=3, x64, PowerShell 5.1, no Hermes dir/task. Fresh immutable `586e944...` install reached `=== ГОТОВО ===`, created OpenSSH tunnel/task, assigned endpoint, and user confirmed it works. `scripts/install-client.ps1` blob is identical on `586e944...` and current PR head `c51ed8...`, so this directly validates the current ProductType fix. |
+| WI-008 | New Windows Server runs newest `c51ed8...` agent after install | REVALIDATION REQUIRED | Fresh install used `RepositoryRef=586e944...`, so the installed agent is still `586e944...`; update-only current-head smoke is required before calling the full current-head Windows Server stack accepted. |
 
 ## Agent / telemetry performance
 
@@ -65,8 +66,8 @@ A PASS proves the tested scenario/build boundary only. Relevant later code chang
 | PF-004 | TOP-process sample has an 800 ms sampling window | CONFIRMED | Agent implementation. |
 | PF-005 | Old 3-second telemetry loop could consume most of its interval | CONFIRMED REGRESSION | Measured heavy operations aligned with observed RDP micro-freezes. |
 | PF-006 | First split fast/background/on-demand telemetry fully removes regression | FAIL / INCOMPLETE FIX | Heavy CPU/RAM/process work moved off 3s path, but RDP NetTCPIP + SSH WMI remained too expensive. |
-| PF-007 | Background resources ~15s, observe resources ~3s/TOP ~6s | PARTIAL PASS | Current-head observation mode live card showed resource age ~3s and populated TOP snapshot age 7s while the 60s countdown was active; automatic stop still needs final proof. |
-| PF-008 | `НАБЛЮДАТЬ 60с` automatically stops heavy telemetry/live render | PARTIAL PASS | Activation and cadence are live-proven: countdown active, resources updating at observation cadence, TOP populated. Final requirement is automatic return to `Наблюдение выключено` after lease expiry without manual stop. |
+| PF-007 | Background resources ~15s, observe resources ~3s/TOP ~6s | PASS | Current-head observation card showed resource age ~3s and populated TOP snapshot age 7s while countdown was active; ordinary background behavior remained healthy before/after observation. |
+| PF-008 | `НАБЛЮДАТЬ 60с` automatically stops heavy telemetry/live render | PASS | Live current-head sequence proved countdown/live resource+TOP cadence, then automatic return to `Наблюдение выключено` after lease expiry without manual stop. |
 | PF-009 | Second fast-path optimization removes NetTCPIP/WMI bottleneck from ordinary 3s loop | PASS | Live on MIPC head `c51ed8fa...`: cached SSH PID avg 21.63 ms, .NET RDP snapshot avg 19.68 ms, combined FAST core avg 27.46 ms / max 43.69 ms. Full SSH WMI refresh remained ~312.72 ms avg but is no longer ordinary per-cycle work. |
 | PF-010 | Overall subjective RDP performance after second optimization | PASS | On the accepted working Hermes path, user reported normal work is comfortable, smooth and free of noticeable micro-freezes; clearly better than before. No noticeable ~15-second periodic stall was reported. |
 
@@ -121,12 +122,11 @@ Targeted current-head smoke RV-001..RV-006 is **COMPLETE**. Do not re-run wholes
 
 ## Remaining acceptance before merge
 
-1. complete PF-008 by proving `НАБЛЮДАТЬ 60с` automatically stops after lease expiry;
-2. real fresh Windows Server install;
-3. fresh Win10 x64 full install launched from PowerShell x86;
-4. reconcile feature branch with current `main`, rerun CI and recheck mergeability;
-5. merge only after acceptance is green or remaining scenarios are explicitly split with evidence boundaries.
+1. update the newly installed Windows Server agent to immutable `c51ed8...` and smoke task/one-SSH/endpoint without changing identity/key/port;
+2. fresh Win10 x64 full install launched from PowerShell x86;
+3. reconcile feature branch with current `main`, rerun CI and recheck mergeability;
+4. merge only after acceptance is green or remaining scenarios are explicitly split with evidence boundaries.
 
 ## Update triggers
 
-Update this ledger when live acceptance becomes PASS/FAIL, a root cause is confirmed, deployment provenance changes, a fix is live-accepted, or relevant code invalidates an older PASS. Do not add routine commands or speculative ideas.
+Update this ledger when live acceptance becomes PASS/FAIL, a root cause is confirmed, deployment provenance changes, a fix is live-accepted, or relevant code invalidates an older PASS. Do not add routine commands, pairing codes, tokens or speculative ideas.
