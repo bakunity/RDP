@@ -9,12 +9,15 @@ $SshErrorLog = Join-Path $BaseDir 'ssh-error.log'
 $PollSeconds = 3
 $SlowTelemetrySeconds = 15
 $TopProcessesSeconds = 6
+$SshDiscoverySeconds = 15
 $script:Http = $null
 $script:LiveTelemetry = $false
 $script:SlowTelemetry = $null
 $script:SlowTelemetryCapturedAt = 0
 $script:TopProcesses = @()
 $script:TopProcessesCapturedAt = 0
+$script:HermesSshPids = @()
+$script:SshDiscoveryCapturedAt = 0
 
 $PinnedHttpClientSource = @'
 using System;
@@ -167,10 +170,41 @@ function Invoke-ApiPost {
 }
 
 function Get-SshProcesses {
-    # Query only ssh.exe instead of scanning every Win32_Process row.
-    # The private key path is unique per Hermes device.
+    param([switch]$ForceRefresh)
+
+    $Now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    $CacheAge = $Now - [int64]$script:SshDiscoveryCapturedAt
+
+    if (-not $ForceRefresh -and $CacheAge -lt $SshDiscoverySeconds) {
+        $Cached = @()
+        $CacheValid = $true
+        foreach ($PidValue in @($script:HermesSshPids)) {
+            try {
+                $Process = Get-Process -Id ([int]$PidValue) -ErrorAction Stop
+                if ($Process.ProcessName -ne 'ssh') {
+                    $CacheValid = $false
+                    break
+                }
+                $Cached += [pscustomobject]@{
+                    ProcessId = [int]$Process.Id
+                    ExecutablePath = try { [string]$Process.Path } catch { '' }
+                    CommandLine = $null
+                }
+            }
+            catch {
+                $CacheValid = $false
+                break
+            }
+        }
+        if ($CacheValid) {
+            return @($Cached)
+        }
+    }
+
+    # Full WMI discovery is intentionally outside the normal 3-second path.
+    # It runs at startup, periodically, or immediately after cached PID loss.
     $KeyPath = [string]$Config.ssh_key_path
-    return @(
+    $Matches = @(
         Get-CimInstance `
             Win32_Process `
             -Filter "Name='ssh.exe'" `
@@ -179,6 +213,12 @@ function Get-SshProcesses {
                 $_.CommandLine -and $_.CommandLine.Contains($KeyPath)
             }
     )
+
+    $script:HermesSshPids = @(
+        $Matches | ForEach-Object { [int]$_.ProcessId }
+    )
+    $script:SshDiscoveryCapturedAt = $Now
+    return @($Matches)
 }
 
 function Start-SshTunnel {
@@ -243,14 +283,18 @@ function Start-SshTunnel {
         }
         throw "SSH завершился с кодом $($Process.ExitCode): $Detail"
     }
+    $script:HermesSshPids = @([int]$Process.Id)
+    $script:SshDiscoveryCapturedAt = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
     return "SSH-туннель запущен, PID $($Process.Id)"
 }
 
 function Stop-SshTunnel {
-    $Processes = @(Get-SshProcesses)
+    $Processes = @(Get-SshProcesses -ForceRefresh)
     foreach ($Process in $Processes) {
         Stop-Process -Id $Process.ProcessId -Force -ErrorAction SilentlyContinue
     }
+    $script:HermesSshPids = @()
+    $script:SshDiscoveryCapturedAt = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
     return "SSH-туннель остановлен ($($Processes.Count) процессов)"
 }
 
@@ -322,18 +366,81 @@ function Get-NetworkTotals {
     return @($Received, $Sent)
 }
 
+function ConvertFrom-NetstatEndpoint {
+    param([string]$Endpoint)
+
+    if ([string]::IsNullOrWhiteSpace($Endpoint)) {
+        return $null
+    }
+    if ($Endpoint -match '^\[(.+)\]:(\d+)$') {
+        return [pscustomobject]@{
+            address = [string]$Matches[1]
+            port = [int]$Matches[2]
+        }
+    }
+    if ($Endpoint -match '^(.+):(\d+)$') {
+        return [pscustomobject]@{
+            address = [string]$Matches[1]
+            port = [int]$Matches[2]
+        }
+    }
+    return $null
+}
+
+function Get-LoopbackPeerPid {
+    param(
+        [int]$ClientPort,
+        [int]$ServerPort = 3389
+    )
+
+    $LoopbackAddresses = @('127.0.0.1', '::1')
+    try {
+        $NetstatPath = Join-Path $env:WINDIR 'System32\netstat.exe'
+        foreach ($Line in @(& $NetstatPath -ano -p tcp 2>$null)) {
+            $Fields = @($Line.Trim() -split '\s+')
+            if ($Fields.Count -lt 5 -or $Fields[0] -ne 'TCP') {
+                continue
+            }
+            $Local = ConvertFrom-NetstatEndpoint -Endpoint $Fields[1]
+            $Remote = ConvertFrom-NetstatEndpoint -Endpoint $Fields[2]
+            if (-not $Local -or -not $Remote) {
+                continue
+            }
+            if (
+                $Local.port -eq $ClientPort -and
+                $Remote.port -eq $ServerPort -and
+                $LoopbackAddresses -contains $Local.address -and
+                $LoopbackAddresses -contains $Remote.address
+            ) {
+                return [int]$Fields[-1]
+            }
+        }
+    }
+    catch {
+    }
+    return 0
+}
+
 function Get-RdpConnectionSummary {
     param([object[]]$SshProcesses = @())
 
-    # Query only local RDP connections. A second exact-port query is made only
-    # for loopback sessions so we can prove that the peer PID is Hermes ssh.exe.
+    # Use the in-process .NET TCP table for the normal fast path. This avoids
+    # the expensive NetTCPIP/CIM provider behind Get-NetTCPConnection.
     $LoopbackAddresses = @('127.0.0.1', '::1')
-    $RdpConnections = @(
-        Get-NetTCPConnection `
-            -LocalPort 3389 `
-            -State Established `
-            -ErrorAction SilentlyContinue
-    )
+    $RdpConnections = @()
+    try {
+        $RdpConnections = @(
+            [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().GetActiveTcpConnections() |
+                Where-Object {
+                    $_.State -eq [System.Net.NetworkInformation.TcpState]::Established -and
+                    $_.LocalEndPoint.Port -eq 3389
+                }
+        )
+    }
+    catch {
+        $RdpConnections = @()
+    }
+
     $HermesSshPids = @(
         $SshProcesses |
             ForEach-Object { [int]($_.ProcessId) }
@@ -346,7 +453,8 @@ function Get-RdpConnectionSummary {
     $DirectRemoteAddresses = @()
 
     foreach ($Connection in $RdpConnections) {
-        $RemoteAddress = [string]$Connection.RemoteAddress
+        $RemoteAddress = [string]$Connection.RemoteEndPoint.Address
+        $RemotePort = [int]$Connection.RemoteEndPoint.Port
         if ($RemoteAddress -and $RemoteAddresses -notcontains $RemoteAddress) {
             $RemoteAddresses += $RemoteAddress
         }
@@ -362,23 +470,10 @@ function Get-RdpConnectionSummary {
             continue
         }
 
-        $Peer = @(
-            Get-NetTCPConnection `
-                -LocalPort ([int]$Connection.RemotePort) `
-                -RemotePort 3389 `
-                -State Established `
-                -ErrorAction SilentlyContinue |
-                Where-Object {
-                    $LoopbackAddresses -contains [string]($_.LocalAddress) -and
-                    $LoopbackAddresses -contains [string]($_.RemoteAddress)
-                } |
-                Select-Object -First 1
-        )
-
-        if (
-            $Peer.Count -gt 0 -and
-            $HermesSshPids -contains [int]($Peer[0].OwningProcess)
-        ) {
+        # PID lookup is needed only for an actual loopback RDP session. A
+        # native netstat snapshot is used instead of a second NetTCPIP query.
+        $PeerPid = Get-LoopbackPeerPid -ClientPort $RemotePort -ServerPort 3389
+        if ($PeerPid -gt 0 -and $HermesSshPids -contains $PeerPid) {
             $HermesCount += 1
         }
         else {
@@ -638,6 +733,7 @@ $State = Get-AgentState
 
 if ($State.enabled) {
     try {
+        [void](Get-SshProcesses -ForceRefresh)
         [void](Start-SshTunnel)
     }
     catch {
