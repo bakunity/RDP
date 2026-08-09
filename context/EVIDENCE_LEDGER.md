@@ -67,7 +67,15 @@ A PASS proves the tested scenario/build boundary only. Relevant later code chang
 | PF-007 | Background resources ~15s, observe resources ~3s/TOP ~6s | IMPLEMENTED, NOT VALIDATED | Runtime cadence still needs observation. |
 | PF-008 | `НАБЛЮДАТЬ 60с` automatically stops heavy telemetry/live render | IMPLEMENTED, NOT VALIDATED | Live 60-second lease acceptance required. |
 | PF-009 | Second fast-path optimization removes NetTCPIP/WMI bottleneck from ordinary 3s loop | PASS | Live on MIPC head `c51ed8fa...`: cached SSH PID avg 21.63 ms, .NET RDP snapshot avg 19.68 ms, combined FAST core avg 27.46 ms / max 43.69 ms. Full SSH WMI refresh remained ~312.72 ms avg but is no longer ordinary per-cycle work. Direct RDP was active, loopback count 0, so conditional netstat peer lookup was not exercised. |
-| PF-010 | Overall subjective RDP performance after second optimization | REVALIDATION REQUIRED | Fast-path timing is green; user-visible smoothness and possible 15-second background spikes still need acceptance. |
+| PF-010 | Overall subjective RDP performance after second optimization | PARTIAL PASS / REVALIDATION REQUIRED | User reports RDP is better. Full smoothness and possible 15-second spikes are not yet accepted. |
+
+## Network / latency evidence
+
+| ID | Scenario | Status | Evidence / boundary |
+|---|---|---|---|
+| NW-001 | External client PC -> public Hermes RTT | CONFIRMED | 30 ICMP samples: 0% loss, min 86 ms, avg 101 ms, max 129 ms. This is already a meaningful latency floor for that client-to-VPS leg. |
+| NW-002 | MIPC `ping` / TCP-connect to public Hermes directly measures physical VPS latency | INVALIDATED | MIPC showed ICMP 0–3 ms and TCP connect avg 6.2 ms, but routing inspection proved the destination is intercepted locally by `Karing TUN Network Adapter` (ifIndex 63, local 10.20.0.1, next hop 10.20.0.2); `tracert` reports the public Hermes IP as one hop `<1 ms`. Those timings measure the local TUN/proxy acceptance path, not guaranteed remote VPS RTT. |
+| NW-003 | Actual MIPC -> Hermes latency through Karing | REVALIDATION REQUIRED | Need a remote-response/application measurement that cannot complete at the local TUN edge, e.g. SSH banner first-byte on Hermes `:7000`, before estimating end-to-end Hermes RDP latency. |
 
 ## Deployment / provenance
 
