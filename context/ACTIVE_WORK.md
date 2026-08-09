@@ -52,20 +52,15 @@ FAST core combined    avg 27.46 ms, max 43.69 ms
 SSH full refresh      avg 312.72 ms, max 401.56 ms
 ```
 
-During this benchmark:
-
-- one RDP connection was present;
-- it was non-loopback/direct;
-- loopback RDP count was zero;
-- therefore native `netstat` peer correlation was not invoked.
+During this benchmark one non-loopback/direct RDP connection was present, so conditional native `netstat` peer correlation was not invoked.
 
 Conclusion: **ordinary fast-path timing PASS**. The confirmed NetTCPIP/WMI bottleneck has been removed from the normal 3-second path.
 
-Subjective result after the second optimization: user reported RDP is **better**, but not yet declared fully smooth.
+Subjective result after the second optimization: user reported RDP is **better**, but not yet fully smooth.
 
 ### Network latency diagnosis
 
-A real client PC outside MIPC measured the public Hermes host at:
+External client -> public Hermes host:
 
 ```text
 ICMP loss 0%
@@ -74,18 +69,42 @@ RTT avg 101 ms
 RTT max 129 ms
 ```
 
-This is valid evidence that the client-to-Hermes leg alone is already about 100 ms average RTT.
+MIPC initially appeared to reach the public Hermes host in `0–3 ms` by ICMP and `1.5–9 ms` by TCP connect. Routing inspection proved those values were local TUN/proxy acceptance timings: the destination was intercepted by `Karing TUN Network Adapter`, and `tracert` reported the public host as one-hop `<1 ms`.
 
-MIPC initially appeared to reach the same public Hermes host in `0–3 ms` by ICMP and `1.5–9 ms` by TCP connect. Those numbers are **not valid physical MIPC-to-Hermes latency**. Routing inspection proved traffic to the public Hermes IP is intercepted by `Karing TUN Network Adapter` (`ifIndex 63`, local `10.20.0.1`, next hop `10.20.0.2`), and `tracert` reports the public Hermes IP as a one-hop `<1 ms` destination. Therefore local TCP-connect timing can measure the TUN/proxy acceptance path rather than remote VPS latency.
+A remote SSH-banner measurement through Karing then returned:
 
-Next latency step: measure a remote-response/application timing that must traverse the Karing path (for example SSH banner first-byte on Hermes `:7000`), then combine that with client-side RTT/RDP input-delay evidence. Do not sum the invalid `6.2 ms` MIPC TCP-connect figure into an end-to-end latency estimate.
+```text
+min 783.2 ms
+avg 804.7 ms
+max 870.9 ms
+```
+
+This is **not RTT**; it includes new TCP/proxy setup plus waiting for the real remote SSH banner. It proves that new remote-response setup through the Karing path is expensive, but does not by itself measure steady-state RDP latency.
+
+A client-side RDP negotiation probe through the already-established Hermes tunnel then measured:
+
+```text
+TCP connect median ~92 ms (one 1092.7 ms outlier)
+RDP response min 302.7 ms
+RDP response median 332.4 ms
+RDP response avg 350.1 ms
+RDP response max 471.2 ms
+```
+
+A temporary host-specific route was then added on MIPC to bypass Karing for Hermes only. Route selection moved to the physical Wi-Fi interface; real ICMP to Hermes became `85–95 ms`, avg `89 ms`, TTL 52, confirming the bypass.
+
+The Hermes `ssh.exe` transport was deliberately killed once so the agent would reconnect over that direct route. Dashboard briefly showed MIPC offline during the intentional transport break, then recovered when the agent created a new tunnel.
+
+Important A/B result: **after the tunnel reconnected over the direct Wi-Fi route, subjective RDP became substantially worse and the Windows RDP connection-quality indicator dropped**. Therefore the working hypothesis “Karing is the main cause of the steady-state RDP lag” is weakened; direct routing is not an improvement in this environment.
+
+Current action: revert the temporary `/32` bypass, recreate the Hermes SSH tunnel back on the prior Karing route, confirm service recovery, then continue performance acceptance from the restored baseline.
 
 Overall performance regression is **not yet fully closed** until:
 
-1. subjective RDP smoothness is accepted;
+1. restored-route subjective RDP smoothness is accepted;
 2. the 15-second background telemetry cadence is checked for noticeable periodic spikes;
 3. Hermes loopback RDP exercises the conditional `netstat` peer path;
-4. current end-to-end latency is separated into network/TUN vs Windows/RDP vs Hermes-agent components.
+4. current end-to-end latency is separated into network/TUN vs Windows/RDP vs Hermes-agent components without assuming direct routing is better.
 
 ## Stable live baseline
 
@@ -110,21 +129,22 @@ Status: **IMPLEMENTED; REAL FRESH WINDOWS SERVER INSTALL PENDING**.
 
 ## Exact next engineering stage
 
-1. measure actual MIPC -> Hermes remote-response latency through Karing rather than local TUN connect latency;
-2. correlate that with client -> Hermes RTT and RDP input delay / subjective smoothness;
-3. check whether 15-second background telemetry causes a visible/measurable periodic spike;
-4. targeted current-head smoke:
+1. remove the temporary Hermes-only direct route and restore prior Karing routing;
+2. recreate the Hermes SSH tunnel and confirm dashboard/endpoint recovery with exactly one Hermes `ssh.exe`;
+3. re-check subjective RDP behavior on the restored route;
+4. check whether 15-second background telemetry causes a visible/measurable periodic spike;
+5. targeted current-head smoke:
    - one Hermes `ssh.exe`;
    - OFF -> applied OFF + endpoint CLOSED;
    - ON -> one tunnel + endpoint OPEN;
    - direct LAN/VPN RDP -> Hermes=0/direct=1;
    - Hermes RDP -> Hermes=1/direct=0 and exercises loopback peer correlation;
    - endpoint open with no Hermes RDP client -> Hermes=0;
-5. test `НАБЛЮДАТЬ 60с` + automatic stop;
-6. real fresh Windows Server install;
-7. fresh patched install from Win10 x64 + PowerShell x86;
-8. reconcile PR #19 with current `main`, rerun CI/recheck mergeability;
-9. merge only after acceptance is green or remaining scenarios are explicitly split with evidence boundaries.
+6. test `НАБЛЮДАТЬ 60с` + automatic stop;
+7. real fresh Windows Server install;
+8. fresh patched install from Win10 x64 + PowerShell x86;
+9. reconcile PR #19 with current `main`, rerun CI/recheck mergeability;
+10. merge only after acceptance is green or remaining scenarios are explicitly split with evidence boundaries.
 
 ## Context rule
 
