@@ -61,11 +61,31 @@ During this benchmark:
 
 Conclusion: **ordinary fast-path timing PASS**. The confirmed NetTCPIP/WMI bottleneck has been removed from the normal 3-second path.
 
+Subjective result after the second optimization: user reported RDP is **better**, but not yet declared fully smooth.
+
+### Network latency diagnosis
+
+A real client PC outside MIPC measured the public Hermes host at:
+
+```text
+ICMP loss 0%
+RTT min 86 ms
+RTT avg 101 ms
+RTT max 129 ms
+```
+
+This is valid evidence that the client-to-Hermes leg alone is already about 100 ms average RTT.
+
+MIPC initially appeared to reach the same public Hermes host in `0–3 ms` by ICMP and `1.5–9 ms` by TCP connect. Those numbers are **not valid physical MIPC-to-Hermes latency**. Routing inspection proved traffic to the public Hermes IP is intercepted by `Karing TUN Network Adapter` (`ifIndex 63`, local `10.20.0.1`, next hop `10.20.0.2`), and `tracert` reports the public Hermes IP as a one-hop `<1 ms` destination. Therefore local TCP-connect timing can measure the TUN/proxy acceptance path rather than remote VPS latency.
+
+Next latency step: measure a remote-response/application timing that must traverse the Karing path (for example SSH banner first-byte on Hermes `:7000`), then combine that with client-side RTT/RDP input-delay evidence. Do not sum the invalid `6.2 ms` MIPC TCP-connect figure into an end-to-end latency estimate.
+
 Overall performance regression is **not yet fully closed** until:
 
-1. subjective RDP smoothness is confirmed;
+1. subjective RDP smoothness is accepted;
 2. the 15-second background telemetry cadence is checked for noticeable periodic spikes;
-3. Hermes loopback RDP exercises the conditional `netstat` peer path.
+3. Hermes loopback RDP exercises the conditional `netstat` peer path;
+4. current end-to-end latency is separated into network/TUN vs Windows/RDP vs Hermes-agent components.
 
 ## Stable live baseline
 
@@ -90,20 +110,21 @@ Status: **IMPLEMENTED; REAL FRESH WINDOWS SERVER INSTALL PENDING**.
 
 ## Exact next engineering stage
 
-1. confirm subjective RDP smoothness on the current MIPC agent;
-2. check whether 15-second background telemetry causes a visible/measureable periodic spike;
-3. targeted current-head smoke:
+1. measure actual MIPC -> Hermes remote-response latency through Karing rather than local TUN connect latency;
+2. correlate that with client -> Hermes RTT and RDP input delay / subjective smoothness;
+3. check whether 15-second background telemetry causes a visible/measurable periodic spike;
+4. targeted current-head smoke:
    - one Hermes `ssh.exe`;
    - OFF -> applied OFF + endpoint CLOSED;
    - ON -> one tunnel + endpoint OPEN;
    - direct LAN/VPN RDP -> Hermes=0/direct=1;
    - Hermes RDP -> Hermes=1/direct=0 and exercises loopback peer correlation;
    - endpoint open with no Hermes RDP client -> Hermes=0;
-4. test `НАБЛЮДАТЬ 60с` + automatic stop;
-5. real fresh Windows Server install;
-6. fresh patched install from Win10 x64 + PowerShell x86;
-7. reconcile PR #19 with current `main`, rerun CI/recheck mergeability;
-8. merge only after acceptance is green or remaining scenarios are explicitly split with evidence boundaries.
+5. test `НАБЛЮДАТЬ 60с` + automatic stop;
+6. real fresh Windows Server install;
+7. fresh patched install from Win10 x64 + PowerShell x86;
+8. reconcile PR #19 with current `main`, rerun CI/recheck mergeability;
+9. merge only after acceptance is green or remaining scenarios are explicitly split with evidence boundaries.
 
 ## Context rule
 
