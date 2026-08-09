@@ -19,71 +19,55 @@ Server remains on immutable head `586e9446ea41262f1ed0d9c84ba72838a47d9bc5`.
 
 MIPC Windows agent is on immutable head `c51ed8fa2c090dbc731a0c06f357d899846e90ae`.
 
-The split is intentional: changes after `586e944...` are Windows-agent/test only, so no Linux redeploy was required.
+The newly added Windows Server 2019 Datacenter device is also running the immutable `c51ed8...` agent after an in-place update that preserved device ID, assigned RDP port, config and private key.
 
-## MIPC stabilization — COMPLETE
+## Accepted stabilization blocks
 
-Current-head MIPC acceptance is green:
+### MIPC — COMPLETE
 
-- ordinary fast-path timing **PASS**: cached SSH PID avg 21.63 ms, .NET RDP snapshot avg 19.68 ms, combined FAST core avg 27.46 ms / max 43.69 ms;
-- subjective Hermes RDP smoothness **PASS**: no noticeable micro-freezes on the accepted working route;
+- ordinary fast-path timing **PASS**;
+- subjective Hermes RDP smoothness **PASS**;
 - RV-001..RV-006 targeted smoke **PASS**;
-- `НАБЛЮДАТЬ 60с` **PF-008 PASS**: countdown/live resource+TOP cadence worked and observation automatically returned to `Наблюдение выключено` after lease expiry without manual stop.
+- `НАБЛЮДАТЬ 60с` / PF-008 including automatic stop **PASS**.
 
-Do not repeat these checks without a concrete regression reason.
+### Windows Server — COMPLETE
 
-## Windows Server acceptance — ACTIVE STAGE
+Real clean Windows Server 2019 Datacenter acceptance is fully green:
 
-Real clean baseline/fresh install:
-
-- Windows Server 2019 Datacenter;
-- ProductType `3`;
-- x64 OS + x64 PowerShell 5.1;
-- no pre-existing Hermes directory/task;
-- fresh immutable `586e944...` install reached `=== ГОТОВО ===`;
-- old client-only ProductType rejection did not occur;
-- OpenSSH tunnel/task were created and the user confirmed the newly added Server worked.
-
-`scripts/install-client.ps1` is byte-identical at `586e944...` and current PR head `c51ed8...`, therefore the Windows Server installer/ProductType fix itself is **PASS**.
-
-The Server agent has now been updated in place to immutable `c51ed8fa2c090dbc731a0c06f357d899846e90ae` with a local backup. Live post-update evidence:
-
-- Scheduled Task = `Running`;
-- device ID preserved;
-- assigned RDP port preserved;
-- config hash unchanged;
-- private-key hash unchanged;
+- ProductType `3`, x64, PowerShell 5.1, no pre-existing Hermes dir/task;
+- fresh installer reached `=== ГОТОВО ===` and old client-only rejection did not occur;
+- installer/ProductType fix is live-proven;
+- agent updated to immutable `c51ed8...` preserving identity/key/port/config;
+- Scheduled Task=`Running`;
 - exactly one Hermes `ssh.exe`;
-- .NET TCP fast path present;
-- SSH PID cache present with 15-second discovery interval;
-- loopback peer helper present;
-- executable old `Get-NetTCPConnection` RDP path absent.
+- .NET TCP fast path, 15-second SSH PID cache and loopback peer helper present;
+- old executable `Get-NetTCPConnection` RDP path absent;
+- real RDP connection through the assigned Hermes endpoint succeeded after the current-head update.
 
-This is **current-head agent update PASS**. One final Windows Server acceptance check remains: prove the assigned RDP endpoint is still usable after this `c51ed8...` update. Do not infer endpoint usability from process state alone.
+Do not repeat MIPC or Windows Server acceptance without a concrete regression reason.
 
-Exact next action: connect to this Windows Server through its assigned Hermes RDP endpoint after the `c51ed8...` update and confirm the session opens. If yes, Windows Server current-head acceptance is complete.
+## Current stage — Win10 x64 + PowerShell x86 fresh install
 
-## Stable live baseline
+Raw runtime behavior is already proven: on x64 Windows launched under 32-bit PowerShell, `Sysnative` reaches native Microsoft OpenSSH and the resolver avoids PATH/Git SSH fallback.
 
-Do not re-prove wholesale:
+What remains is one real end-to-end fresh install on a clean Win10 x64 machine launched specifically from PowerShell x86.
 
-- OpenSSH reverse RDP end-to-end;
-- external-network RDP;
-- tested Windows reboot recovery;
-- existing-install guard;
-- Win10 x64 + x86 PowerShell native `Sysnative` OpenSSH visibility/probe;
-- MIPC fast-path/performance acceptance;
-- RV-001..RV-006 current-head smoke;
-- PF-008 observation-mode acceptance;
-- Windows Server ProductType=3 fresh-installer acceptance;
-- Windows Server `c51ed8...` in-place agent update preserving identity/key/port and one-SSH state.
+Acceptance target:
+
+- clean Hermes state before install;
+- 64-bit OS + 32-bit PowerShell process confirmed;
+- patched installer used from immutable current code;
+- native Microsoft OpenSSH selected through Sysnative/canonical System32 handling;
+- key/task/tunnel/endpoint complete successfully;
+- real RDP connection through the assigned endpoint works.
+
+Exact next action: collect the Win10 pre-install baseline only. Do not run the installer until the baseline is reviewed.
 
 ## Remaining PR #19 acceptance
 
-1. confirm the newly updated Windows Server endpoint is actually usable over RDP;
-2. fresh patched Win10 x64 full install launched from PowerShell x86;
-3. reconcile PR #19 with current `main`, rerun CI and recheck mergeability;
-4. merge only after acceptance is green or remaining scenarios are explicitly split with evidence boundaries.
+1. fresh patched Win10 x64 full install launched from PowerShell x86;
+2. reconcile PR #19 with current `main`, rerun CI and recheck mergeability;
+3. merge only after acceptance is green or remaining scenarios are explicitly split with evidence boundaries.
 
 ## Context rule
 
