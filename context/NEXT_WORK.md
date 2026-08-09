@@ -1,6 +1,6 @@
 # Hermes RDP — Next Work / Goal Vector
 
-Updated: 2026-08-08
+Updated: 2026-08-10
 
 For exact immediate action read `ACTIVE_WORK.md`. This file is the remaining product-level queue; completed work is removed rather than kept for history.
 
@@ -18,95 +18,35 @@ Ship a stable self-hosted product where a user can:
 8. update safely without losing access;
 9. operate the system from coherent documentation.
 
-## Stable baseline — do not re-prove wholesale
-
-The following have real baseline evidence:
-
-- OpenSSH reverse RDP architecture works;
-- external-network RDP works;
-- tested Windows reboot recovery works;
-- Telegram OFF/ON works on the previously accepted build;
-- server endpoint CLOSED/OFF + OPEN/ON works on the previously accepted stabilization build;
-- direct vs Hermes RDP classification works on the pre-optimization classifier;
-- existing-install guard works;
-- Win10 x86 PowerShell can reach native Microsoft OpenSSH through `Sysnative`.
-
-Important evidence rule: the newest low-cost telemetry/main-loop refactor touches RDP classification, SSH process detection and command polling. Therefore **targeted current-head smoke is required for those touched paths**. This is not a request to repeat the whole historical acceptance matrix.
-
 ## Current release target
 
 **Hermes RDP v1.2.0 — Stabilization**
 
-Active implementation: PR #19, `fix/control-state-dashboard`.
+Active implementation: PR #19, `fix/control-state-dashboard`, current head `c51ed8fa2c090dbc731a0c06f357d899846e90ae`.
 
 ## Stage 1 — finish PR #19 acceptance
 
-### A. Immutable current-head deployment
+Already accepted and removed from the active test queue:
 
-For acceptance, deploy/update using the exact PR head SHA rather than mutable branch name so server and Windows agent provenance is known.
+- immutable MIPC update with identity/key/port preservation;
+- fast-path timing and subjective performance;
+- RV-001..RV-006 current-head regression smoke;
+- `НАБЛЮДАТЬ 60с` including automatic stop;
+- real clean Windows Server 2019 ProductType=3 fresh installer path and removal of the old client-only rejection.
 
-Current acceptance head at this checkpoint:
+### A. Windows Server current-head agent smoke
 
-```text
-586e9446ea41262f1ed0d9c84ba72838a47d9bc5
-```
+The successful clean Server install used immutable `RepositoryRef=586e944...`. `scripts/install-client.ps1` is byte-identical at `586e944...` and `c51ed8...`, so the installer/ProductType fix is already PASS. The Server still runs the older agent because of the supplied RepositoryRef.
 
-Future updater reliability work should resolve/store/print deployed commit SHA automatically; current updater only stores the supplied ref.
+Remaining acceptance:
 
-### B. Telemetry performance
+- update only the Server `HermesRdpAgent.ps1` to immutable `c51ed8...`;
+- preserve device ID, key and assigned port;
+- Scheduled Task remains/runs correctly;
+- exactly one Hermes `ssh.exe`;
+- assigned public endpoint remains usable.
 
-Implemented model:
-
-```text
-FAST ~3s
-heartbeat + commands + access + SSH + RDP channel
-
-BACKGROUND ~15s
-CPU + RAM + disk + network + sessions + route + uptime
-
-OBSERVE 60s
-resources ~3s
-TOP processes ~6s
-Telegram refresh ~3s
-auto-off after 60s
-```
-
-Acceptance:
-
-- update MIPC preserving identity/key/port;
-- re-measure cost;
-- verify RDP micro-freezes disappear or materially reduce;
-- verify background resource cadence;
-- verify explicit observation enables detailed telemetry;
-- verify observation/3s redraw stops automatically after 60s.
-
-### C. Targeted current-head regression smoke
-
-Because the optimization changed previously accepted paths, verify on the new agent:
-
-- one Hermes `ssh.exe` in normal ON state;
-- OFF still applies and closes endpoint;
-- ON restores exactly one tunnel and opens endpoint;
-- direct LAN/VPN RDP -> Hermes=0/direct=1;
-- Hermes RDP -> Hermes=1/direct=0;
-- open endpoint with no Hermes RDP client -> Hermes=0.
-
-No need to re-run unrelated external-RDP/reboot/Sysnative baseline tests here.
-
-### D. Windows Server installer
-
-Confirmed old bug: client-only `ProductType != 1` rejection.
-
-Fix supports ProductType 2/3 with regression coverage.
-
-Acceptance:
-
-- real fresh Windows Server install from the same immutable head;
-- task/tunnel/endpoint online;
-- assigned RDP endpoint usable;
-- no old client-only rejection.
-
-### E. Win10 x64 + x86 PowerShell final e2e
+### B. Win10 x64 + x86 PowerShell final e2e
 
 Runtime `Sysnative` resolver behavior is already proven.
 
@@ -116,7 +56,7 @@ Still required:
 - Microsoft system OpenSSH selected without PATH/Git fallback;
 - key/task/tunnel/endpoint complete successfully.
 
-### F. PR merge preparation
+### C. PR merge preparation
 
 Continuous context-only commits advanced `main` while PR #19 stayed on its older base.
 
@@ -130,7 +70,7 @@ Before merge:
 
 ### PR #19 merge gate
 
-Merge only when A–F are accepted, or consciously split a remaining scenario into a follow-up with explicit evidence boundary.
+Merge only when A–C are accepted, or consciously split a remaining scenario into a follow-up with explicit evidence boundary.
 
 ## Stage 2 — recovery / lifecycle matrix
 
@@ -189,7 +129,7 @@ failure
  -> verify previous health
 ```
 
-The updater currently does **not** resolve/print/store exact downloaded commit when given a mutable branch ref; fix this in this stage.
+Current updater still does not resolve/print/store exact downloaded commit when given a mutable branch ref.
 
 ### Windows client updater
 
@@ -258,4 +198,4 @@ Before release:
 
 ## Context-system follow-up
 
-The durable memory architecture is now designed for continuous checkpoint + compaction. One optional future improvement remains: a lightweight automated context-hygiene/lint check (required files, freshness headers/links, size warnings, obvious contradictory status patterns). Do this only after PR #19 merge/reconciliation so context tooling does not further complicate the active feature-branch base drift.
+Optional after PR #19 merge/reconciliation: lightweight context-hygiene/lint checks for required files, freshness, size and obvious contradictory status patterns.
