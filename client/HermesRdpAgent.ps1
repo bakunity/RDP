@@ -187,8 +187,6 @@ function Get-SshProcesses {
                 }
                 $Cached += [pscustomobject]@{
                     ProcessId = [int]$Process.Id
-                    ExecutablePath = try { [string]$Process.Path } catch { '' }
-                    CommandLine = $null
                 }
             }
             catch {
