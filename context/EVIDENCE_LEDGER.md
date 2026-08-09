@@ -67,15 +67,18 @@ A PASS proves the tested scenario/build boundary only. Relevant later code chang
 | PF-007 | Background resources ~15s, observe resources ~3s/TOP ~6s | IMPLEMENTED, NOT VALIDATED | Runtime cadence still needs observation. |
 | PF-008 | `НАБЛЮДАТЬ 60с` automatically stops heavy telemetry/live render | IMPLEMENTED, NOT VALIDATED | Live 60-second lease acceptance required. |
 | PF-009 | Second fast-path optimization removes NetTCPIP/WMI bottleneck from ordinary 3s loop | PASS | Live on MIPC head `c51ed8fa...`: cached SSH PID avg 21.63 ms, .NET RDP snapshot avg 19.68 ms, combined FAST core avg 27.46 ms / max 43.69 ms. Full SSH WMI refresh remained ~312.72 ms avg but is no longer ordinary per-cycle work. Direct RDP was active, loopback count 0, so conditional netstat peer lookup was not exercised. |
-| PF-010 | Overall subjective RDP performance after second optimization | PARTIAL PASS / REVALIDATION REQUIRED | User reports RDP is better. Full smoothness and possible 15-second spikes are not yet accepted. |
+| PF-010 | Overall subjective RDP performance after second optimization | PARTIAL PASS / REVALIDATION REQUIRED | User reports RDP is better than before the fast-path refactor. Full smoothness and possible 15-second spikes are not yet accepted. |
 
 ## Network / latency evidence
 
 | ID | Scenario | Status | Evidence / boundary |
 |---|---|---|---|
 | NW-001 | External client PC -> public Hermes RTT | CONFIRMED | 30 ICMP samples: 0% loss, min 86 ms, avg 101 ms, max 129 ms. This is already a meaningful latency floor for that client-to-VPS leg. |
-| NW-002 | MIPC `ping` / TCP-connect to public Hermes directly measures physical VPS latency | INVALIDATED | MIPC showed ICMP 0–3 ms and TCP connect avg 6.2 ms, but routing inspection proved the destination is intercepted locally by `Karing TUN Network Adapter` (ifIndex 63, local 10.20.0.1, next hop 10.20.0.2); `tracert` reports the public Hermes IP as one hop `<1 ms`. Those timings measure the local TUN/proxy acceptance path, not guaranteed remote VPS RTT. |
-| NW-003 | Actual MIPC -> Hermes latency through Karing | REVALIDATION REQUIRED | Need a remote-response/application measurement that cannot complete at the local TUN edge, e.g. SSH banner first-byte on Hermes `:7000`, before estimating end-to-end Hermes RDP latency. |
+| NW-002 | MIPC `ping` / TCP-connect while Karing owns the route directly measures physical VPS latency | INVALIDATED | MIPC showed ICMP 0–3 ms and TCP connect avg 6.2 ms, but routing inspection proved the destination was intercepted locally by `Karing TUN Network Adapter`; one-hop `<1 ms` traceroute confirmed those values were local TUN/proxy acceptance timings, not remote VPS RTT. |
+| NW-003 | New SSH connection / remote banner timing through Karing | CONFIRMED WITH SCOPE | 10 remote SSH-banner samples: min 783.2 ms, avg 804.7 ms, max 870.9 ms. This is not RTT: it includes new TCP/proxy setup and waiting for the remote sshd banner. It proves high new-connection response cost through that path, not steady-state tunnel latency. |
+| NW-004 | End-to-end RDP negotiation through established Hermes tunnel | CONFIRMED | 10 samples from an external client: TCP connect median ~92 ms with one 1092.7 ms outlier; RDP response min 302.7 ms, median 332.4 ms, avg 350.1 ms, max 471.2 ms. This measures the client -> Hermes listener -> existing reverse tunnel -> MIPC RDP response path more directly than ICMP. |
+| NW-005 | Temporary Hermes-only direct-route bypass actually bypasses Karing | PASS | Host-specific route selected the physical Wi-Fi interface. Real Hermes ICMP became 85–95 ms, avg 89 ms, TTL 52 instead of local-TUN 0–3 ms / TTL 128. |
+| NW-006 | Direct Wi-Fi route improves steady-state Hermes RDP | FAIL | After deliberately recreating the Hermes SSH tunnel on the direct Wi-Fi route, dashboard briefly showed offline during the intentional transport break then recovered. User then reported RDP became substantially more laggy and Windows RDP connection-quality bars dropped. Therefore direct routing was worse in this environment; Karing cannot currently be blamed as the sole/main steady-state lag source. Revert the temporary bypass and restore the previous route before further acceptance. |
 
 ## Deployment / provenance
 
@@ -95,7 +98,7 @@ A PASS proves the tested scenario/build boundary only. Relevant later code chang
 | RV-002 | Hermes RDP -> Hermes=1/direct=0 | REVALIDATION REQUIRED | Conditional native netstat loopback peer correlation has not yet been exercised live. |
 | RV-003 | Open endpoint with no Hermes RDP client -> Hermes=0 | REVALIDATION REQUIRED | Confirms optimized classifier avoids false active-session count. |
 | RV-004 | Telegram OFF/ON command delivery and tunnel transition | REVALIDATION REQUIRED | Agent process-cache/main-loop behavior changed. |
-| RV-005 | Exactly one Hermes `ssh.exe` in normal ON state | PARTIAL PASS | Immediately after current-head update exactly one Hermes SSH process was present; repeat during ON smoke. |
+| RV-005 | Exactly one Hermes `ssh.exe` in normal ON state | PARTIAL PASS | Immediately after current-head update exactly one Hermes SSH process was present; repeat after restored routing and during ON smoke. |
 | RV-006 | Endpoint CLOSED/OFF and OPEN/ON on newest head | REVALIDATION REQUIRED | Full control path smoke still required after latest agent update. |
 
 ## Pairing behavior
