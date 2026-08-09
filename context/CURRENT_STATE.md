@@ -1,6 +1,6 @@
 # Hermes RDP — Current State Snapshot
 
-Updated: 2026-08-09
+Updated: 2026-08-10
 
 For immediate operational truth read `ACTIVE_WORK.md`; for scenario-level proof/revalidation read `EVIDENCE_LEDGER.md`.
 
@@ -43,96 +43,22 @@ Durable boundaries:
 
 ## Deployment truth
 
-Server is live on immutable head:
+Server is live on immutable head `586e9446ea41262f1ed0d9c84ba72838a47d9bc5`.
 
-`586e9446ea41262f1ed0d9c84ba72838a47d9bc5`
+MIPC Windows agent is live on immutable head `c51ed8fa2c090dbc731a0c06f357d899846e90ae`.
 
-MIPC Windows agent is live on immutable head:
+A newly added Windows Server 2019 Datacenter device was fresh-installed successfully using immutable ref `586e944...`. It currently runs the `586e944...` agent because that ref was passed as `RepositoryRef`. The installer script itself is byte-identical at `586e944...` and current PR head `c51ed8...`, so the ProductType fix is directly validated; only an agent-only update/smoke remains to put this Server on the newest current-head agent.
 
-`c51ed8fa2c090dbc731a0c06f357d899846e90ae`
+## Stabilization acceptance — current
 
-The split is intentional: changes after `586e944...` in the active PR are Windows-agent/test only, so no Linux redeploy was required.
+The MIPC stabilization block is accepted on `c51ed8...`:
 
-Current-head MIPC update preserved device ID, assigned RDP port, config and private key; Scheduled Task remained Running and exactly one Hermes `ssh.exe` was present immediately after update. The installed agent contains the .NET TCP fast path, 15-second SSH PID cache and loopback peer helper, with the old executable `Get-NetTCPConnection` RDP path removed.
-
-## Stable accepted baseline
-
-Real testing has confirmed on accepted builds:
-
-- OpenSSH reverse RDP end-to-end;
-- external-network RDP;
-- Windows reboot -> automatic Hermes recovery -> RDP usable;
-- Telegram OFF interrupts access and ON restores it;
-- OFF can correctly remain `agent online + desired/applied off + SSH disconnected + endpoint closed`;
-- Linux server listener authoritatively reports assigned endpoint CLOSED/OPEN;
-- existing-install guard preserves working identity/key/port;
-- Win10 x64 under x86 PowerShell reaches native Microsoft OpenSSH through `Sysnative`.
-
-Do not re-run these wholesale without a concrete regression reason.
-
-## Performance stabilization — accepted for current working path
-
-The original micro-freeze regression was traced to expensive work inside the old 3-second agent loop, including NetTCPIP and WMI queries.
-
-Current PR separates work into:
-
-```text
-FAST ~3s
-heartbeat + commands + access + cached SSH state + lightweight RDP classification
-
-BACKGROUND ~15s
-CPU + RAM + disk + network + sessions + route + uptime
-
-OBSERVE 60s
-resources ~3s
-TOP processes ~6s
-Telegram render ~3s
-then automatic stop
-```
-
-Live current-head timing on MIPC:
-
-```text
-SSH cached PID        avg 21.63 ms, max 73.51 ms
-.NET RDP snapshot     avg 19.68 ms, max 71.04 ms
-FAST core combined    avg 27.46 ms, max 43.69 ms
-SSH full refresh      avg 312.72 ms, max 401.56 ms
-```
-
-The full SSH WMI refresh is periodic rather than ordinary per-cycle work.
-
-Subjective acceptance on the current working Hermes path is now **PASS**: user reports smooth normal work, no noticeable lag/micro-freezes, and clear improvement over the previous build. Direct RDP inside the local network still feels somewhat more immediate, but Hermes RDP is accepted as good for normal work. No noticeable ~15-second periodic stall was reported during the acceptance window.
+- fast-path timing PASS;
+- subjective smooth Hermes RDP PASS;
+- RV-001..RV-006 targeted classification/control/process smoke PASS;
+- `НАБЛЮДАТЬ 60с` PF-008 PASS, including automatic stop after lease expiry.
 
 Performance regression status: **RESOLVED FOR THE CURRENT TESTED WORKING PATH**.
-
-## Network/routing finding
-
-A temporary host-specific route bypassed Karing and proved real direct Wi-Fi RTT to Hermes around 85–95 ms. However, after recreating the reverse SSH tunnel on that direct route, subjective RDP became materially worse and the Windows RDP quality indicator dropped.
-
-Therefore Karing cannot currently be treated as the sole/main cause of steady-state RDP lag, and direct routing is not automatically better in this environment. The accepted current working path should remain the baseline while regression smoke continues.
-
-## RDP channel classification — current-head smoke still required
-
-Pre-optimization live acceptance proved:
-
-```text
-direct LAN/VPN RDP  -> Hermes=0, direct=1
-Hermes RDP          -> Hermes=1, direct=0
-open endpoint alone -> Hermes=0
-```
-
-The newest agent changed implementation to .NET TCP snapshots plus conditional loopback peer correlation. Historical classification remains valid baseline evidence, but current head still needs explicit smoke for:
-
-- **RV-002:** active Hermes RDP -> `Hermes=1/direct=0`;
-- **RV-003:** endpoint/tunnel open with no Hermes client -> `Hermes=0`;
-- **RV-001:** direct LAN/VPN RDP -> `Hermes=0/direct=1`.
-
-## Control/current-head smoke still required
-
-Because process-cache/main-loop behavior changed, also revalidate:
-
-- **RV-004/RV-006:** OFF -> applied OFF + endpoint CLOSED; ON -> one tunnel + endpoint OPEN;
-- **RV-005:** exactly one Hermes `ssh.exe` in normal ON state.
 
 ## Windows compatibility
 
@@ -140,41 +66,58 @@ Because process-cache/main-loop behavior changed, also revalidate:
 
 Confirmed runtime behavior:
 
-- 64-bit Windows;
-- 32-bit PowerShell under `SysWOW64`;
-- direct `System32` view redirected;
+- 64-bit Windows under 32-bit PowerShell experiences WOW64 redirection;
 - `Sysnative` reaches native Microsoft OpenSSH;
-- no PATH/Git-SSH fallback should be used.
-
-PR #19 implements native resolution and stores canonical `System32` SSH path in config.
+- installer resolver stores canonical `System32` path and avoids PATH/Git SSH fallback.
 
 Status:
 
-- Sysnative runtime/probe behavior — **PASS**;
+- raw Sysnative visibility/probe — **PASS**;
 - existing-install guard — **PASS**;
 - genuinely fresh full patched install launched from x86 PowerShell — **IMPLEMENTED, NOT VALIDATED**.
 
 ### Windows Server
 
-Confirmed old bug: installer blocked `ProductType != 1` before its later Server edition check.
+Old bug: installer rejected `ProductType != 1` before its later Server edition check.
 
-Current PR allows ProductType 2/3 with regression coverage.
+Current implementation accepts ProductType 2/3 for recognized Windows Server editions.
 
-Status: **IMPLEMENTED, NOT LIVE VALIDATED**. Real fresh Windows Server install is required.
+Real clean acceptance now proves:
 
-## CI
+- Windows Server 2019 Datacenter, ProductType=3, x64, PowerShell 5.1;
+- no pre-existing Hermes directory/task;
+- fresh installer completed to `=== ГОТОВО ===`;
+- OpenSSH tunnel/task created and persistent endpoint assigned;
+- user confirmed the added Server works;
+- old client-only rejection is gone.
 
-Current PR head `c51ed8fa...` has green CI (#139), including Linux release checks and Windows PowerShell 5.1 parse/certificate pinning.
+Status:
 
-CI proves source/static checks, not remaining live acceptance scenarios.
+- Windows Server installer/ProductType fix — **PASS**;
+- newest `c51ed8...` agent on that Server — **REVALIDATION REQUIRED** only because the successful fresh install used `RepositoryRef=586e944...`.
+
+## Stable accepted baseline
+
+Do not re-run wholesale without a concrete regression reason:
+
+- OpenSSH reverse RDP end-to-end;
+- external-network RDP;
+- tested Windows reboot recovery;
+- Telegram OFF/ON and endpoint CLOSED/OPEN truth;
+- existing-install guard;
+- current-head MIPC RV-001..RV-006;
+- MIPC fast-path/performance acceptance;
+- PF-008 observation auto-stop;
+- Windows Server ProductType=3 fresh installer acceptance;
+- Win10 x64/x86 PowerShell Sysnative OpenSSH probe behavior.
+
+## CI / PR state
+
+Current PR head `c51ed8fa...` has green CI #139 from before the latest context-only `main` commits. PR remains open and must be reconciled with advanced `main`, then CI/mergeability rechecked before merge.
 
 ## Immediate blockers before PR #19 merge
 
-1. targeted current-head smoke RV-001..RV-006, one scenario at a time;
-2. `НАБЛЮДАТЬ 60с` + automatic stop acceptance;
-3. real Windows Server fresh install;
-4. fresh Win10 x64/x86-PowerShell full install;
-5. reconcile feature branch with advanced `main`, rerun CI, recheck mergeability;
-6. merge only after acceptance is green or remaining scenarios are explicitly split with evidence boundaries.
-
-Exact current order is maintained in `ACTIVE_WORK.md` / `NEXT_WORK.md`.
+1. update the new Windows Server agent to immutable `c51ed8...` and smoke task/one-SSH/endpoint while preserving identity/key/port;
+2. fresh Win10 x64 full install launched from PowerShell x86;
+3. reconcile feature branch with current `main`, rerun CI and recheck mergeability;
+4. merge only after acceptance is green or remaining scenarios are explicitly split with evidence boundaries.
