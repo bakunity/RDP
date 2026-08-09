@@ -15,44 +15,57 @@ Purpose: first operational file after `context/README.md`. Contains current work
 
 ## Deployment truth
 
-Server and MIPC currently run immutable head `586e9446ea41262f1ed0d9c84ba72838a47d9bc5`.
+Server remains on immutable head `586e9446ea41262f1ed0d9c84ba72838a47d9bc5`.
 
-Accepted deployment facts:
+MIPC Windows agent is now on immutable head `c51ed8fa2c090dbc731a0c06f357d899846e90ae`.
 
-- both Hermes server services active after immutable updater run;
-- server rollback backup created;
-- MIPC Scheduled Task Running;
-- `device_id`, assigned port, `device.json` and private SSH key unchanged;
+This split is intentional: the diff from `586e944...` to `c51ed8fa...` changes only `client/HermesRdpAgent.ps1` and its static test; server code is unchanged.
+
+Latest MIPC update proved:
+
+- Scheduled Task = `Running`;
+- `device_id`, assigned RDP port, `device.json` and private SSH key unchanged;
 - exactly one Hermes `ssh.exe` immediately after update;
-- local Windows rollback copy created.
-
-New PR head `c51ed8fa...` changes only `client/HermesRdpAgent.ps1` + its static test relative to deployed `586e944...`; server code is unchanged, so no Linux redeploy is required for the next performance acceptance.
+- `.NET` TCP fast path present;
+- Hermes SSH PID cache present with 15-second rediscovery interval;
+- loopback peer helper present;
+- executable `Get-NetTCPConnection` call absent from the installed agent;
+- local rollback copy created.
 
 ## Performance acceptance state
 
-First runtime benchmark on deployed low-cost head `586e944...` showed the telemetry split helped, but the fast path remained too expensive:
+First runtime benchmark on `586e944...` showed the first telemetry split was incomplete:
 
 ```text
 SSH filtered lookup   avg ~256 ms
 RDP :3389 query       avg ~829 ms, max ~1347 ms
-CPU telemetry         avg ~358 ms   (15s/background)
-OS + RAM              avg ~289 ms   (15s/background)
-Disk                   avg ~35 ms   (15s/background)
-Network                avg ~271 ms  (15s/background; noisy max)
 ```
 
-Conclusion: **performance fix is not yet PASS**. The remaining fast-path bottlenecks were the NetTCPIP RDP query and repeated WMI SSH lookup.
+Those two operations were still too expensive for an ordinary 3-second path.
 
-Current PR head `c51ed8fa...` implements a second optimization:
+Second optimization on current head `c51ed8fa...` was then installed and measured live on MIPC:
 
-- normal RDP discovery uses in-process `.NET IPGlobalProperties.GetActiveTcpConnections()` instead of `Get-NetTCPConnection`;
-- native `netstat -ano -p tcp` is used only when an actual loopback RDP connection needs peer-PID correlation;
-- Hermes SSH PIDs are cached;
-- normal 3-second SSH checks use cheap `Get-Process -Id`;
-- full `Win32_Process` discovery is moved out of the ordinary fast path and refreshed periodically / after cache loss;
-- PowerShell 5.1 parse and full CI #139 are PASS.
+```text
+SSH cached PID        avg 21.63 ms, max 73.51 ms
+.NET RDP snapshot     avg 19.68 ms, max 71.04 ms
+FAST core combined    avg 27.46 ms, max 43.69 ms
+SSH full refresh      avg 312.72 ms, max 401.56 ms
+```
 
-Status: **IMPLEMENTED + CI PASS; MIPC LIVE UPDATE/BENCHMARK PENDING**.
+During this benchmark:
+
+- one RDP connection was present;
+- it was non-loopback/direct;
+- loopback RDP count was zero;
+- therefore native `netstat` peer correlation was not invoked.
+
+Conclusion: **ordinary fast-path timing PASS**. The confirmed NetTCPIP/WMI bottleneck has been removed from the normal 3-second path.
+
+Overall performance regression is **not yet fully closed** until:
+
+1. subjective RDP smoothness is confirmed;
+2. the 15-second background telemetry cadence is checked for noticeable periodic spikes;
+3. Hermes loopback RDP exercises the conditional `netstat` peer path.
 
 ## Stable live baseline
 
@@ -65,7 +78,7 @@ Do not re-prove wholesale:
 - raw Win10 x64 + x86 PowerShell `Sysnative` visibility/probe;
 - earlier state/endpoint/RDP classification baseline.
 
-Relevant behavior touched by the latest fast-path refactor remains under targeted revalidation.
+Relevant behavior touched by the newest fast-path refactor remains under targeted revalidation.
 
 ## Windows Server
 
@@ -77,14 +90,14 @@ Status: **IMPLEMENTED; REAL FRESH WINDOWS SERVER INSTALL PENDING**.
 
 ## Exact next engineering stage
 
-1. update MIPC agent only to immutable head `c51ed8fa2c090dbc731a0c06f357d899846e90ae` with rollback while preserving identity/key/port;
-2. benchmark `.NET TCP snapshot`, cached SSH PID path, and subjective RDP smoothness;
-3. if performance materially improves, run targeted current-head smoke:
+1. confirm subjective RDP smoothness on the current MIPC agent;
+2. check whether 15-second background telemetry causes a visible/measureable periodic spike;
+3. targeted current-head smoke:
    - one Hermes `ssh.exe`;
    - OFF -> applied OFF + endpoint CLOSED;
    - ON -> one tunnel + endpoint OPEN;
    - direct LAN/VPN RDP -> Hermes=0/direct=1;
-   - Hermes RDP -> Hermes=1/direct=0;
+   - Hermes RDP -> Hermes=1/direct=0 and exercises loopback peer correlation;
    - endpoint open with no Hermes RDP client -> Hermes=0;
 4. test `НАБЛЮДАТЬ 60с` + automatic stop;
 5. real fresh Windows Server install;
