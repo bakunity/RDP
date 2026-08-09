@@ -32,19 +32,17 @@ Already accepted and removed from the active test queue:
 - fast-path timing and subjective performance;
 - RV-001..RV-006 current-head regression smoke;
 - `НАБЛЮДАТЬ 60с` including automatic stop;
-- real clean Windows Server 2019 ProductType=3 fresh installer path and removal of the old client-only rejection.
+- real clean Windows Server 2019 ProductType=3 fresh installer path and removal of the old client-only rejection;
+- in-place Windows Server agent update to immutable `c51ed8...` preserving identity/key/port/config with Task Running, one Hermes SSH process and expected fast-path markers.
 
-### A. Windows Server current-head agent smoke
+### A. Windows Server final endpoint confirmation
 
-The successful clean Server install used immutable `RepositoryRef=586e944...`. `scripts/install-client.ps1` is byte-identical at `586e944...` and `c51ed8...`, so the installer/ProductType fix is already PASS. The Server still runs the older agent because of the supplied RepositoryRef.
+Only one Server acceptance item remains:
 
-Remaining acceptance:
+- connect through the Server's assigned Hermes RDP endpoint after the `c51ed8...` agent update;
+- confirm a real RDP session opens successfully.
 
-- update only the Server `HermesRdpAgent.ps1` to immutable `c51ed8...`;
-- preserve device ID, key and assigned port;
-- Scheduled Task remains/runs correctly;
-- exactly one Hermes `ssh.exe`;
-- assigned public endpoint remains usable.
+Do not repeat the fresh installer or update-only checks unless this endpoint test fails.
 
 ### B. Win10 x64 + x86 PowerShell final e2e
 
