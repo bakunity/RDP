@@ -19,50 +19,45 @@ Server remains on immutable head `586e9446ea41262f1ed0d9c84ba72838a47d9bc5`.
 
 MIPC Windows agent is on immutable head `c51ed8fa2c090dbc731a0c06f357d899846e90ae`.
 
-This split is intentional: the diff after `586e944...` is Windows-agent/test only, so no Linux redeploy was required.
+The split is intentional: changes after `586e944...` are Windows-agent/test only, so no Linux redeploy was required.
 
-Current-head MIPC update preserved device ID, assigned RDP port, config and private key; Scheduled Task remained `Running`; the installed agent contains the .NET TCP fast path, 15-second Hermes SSH PID cache and loopback peer helper, with executable `Get-NetTCPConnection` removed from the RDP path.
+## MIPC stabilization — COMPLETE
 
-## Performance acceptance
+Current-head MIPC acceptance is green:
 
-Live current-head timing on MIPC:
+- ordinary fast-path timing **PASS**: cached SSH PID avg 21.63 ms, .NET RDP snapshot avg 19.68 ms, combined FAST core avg 27.46 ms / max 43.69 ms;
+- subjective Hermes RDP smoothness **PASS**: no noticeable micro-freezes on the accepted working route;
+- RV-001..RV-006 targeted smoke **PASS**;
+- `НАБЛЮДАТЬ 60с` **PF-008 PASS**: countdown/live resource+TOP cadence worked and observation automatically returned to `Наблюдение выключено` after lease expiry without manual stop.
 
-```text
-SSH cached PID        avg 21.63 ms, max 73.51 ms
-.NET RDP snapshot     avg 19.68 ms, max 71.04 ms
-FAST core combined    avg 27.46 ms, max 43.69 ms
-SSH full refresh      avg 312.72 ms, max 401.56 ms
-```
+Do not repeat these checks without a concrete regression reason.
 
-Ordinary 3-second fast-path timing is **PASS**. The old NetTCPIP/WMI bottleneck is removed from normal per-cycle work.
+## Windows Server acceptance — ACTIVE STAGE
 
-Subjective Hermes RDP acceptance is also **PASS** on the restored working route: normal work is smooth, no noticeable micro-freezes, and no visible ~15-second periodic stall during the acceptance window. Direct LAN RDP remains somewhat more immediate, as expected.
+Real clean machine baseline:
 
-## Current-head targeted smoke — COMPLETE
+- Windows Server 2019 Datacenter;
+- ProductType `3`;
+- x64 OS + x64 PowerShell 5.1;
+- no pre-existing `C:\ProgramData\HermesRDP`;
+- no pre-existing `Hermes RDP Agent` Scheduled Task.
 
-All current-head smoke obligations RV-001..RV-006 are now **PASS** on `c51ed8fa...`:
+Fresh install then completed successfully with immutable ref `586e9446ea41262f1ed0d9c84ba72838a47d9bc5`:
 
-- **RV-001 PASS:** direct LAN/VPN RDP -> `Hermes=0/direct=1` while Hermes tunnel remains enabled.
-- **RV-002 PASS:** active Hermes RDP -> `Hermes=1/direct=0`; current loopback peer-correlation path is live-proven.
-- **RV-003 PASS:** Hermes endpoint/tunnel open with no RDP client -> `Hermes=0/direct=0`.
-- **RV-004 PASS:** Telegram OFF/ON command delivery and applied-state transition work on current head.
-- **RV-005 PASS:** normal ON state has exactly one Hermes `ssh.exe`; latest live check returned one PID and Scheduled Task `Running`.
-- **RV-006 PASS:** OFF -> endpoint CLOSED / SSH disconnected; ON -> endpoint OPEN / SSH connected.
+- old client-only ProductType rejection did not occur;
+- installer reached `=== ГОТОВО ===`;
+- OpenSSH tunnel and Scheduled Task were created;
+- a persistent RDP endpoint was assigned;
+- user confirmed the added Windows Server works.
 
-Do not repeat RV-001..RV-006 without a concrete regression reason.
+Important provenance boundary: `scripts/install-client.ps1` has the **same blob** on `586e944...` and current PR head `c51ed8...`, so the real fresh-install proves the current Windows Server ProductType fix. However `RepositoryRef=586e944...` means this new Server currently runs the `586e944...` agent, not the newest `c51ed8...` agent.
 
-## Observation-mode acceptance — ACTIVE STAGE
+Therefore:
 
-`НАБЛЮДАТЬ 60с` has now been started on MIPC and live activation is confirmed:
+- **Windows Server installer/ProductType fix: PASS**;
+- **current-head Windows Server agent runtime: one small revalidation still required**.
 
-- dashboard reports observation enabled with a remaining-seconds countdown;
-- resource age is ~3 seconds during observation;
-- TOP-process data is populated and refreshed (observed snapshot age 7 seconds with five processes);
-- ordinary access/tunnel state remains healthy during observation.
-
-This is **activation/cadence PARTIAL PASS**, not final PF-008 acceptance yet.
-
-Exact next check: after the 60-second lease expires, refresh the MIPC card and confirm observation automatically returns to `Наблюдение выключено` without manually stopping it. If yes, PF-008 becomes PASS and observation-mode acceptance is complete.
+Exact next action: update only `HermesRdpAgent.ps1` on this Windows Server to immutable `c51ed8...`, preserving its device identity/key/port, then verify Task=`Running`, exactly one Hermes `ssh.exe`, and endpoint remains usable.
 
 ## Stable live baseline
 
@@ -72,25 +67,19 @@ Do not re-prove wholesale:
 - external-network RDP;
 - tested Windows reboot recovery;
 - existing-install guard;
-- raw Win10 x64 + x86 PowerShell `Sysnative` visibility/probe;
-- current-head RV-001..RV-006 targeted smoke;
-- current-head ordinary fast-path timing and subjective smoothness on the accepted working Hermes path.
+- Win10 x64 + x86 PowerShell native `Sysnative` OpenSSH visibility/probe;
+- MIPC fast-path/performance acceptance;
+- RV-001..RV-006 current-head smoke;
+- PF-008 observation-mode acceptance;
+- Windows Server ProductType=3 fresh-installer acceptance.
 
-## Windows Server
+## Remaining PR #19 acceptance
 
-Confirmed old bug: installer rejected Windows Server through the client-only ProductType gate.
-
-PR #19 allows ProductType 2/3 and has regression coverage.
-
-Status: **IMPLEMENTED; REAL FRESH WINDOWS SERVER INSTALL PENDING**.
-
-## Next stages after observation acceptance
-
-1. real fresh Windows Server install;
+1. current-head `c51ed8...` agent smoke on the newly installed Windows Server;
 2. fresh patched Win10 x64 full install launched from PowerShell x86;
 3. reconcile PR #19 with current `main`, rerun CI and recheck mergeability;
 4. merge only after acceptance is green or remaining scenarios are explicitly split with evidence boundaries.
 
 ## Context rule
 
-Checkpoint meaningful PASS/FAIL/root-cause/deployment transitions continuously. Record outcomes, not raw terminal transcripts. See `SESSION_PROTOCOL.md` and `CONTEXT_LIFECYCLE.md`.
+Checkpoint meaningful PASS/FAIL/root-cause/deployment transitions continuously. Record outcomes, not raw terminal transcripts. Never store pairing codes, tokens, private keys or ready-to-use secret material in context.
