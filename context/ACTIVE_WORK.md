@@ -8,35 +8,53 @@ Purpose: first operational file after `context/README.md`. Contains current work
 
 - Active PR: **#19 — `fix: stabilize control state and Windows OpenSSH detection`**.
 - Active branch: `fix/control-state-dashboard`.
-- Acceptance head: `586e9446ea41262f1ed0d9c84ba72838a47d9bc5`.
+- Current PR head: `c51ed8fa2c090dbc731a0c06f357d899846e90ae`.
 - Published release: `v1.1.0`.
 - Target release: **v1.2.0 — Stabilization**.
 - Product code from PR #19 is still unmerged.
 
 ## Deployment truth
 
-The exact immutable acceptance head `586e9446ea41262f1ed0d9c84ba72838a47d9bc5` is now deployed server-side and installed on the MIPC Windows agent.
+Server and MIPC currently run immutable head `586e9446ea41262f1ed0d9c84ba72838a47d9bc5`.
 
-Server updater result:
+Accepted deployment facts:
 
-- both Hermes services returned `active`;
-- rollback backup created under `/var/backups/hermes-rdp/`.
+- both Hermes server services active after immutable updater run;
+- server rollback backup created;
+- MIPC Scheduled Task Running;
+- `device_id`, assigned port, `device.json` and private SSH key unchanged;
+- exactly one Hermes `ssh.exe` immediately after update;
+- local Windows rollback copy created.
 
-MIPC agent update result:
+New PR head `c51ed8fa...` changes only `client/HermesRdpAgent.ps1` + its static test relative to deployed `586e944...`; server code is unchanged, so no Linux redeploy is required for the next performance acceptance.
 
-- Scheduled Task = `Running`;
-- `device_id` unchanged;
-- assigned RDP port unchanged (`53389` on this acceptance device);
-- `device.json` hash unchanged;
-- private SSH key hash unchanged;
-- exactly one Hermes `ssh.exe` after update;
-- local rollback copy created under `C:\ProgramData\HermesRDP\backups\`.
+## Performance acceptance state
 
-This proves deployment/provenance and identity-preserving update. It does **not** yet prove performance, OFF/ON, RDP classification or observation behavior on the new head.
+First runtime benchmark on deployed low-cost head `586e944...` showed the telemetry split helped, but the fast path remained too expensive:
+
+```text
+SSH filtered lookup   avg ~256 ms
+RDP :3389 query       avg ~829 ms, max ~1347 ms
+CPU telemetry         avg ~358 ms   (15s/background)
+OS + RAM              avg ~289 ms   (15s/background)
+Disk                   avg ~35 ms   (15s/background)
+Network                avg ~271 ms  (15s/background; noisy max)
+```
+
+Conclusion: **performance fix is not yet PASS**. The remaining fast-path bottlenecks were the NetTCPIP RDP query and repeated WMI SSH lookup.
+
+Current PR head `c51ed8fa...` implements a second optimization:
+
+- normal RDP discovery uses in-process `.NET IPGlobalProperties.GetActiveTcpConnections()` instead of `Get-NetTCPConnection`;
+- native `netstat -ano -p tcp` is used only when an actual loopback RDP connection needs peer-PID correlation;
+- Hermes SSH PIDs are cached;
+- normal 3-second SSH checks use cheap `Get-Process -Id`;
+- full `Win32_Process` discovery is moved out of the ordinary fast path and refreshed periodically / after cache loss;
+- PowerShell 5.1 parse and full CI #139 are PASS.
+
+Status: **IMPLEMENTED + CI PASS; MIPC LIVE UPDATE/BENCHMARK PENDING**.
 
 ## Stable live baseline
-
-Detailed evidence lives in `EVIDENCE_LEDGER.md`.
 
 Do not re-prove wholesale:
 
@@ -47,69 +65,32 @@ Do not re-prove wholesale:
 - raw Win10 x64 + x86 PowerShell `Sysnative` visibility/probe;
 - earlier state/endpoint/RDP classification baseline.
 
-Relevant baseline behaviors touched by the latest telemetry/main-loop refactor remain under targeted revalidation.
-
-## Confirmed regression being accepted
-
-Before optimization on MIPC:
-
-```text
-full Established TCP query  ~1059 ms
-RDP-only TCP query          ~516 ms
-full Win32_Process query    ~357 ms
-TopProcesses sample         800 ms minimum
-```
-
-The old 3-second telemetry loop could spend most of its interval collecting diagnostics and coincided with RDP micro-freezes.
-
-Latest head implements:
-
-```text
-FAST ~3s
-heartbeat / commands / access / SSH / RDP channel
-
-BACKGROUND ~15s
-CPU / RAM / disk / network / sessions / route / uptime
-
-OBSERVE 60s
-resources ~3s
-TOP processes ~6s
-Telegram live render ~3s
-then automatic stop
-```
-
-Background TOP-process collection is removed; RDP TCP queries are narrowed; SSH process discovery is filtered/reused.
-
-Status: **IMPLEMENTED + DEPLOYED; LIVE PERFORMANCE ACCEPTANCE PENDING**.
+Relevant behavior touched by the latest fast-path refactor remains under targeted revalidation.
 
 ## Windows Server
 
 Confirmed old bug: installer rejected Windows Server through the client-only ProductType gate.
 
-Latest head allows ProductType 2/3 and has regression coverage.
+PR #19 allows ProductType 2/3 and has regression coverage.
 
-Status: **IMPLEMENTED + DEPLOYED SERVER-SIDE; REAL FRESH WINDOWS SERVER INSTALL PENDING**.
+Status: **IMPLEMENTED; REAL FRESH WINDOWS SERVER INSTALL PENDING**.
 
 ## Exact next engineering stage
 
-1. measure the cost of the new MIPC fast/background paths and compare with the old measurements;
-2. subjectively verify whether RDP micro-freezes disappear or materially reduce;
-3. targeted current-head smoke:
+1. update MIPC agent only to immutable head `c51ed8fa2c090dbc731a0c06f357d899846e90ae` with rollback while preserving identity/key/port;
+2. benchmark `.NET TCP snapshot`, cached SSH PID path, and subjective RDP smoothness;
+3. if performance materially improves, run targeted current-head smoke:
    - one Hermes `ssh.exe`;
    - OFF -> applied OFF + endpoint CLOSED;
    - ON -> one tunnel + endpoint OPEN;
    - direct LAN/VPN RDP -> Hermes=0/direct=1;
    - Hermes RDP -> Hermes=1/direct=0;
    - endpoint open with no Hermes RDP client -> Hermes=0;
-4. test `НАБЛЮДАТЬ 60с`: heavy telemetry appears, then automatic stop and no endless 3-second redraw;
+4. test `НАБЛЮДАТЬ 60с` + automatic stop;
 5. real fresh Windows Server install;
-6. fresh patched install from Win10 x64 + PowerShell x86 for final Sysnative e2e acceptance;
-7. reconcile PR #19 with current `main`, rerun CI and recheck mergeability;
-8. merge only after the acceptance gate is green or explicitly split with evidence boundaries.
-
-## PR/base drift
-
-Context-only commits have advanced `main` while product code remains in PR #19. Before merge, query current divergence, reconcile the feature branch with current `main`, rerun CI and recheck mergeability. Do not keep exact ahead/behind counts as durable facts.
+6. fresh patched install from Win10 x64 + PowerShell x86;
+7. reconcile PR #19 with current `main`, rerun CI/recheck mergeability;
+8. merge only after acceptance is green or remaining scenarios are explicitly split with evidence boundaries.
 
 ## Context rule
 
