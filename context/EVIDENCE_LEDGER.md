@@ -60,13 +60,14 @@ A PASS proves the tested scenario/build boundary only. Relevant later code chang
 |---|---|---|---|
 | PF-001 | Full Established TCP scan is expensive on MIPC | CONFIRMED | Measured ~1059 ms. |
 | PF-002 | RDP-only NetTCPIP query is expensive on MIPC | CONFIRMED | First measurement ~516 ms; later 5-run average on deployed low-cost head ~829 ms with max ~1347 ms. |
-| PF-003 | Full `Win32_Process` scan is expensive | CONFIRMED | Measured ~357 ms; filtered `Name='ssh.exe'` on deployed low-cost head still averaged ~256 ms. |
+| PF-003 | Full `Win32_Process` scan is expensive | CONFIRMED | Measured ~357 ms; filtered `Name='ssh.exe'` on first low-cost head still averaged ~256 ms. |
 | PF-004 | TOP-process sample has an 800 ms sampling window | CONFIRMED | Agent implementation. |
 | PF-005 | Old 3-second telemetry loop could consume most of its interval | CONFIRMED REGRESSION | Measured heavy operations aligned with observed RDP micro-freezes. |
-| PF-006 | First split fast/background/on-demand telemetry fully removes regression | FAIL / INCOMPLETE FIX | Heavy CPU/RAM/process work moved off 3s path, but RDP NetTCPIP (~829 ms avg) + SSH WMI (~256 ms avg) remained too expensive. |
+| PF-006 | First split fast/background/on-demand telemetry fully removes regression | FAIL / INCOMPLETE FIX | Heavy CPU/RAM/process work moved off 3s path, but RDP NetTCPIP + SSH WMI remained too expensive. |
 | PF-007 | Background resources ~15s, observe resources ~3s/TOP ~6s | IMPLEMENTED, NOT VALIDATED | Runtime cadence still needs observation. |
 | PF-008 | `НАБЛЮДАТЬ 60с` automatically stops heavy telemetry/live render | IMPLEMENTED, NOT VALIDATED | Live 60-second lease acceptance required. |
-| PF-009 | Second fast-path optimization removes NetTCPIP/WMI from ordinary 3s loop | IMPLEMENTED, NOT VALIDATED | PR head `c51ed8fa...`: RDP uses in-process `IPGlobalProperties`; native netstat only for actual loopback peer PID; SSH PID cache uses `Get-Process` with periodic/full rediscovery. CI #139 PASS. Live MIPC timing required. |
+| PF-009 | Second fast-path optimization removes NetTCPIP/WMI bottleneck from ordinary 3s loop | PASS | Live on MIPC head `c51ed8fa...`: cached SSH PID avg 21.63 ms, .NET RDP snapshot avg 19.68 ms, combined FAST core avg 27.46 ms / max 43.69 ms. Full SSH WMI refresh remained ~312.72 ms avg but is no longer ordinary per-cycle work. Direct RDP was active, loopback count 0, so conditional netstat peer lookup was not exercised. |
+| PF-010 | Overall subjective RDP performance after second optimization | REVALIDATION REQUIRED | Fast-path timing is green; user-visible smoothness and possible 15-second background spikes still need acceptance. |
 
 ## Deployment / provenance
 
@@ -76,17 +77,17 @@ A PASS proves the tested scenario/build boundary only. Relevant later code chang
 | SV-002 | Linux listener is authoritative endpoint truth | PASS | Earlier Windows false-positive disappeared; dashboard matched Linux CLOSED/OPEN. |
 | SV-003 | Immutable head `586e944...` deployed server-side | PASS | Both services active and rollback backup created. |
 | SV-004 | MIPC updated to `586e944...` without identity loss | PASS | Task Running; device ID, config hash, private-key hash and assigned port unchanged; exactly one Hermes `ssh.exe`; local backup created. |
-| SV-005 | Current PR head after second performance fix | IMPLEMENTED, NOT DEPLOYED | `c51ed8fa2c090dbc731a0c06f357d899846e90ae`; diff from deployed head changes only Windows agent + static test, no server code. CI #139 PASS. |
+| SV-005 | MIPC updated to current agent head `c51ed8fa...` without identity loss | PASS | Task Running; identity/config/key/port unchanged; one Hermes `ssh.exe`; .NET TCP path, 15-second SSH PID cache and loopback peer helper present; executable `Get-NetTCPConnection` absent; rollback copy created. Server stayed on `586e944...` because intervening diff was client/test only. |
 
 ## Current-head revalidation obligations
 
 | ID | Scenario on newest fast-path head | Status | Why revalidate |
 |---|---|---|---|
-| RV-001 | Direct LAN/VPN RDP -> Hermes=0/direct=1 | REVALIDATION REQUIRED | RDP classifier moved from NetTCPIP to .NET snapshot. |
-| RV-002 | Hermes RDP -> Hermes=1/direct=0 | REVALIDATION REQUIRED | Loopback peer PID now uses native netstat correlation. |
+| RV-001 | Direct LAN/VPN RDP -> Hermes=0/direct=1 | REVALIDATION REQUIRED | New .NET classifier is installed; dashboard counter still needs explicit current-head smoke. |
+| RV-002 | Hermes RDP -> Hermes=1/direct=0 | REVALIDATION REQUIRED | Conditional native netstat loopback peer correlation has not yet been exercised live. |
 | RV-003 | Open endpoint with no Hermes RDP client -> Hermes=0 | REVALIDATION REQUIRED | Confirms optimized classifier avoids false active-session count. |
 | RV-004 | Telegram OFF/ON command delivery and tunnel transition | REVALIDATION REQUIRED | Agent process-cache/main-loop behavior changed. |
-| RV-005 | Exactly one Hermes `ssh.exe` in normal ON state | REVALIDATION REQUIRED | SSH discovery now uses cache + periodic full discovery. |
+| RV-005 | Exactly one Hermes `ssh.exe` in normal ON state | PARTIAL PASS | Immediately after current-head update exactly one Hermes SSH process was present; repeat during ON smoke. |
 | RV-006 | Endpoint CLOSED/OFF and OPEN/ON on newest head | REVALIDATION REQUIRED | Full control path smoke still required after latest agent update. |
 
 ## Pairing behavior
