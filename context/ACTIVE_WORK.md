@@ -28,7 +28,8 @@ Do not repeat without a concrete regression reason:
 - Stage 2 RL-001 Telegram RESTART end-to-end recovery;
 - Stage 2 RL-002 automatic Hermes transport recovery after temporary Windows-side network loss;
 - Stage 2 RL-003 Linux server reboot recovery;
-- Stage 2 RL-004 controller restart isolation.
+- Stage 2 RL-004 controller restart isolation;
+- Stage 2 RL-005 dedicated Hermes sshd restart recovery.
 
 ## Deployment truth
 
@@ -54,31 +55,35 @@ A real `systemctl reboot` was performed after a healthy baseline. The server ret
 
 ### RL-004 Controller restart isolation — COMPLETE PASS
 
-Live controller-only restart on the Linux server proved architectural separation:
+Controller-only restart changed the controller PID and returned `active` while dedicated `hermes-rdp-sshd.service`, the existing endpoint `sshd-session`, `:7000`, and the public RDP endpoint all remained untouched. Telegram/dashboard stayed healthy and active RDP had no interruption.
 
-- `hermes-rdp.service` controller PID changed and returned `active`;
-- `hermes-rdp-sshd.service` PID stayed unchanged and remained `active`;
-- existing `sshd-session` PID for the tested endpoint stayed unchanged;
-- listeners on dedicated SSH `:7000` and the tested public RDP endpoint remained present;
-- Telegram/dashboard continued working after controller restart;
-- the active RDP session had no interruption or visible reconnect.
+### RL-005 Dedicated Hermes sshd restart — COMPLETE PASS
 
-This proves controller lifecycle is isolated from the dedicated OpenSSH transport on the tested deployment.
+Live restart of only `hermes-rdp-sshd.service` proved transport recovery independently of the controller:
 
-Do not repeat RL-001..RL-004 without a concrete regression reason.
+- controller PID remained unchanged and controller stayed `active`;
+- dedicated sshd PID changed and returned `active`;
+- old endpoint `sshd-session` PID was replaced by a new session PID;
+- dedicated SSH listener `:7000` and the same public RDP endpoint returned;
+- Windows reverse tunnel reconnected automatically without Telegram ON/RESTART;
+- the already-open RDP session automatically recovered after the brief transport interruption;
+- Telegram/dashboard remained healthy.
+
+This proves the dedicated transport service can be restarted independently and the Windows client automatically recreates the reverse tunnel on the tested deployment.
+
+Do not repeat RL-001..RL-005 without a concrete regression reason.
 
 ## Remaining Stage 2 order
 
-1. **Dedicated Hermes sshd restart -> clients recover.**
-2. Repeated reconnects -> no duplicate/orphan Hermes SSH processes.
-3. Two+ devices simultaneously.
-4. One device failure must not affect another.
+1. **Repeated reconnects -> no duplicate/orphan Hermes SSH processes.**
+2. Two+ devices simultaneously.
+3. One device failure must not affect another.
 
 Windows reboot recovery is already PASS and is not repeated as a generic test.
 
 ## Exact next action
 
-Run RL-005 by restarting only `hermes-rdp-sshd.service` while leaving `hermes-rdp.service` untouched. Keep the active Hermes RDP session open. Acceptance: controller PID remains unchanged/active; dedicated sshd PID changes and returns active; old endpoint `sshd-session` is replaced; the Windows agent reconnects automatically without Telegram ON/RESTART; exactly one endpoint listener returns; Telegram/dashboard remains healthy; and the active RDP client either automatically resumes or any interruption is recorded explicitly.
+Run RL-006 as a bounded repeated-reconnect stress smoke on the accepted Win10 device. Recreate the transport several times, waiting for a healthy endpoint after every cycle rather than keeping it down continuously. Acceptance: every cycle returns to exactly one endpoint `sshd-session`; Windows ends with exactly one Hermes `ssh.exe`; no stale endpoint listener or orphan process accumulates; access remains enabled; controller stays healthy; Telegram/dashboard stays healthy; and RDP remains usable after the sequence. RDP-client continuity during every individual cycle is observational, not the primary RL-006 acceptance target.
 
 ## Context rule
 
