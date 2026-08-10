@@ -86,21 +86,25 @@ Do not re-run wholesale without a concrete regression reason:
 - MIPC current-head classification/control/performance acceptance;
 - observation auto-stop;
 - Windows Server full acceptance;
-- Win10 x64 + PowerShell x86 full acceptance.
+- Win10 x64 + PowerShell x86 full acceptance;
+- Telegram RESTART full transport/RDP recovery.
 
 ## Current stage — recovery / lifecycle matrix
 
 Stage 2 is active after PR #19 merge.
 
-Next acceptance order:
+### Completed
 
-1. Telegram `RESTART` actually replaces the Hermes SSH transport and returns to exactly one tunnel while access stays ON;
-2. temporary Windows network loss recovers automatically;
-3. Linux server reboot recovers controller + dedicated sshd and clients reconnect;
-4. controller restart recovery;
-5. dedicated Hermes sshd restart recovery;
-6. repeated reconnects create no duplicate/orphan Hermes SSH processes;
-7. two+ devices work simultaneously;
-8. failure of one device does not affect another.
+**RL-001 RESTART — COMPLETE PASS.** Telegram RESTART replaced the existing Hermes SSH PID with a different PID, old PID exited, process count returned to exactly one, access remained ON, Task remained Running, endpoint returned OPEN, dashboard returned `Hermes=1/direct=0`, and the already-open RDP session automatically recovered after a brief connection-lost interval.
+
+### Next acceptance order
+
+1. temporary Windows network loss recovers automatically without manual Telegram action;
+2. Linux server reboot recovers controller + dedicated sshd and clients reconnect;
+3. controller restart recovery;
+4. dedicated Hermes sshd restart recovery;
+5. repeated reconnects create no duplicate/orphan Hermes SSH processes;
+6. two+ devices work simultaneously;
+7. failure of one device does not affect another.
 
 Windows reboot is already PASS and is not repeated generically.
