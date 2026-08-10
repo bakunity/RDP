@@ -90,20 +90,21 @@ Real target machine:
 - native `ssh.exe` and `ssh-keygen.exe` visible through `Sysnative`;
 - native OpenSSH execution through `Sysnative` confirmed.
 
-The machine originally had an older Hermes client installed from normal x64 PowerShell. For a genuine fresh x86 acceptance test, that local installation was safely archived intact and its Scheduled Task exported; the server registration was not deleted.
+The machine originally had an older Hermes client installed from normal x64 PowerShell. For a genuine fresh x86 acceptance test, that local installation was safely archived intact and its Scheduled Task exported; server registration was not deleted.
 
-Current fresh-test baseline:
+Fresh-test baseline was confirmed with active Hermes directory/task absent while the shell remained x86.
 
-- active `C:\ProgramData\HermesRDP` directory — absent;
-- active `Hermes RDP Agent` Scheduled Task — absent;
-- previous local install — archived for rollback;
-- current shell — still x86 PowerShell on x64 Windows.
+The immutable current-head installer `c51ed8...` has now been run from that same x86 PowerShell process and reached `=== ГОТОВО ===`. It created a new device registration, assigned a public RDP endpoint, created `Hermes RDP Agent`, and reported OpenSSH transport. This directly proves the installer no longer fails because the launching process is 32-bit on x64 Win10.
 
 Status:
 
 - Sysnative runtime/probe — **PASS**;
 - clean x86 fresh-test baseline — **PASS**;
-- current-head fresh pairing/install/task/tunnel/endpoint/RDP e2e — **PENDING**.
+- immutable current-head installer completion from x86 PowerShell — **PASS**;
+- post-install canonical System32 SSH/key/task/one-SSH/current-agent verification — **PENDING**;
+- real RDP through the newly assigned endpoint — **PENDING**.
+
+The archived original `ai` local installation remains available for rollback and has not been restored.
 
 ## Stable accepted baseline
 
@@ -118,7 +119,8 @@ Do not re-run wholesale without a concrete regression reason:
 - MIPC fast-path/performance acceptance;
 - PF-008 observation auto-stop;
 - complete Windows Server ProductType/current-head/end-to-end acceptance;
-- Win10 x64/x86 PowerShell Sysnative OpenSSH runtime behavior.
+- Win10 x64/x86 PowerShell Sysnative OpenSSH runtime behavior;
+- Win10 immutable current-head fresh installer completion from x86 PowerShell.
 
 ## CI / PR state
 
@@ -126,6 +128,6 @@ Current PR head `c51ed8fa...` has green CI #139 from before the latest context-o
 
 ## Immediate blockers before PR #19 merge
 
-1. complete the fresh Win10 x64 install from PowerShell x86 using immutable current-head code and prove its real endpoint;
+1. finish Win10 x86 post-install smoke and real endpoint test;
 2. reconcile feature branch with current `main`, rerun CI and recheck mergeability;
 3. merge only after acceptance is green or remaining scenarios are explicitly split with evidence boundaries.
