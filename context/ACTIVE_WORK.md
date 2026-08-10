@@ -26,7 +26,8 @@ Do not repeat without a concrete regression reason:
 - existing-install duplicate Add guard;
 - OpenSSH reverse RDP end-to-end, external-network RDP, Windows reboot recovery, Telegram OFF/ON and endpoint CLOSED/OPEN truth;
 - Stage 2 RL-001 Telegram RESTART end-to-end recovery;
-- Stage 2 RL-002 automatic Hermes transport recovery after temporary Windows-side network loss.
+- Stage 2 RL-002 automatic Hermes transport recovery after temporary Windows-side network loss;
+- Stage 2 RL-003 Linux server reboot recovery.
 
 ## Deployment truth
 
@@ -67,22 +68,32 @@ A reversible outbound firewall block was applied only to the Hermes OpenSSH tran
 
 RDP continuity interpretation: the test intentionally held the transport down long enough that Microsoft RDP exhausted its finite reconnect attempts (user observed roughly five retry cycles) and stopped retrying. Manual reconnection afterward succeeded immediately. This is not treated as a Hermes recovery defect. RL-001 already proves that a shorter transport interruption can be survived by the already-open RDP session automatically.
 
-Do not repeat RL-001/RL-002 without a concrete regression reason.
+### RL-003 Linux server reboot — COMPLETE PASS
+
+Before reboot the live server had both `hermes-rdp.service` and `hermes-rdp-sshd.service` enabled and active, dedicated SSH listener `:7000` open, and the tested device endpoint listener open. A real `systemctl reboot` was then performed. After the machine returned, the user confirmed:
+
+- the server came back normally;
+- Telegram control and dashboard worked again;
+- the Windows client/tunnel recovered without reported manual recovery action;
+- the already-open RDP session automatically restored and was usable again.
+
+This proves the full server reboot path restores controller, dedicated sshd, reverse tunnel and live RDP service on the tested deployment.
+
+Do not repeat RL-001..RL-003 without a concrete regression reason.
 
 ## Remaining Stage 2 order
 
-1. **Linux server reboot -> controller + dedicated sshd recover -> clients reconnect.**
-2. Controller restart -> clients recover.
-3. Dedicated Hermes sshd restart -> clients recover.
-4. Repeated reconnects -> no duplicate/orphan Hermes SSH processes.
-5. Two+ devices simultaneously.
-6. One device failure must not affect another.
+1. **Controller restart -> clients recover / transport remains healthy.**
+2. Dedicated Hermes sshd restart -> clients recover.
+3. Repeated reconnects -> no duplicate/orphan Hermes SSH processes.
+4. Two+ devices simultaneously.
+5. One device failure must not affect another.
 
 Windows reboot recovery is already PASS and is not repeated as a generic test.
 
 ## Exact next action
 
-Run RL-003: reboot the Hermes Linux server, then prove `hermes-rdp.service` and `hermes-rdp-sshd.service` return automatically and the accepted Windows client reconnects without Telegram ON/RESTART. Acceptance requires the client agent to remain enabled, exactly one Hermes SSH process after recovery, the public endpoint to return OPEN, and RDP to be usable again.
+Run RL-004 by restarting only `hermes-rdp.service` while leaving `hermes-rdp-sshd.service` untouched. Keep an active Hermes RDP session open. Acceptance: controller PID changes and returns active, dedicated sshd remains active, the reverse-tunnel endpoint remains available, Telegram/dashboard returns, and the existing RDP transport stays usable without Windows-side ON/RESTART. If the active RDP session is interrupted, record that separately rather than hiding it.
 
 ## Context rule
 
