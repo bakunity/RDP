@@ -19,7 +19,7 @@ Server remains on immutable head `586e9446ea41262f1ed0d9c84ba72838a47d9bc5`.
 
 MIPC Windows agent is on immutable head `c51ed8fa2c090dbc731a0c06f357d899846e90ae`.
 
-The newly added Windows Server 2019 Datacenter device is also running the immutable `c51ed8...` agent after an in-place update that preserved device ID, assigned RDP port, config and private key.
+The accepted Windows Server 2019 Datacenter device is also running immutable `c51ed8...` and has a live-proven Hermes RDP endpoint.
 
 ## Accepted stabilization blocks
 
@@ -40,32 +40,38 @@ Real clean Windows Server 2019 Datacenter acceptance is fully green:
 - agent updated to immutable `c51ed8...` preserving identity/key/port/config;
 - Scheduled Task=`Running`;
 - exactly one Hermes `ssh.exe`;
-- .NET TCP fast path, 15-second SSH PID cache and loopback peer helper present;
-- old executable `Get-NetTCPConnection` RDP path absent;
+- current fast-path markers present and old executable `Get-NetTCPConnection` RDP path absent;
 - real RDP connection through the assigned Hermes endpoint succeeded after the current-head update.
 
 Do not repeat MIPC or Windows Server acceptance without a concrete regression reason.
 
 ## Current stage — Win10 x64 + PowerShell x86 fresh install
 
-Raw runtime behavior is already proven: on x64 Windows launched under 32-bit PowerShell, `Sysnative` reaches native Microsoft OpenSSH and the resolver avoids PATH/Git SSH fallback.
+The real target machine is Windows 10 Pro build 19045 with x64 OS and 32-bit PowerShell 5.1 under `SysWOW64`.
 
-What remains is one real end-to-end fresh install on a clean Win10 x64 machine launched specifically from PowerShell x86.
+Runtime compatibility baseline is **PASS**:
 
-Acceptance target:
+- `OS64Bit=True`;
+- `Process64Bit=False`;
+- process path is `SysWOW64\WindowsPowerShell\v1.0\powershell.exe`;
+- OpenSSH capability is installed;
+- `Sysnative\OpenSSH\ssh.exe` and `ssh-keygen.exe` are visible;
+- native Microsoft OpenSSH executes successfully through `Sysnative`.
 
-- clean Hermes state before install;
-- 64-bit OS + 32-bit PowerShell process confirmed;
-- patched installer used from immutable current code;
-- native Microsoft OpenSSH selected through Sysnative/canonical System32 handling;
-- key/task/tunnel/endpoint complete successfully;
-- real RDP connection through the assigned endpoint works.
+The machine initially contained an older working Hermes installation created from normal x64 PowerShell. It was not overwritten. That installation was safely stopped, its Scheduled Task exported, and the entire local Hermes directory moved aside intact. Server registration was not deleted.
 
-Exact next action: collect the Win10 pre-install baseline only. Do not run the installer until the baseline is reviewed.
+Fresh-test baseline is now **PASS**:
+
+- `C:\ProgramData\HermesRDP` absent;
+- `Hermes RDP Agent` Scheduled Task absent;
+- archived prior installation exists for rollback;
+- current shell remains 32-bit PowerShell on x64 Windows.
+
+Exact next action: generate a fresh pair code in Telegram, then run the immutable current-head installer from this same elevated PowerShell x86 process with `RepositoryRef=c51ed8fa2c090dbc731a0c06f357d899846e90ae`. After install, verify canonical System32 SSH path, task/tunnel/endpoint and real RDP connectivity. Do not restore the archived old installation unless the test fails or acceptance is complete and rollback is intentionally chosen.
 
 ## Remaining PR #19 acceptance
 
-1. fresh patched Win10 x64 full install launched from PowerShell x86;
+1. complete the fresh patched Win10 x64 install from PowerShell x86 and real endpoint test;
 2. reconcile PR #19 with current `main`, rerun CI and recheck mergeability;
 3. merge only after acceptance is green or remaining scenarios are explicitly split with evidence boundaries.
 
