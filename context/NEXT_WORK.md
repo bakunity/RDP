@@ -34,17 +34,17 @@ Completed and removed from the active queue:
 - **RL-002 temporary Windows-side network loss — PASS**: agent automatically recreated one Hermes SSH transport with no Telegram command; RDP worked again after recovery. The intentionally long outage exceeded Microsoft RDP's client retry window.
 - **RL-003 Linux server reboot — PASS**: real reboot restored server services, Telegram/dashboard, Windows reverse tunnel and the already-open RDP session automatically.
 - **RL-004 controller restart — PASS**: controller PID changed while dedicated sshd PID and active endpoint session PID stayed unchanged; listeners remained available, Telegram/dashboard worked, and RDP had no interruption.
+- **RL-005 dedicated Hermes sshd restart — PASS**: controller stayed untouched; dedicated sshd and endpoint session were replaced; Windows automatically recreated the reverse tunnel; the same public endpoint returned; Telegram/dashboard stayed healthy; and the already-open RDP session recovered automatically.
 
 Current queue:
 
-1. **Dedicated Hermes sshd restart -> Windows clients reconnect automatically.**
-2. Repeated reconnects -> no duplicate/orphan Hermes SSH processes.
-3. Two+ devices simultaneously remain healthy.
-4. Failure of one device does not affect another.
+1. **Repeated reconnects -> no duplicate/orphan Hermes SSH processes.**
+2. Two+ devices simultaneously remain healthy.
+3. Failure of one device does not affect another.
 
 Windows reboot recovery is already PASS and is not repeated without a regression reason.
 
-For RL-005, restart only `hermes-rdp-sshd.service`, not `hermes-rdp.service`. Keep an active Hermes RDP session open. Acceptance: controller remains active with unchanged PID; dedicated sshd gets a new PID and returns active; the old endpoint `sshd-session` is replaced; Windows reconnects automatically without Telegram ON/RESTART; exactly one endpoint listener returns; Telegram/dashboard remains healthy; and RDP recovery/continuity is recorded explicitly.
+For RL-006, use a bounded repeated-reconnect smoke rather than a prolonged outage. Recreate the dedicated transport several times, waiting for the tested endpoint to return after each cycle. Acceptance: every cycle returns exactly one endpoint session; no stale session/listener accumulates; Windows ends with exactly one Hermes `ssh.exe`; access remains enabled; controller and Telegram/dashboard remain healthy; and RDP remains usable after the sequence. Whether the already-open RDP client visually reconnects on every individual cycle is useful observation but not the primary RL-006 gate.
 
 ## Stage 3 — device/security lifecycle
 
