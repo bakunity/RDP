@@ -22,46 +22,36 @@ Ship a stable self-hosted product where a user can:
 
 **Hermes RDP v1.2.0 — Stabilization**
 
-Active implementation: PR #19, `fix/control-state-dashboard`, current head `c51ed8fa2c090dbc731a0c06f357d899846e90ae`.
+Active implementation: PR #19, `fix/control-state-dashboard`. Accepted product head before reconciliation: `c51ed8fa2c090dbc731a0c06f357d899846e90ae`.
 
-## Stage 1 — finish PR #19 acceptance
+## Stage 1 — finish PR #19 repository gate
 
-Already accepted and removed from the active test queue:
+All required live runtime acceptance is complete and removed from the active test queue:
 
 - immutable MIPC update with identity/key/port preservation;
 - fast-path timing and subjective performance;
 - RV-001..RV-006 current-head regression smoke;
 - `НАБЛЮДАТЬ 60с` including automatic stop;
-- full Windows Server 2019 ProductType=3 acceptance: clean install, current-head agent update preserving identity/key/port/config, one Hermes SSH process and successful real RDP connection through the assigned endpoint.
+- full Windows Server 2019 ProductType=3 acceptance;
+- full Win10 Pro 19045 x64 + 32-bit PowerShell acceptance, including Sysnative Microsoft OpenSSH selection, clean immutable current-head fresh install and real RDP through the assigned endpoint.
 
-### A. Win10 x64 + x86 PowerShell final e2e
+Do not repeat these live blocks without a concrete regression reason.
 
-Runtime `Sysnative` resolver behavior is already proven.
+### PR merge preparation — ACTIVE
 
-Still required:
-
-- genuinely fresh patched installation launched from x86 PowerShell on x64 Win10;
-- Microsoft system OpenSSH selected without PATH/Git fallback;
-- key/task/tunnel/endpoint complete successfully;
-- real RDP connection through the assigned endpoint.
-
-Do not repeat the standalone Sysnative probe unless the fresh-install result contradicts it.
-
-### B. PR merge preparation
-
-Continuous context-only commits advanced `main` while PR #19 stayed on its older base.
+`main` advanced through context-only commits after the feature branch split. Comparison shows the main-only delta under `context/`; accepted product code remains on the feature branch.
 
 Before merge:
 
-- reconcile current `main` into/rebase feature branch;
-- resolve actual conflicts if any;
-- rerun CI after reconciliation;
-- recheck mergeability;
-- do not interpret simple base drift as a product failure.
+- reconcile current `main` into `fix/control-state-dashboard` without changing accepted product code;
+- verify the reconciled diff/provenance;
+- rerun CI on the reconciled head;
+- recheck GitHub mergeability;
+- merge only if the reconciled gate is green.
 
 ### PR #19 merge gate
 
-Merge only when A–B are accepted, or consciously split a remaining scenario into a follow-up with explicit evidence boundary.
+PR #19 can merge when reconciliation + post-reconciliation CI + final mergeability are green. Runtime acceptance is no longer a blocker.
 
 ## Stage 2 — recovery / lifecycle matrix
 
