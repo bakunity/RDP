@@ -105,7 +105,7 @@ The Win10 x64 + PowerShell x86 / WOW64 / Sysnative compatibility acceptance is *
 | RV-003 | Open endpoint with no Hermes RDP client -> Hermes=0/direct=0 | PASS | Live current-head card showed endpoint/tunnel open and both counters zero. |
 | RV-004 | Telegram OFF/ON command delivery and tunnel transition | PASS | Current-head OFF and ON states both applied successfully. |
 | RV-005 | Exactly one Hermes `ssh.exe` in normal ON state | PASS | After OFF -> ON, live PowerShell check returned `HermesSshCount=1` and Scheduled Task `Running`. |
-| RV-006 | Endpoint CLOSED/OFF and OPEN/ON on newest head | PASS | Current-head dashboard showed CLOSED+SSH disconnected on OFF and OPEN+SSH connected on ON. |
+| RV-006 | Endpoint CLOSED/OFF and OPEN/ON on newest head | PASS | Current-head dashboard showed CLOSED+SSH disconnected on OFF and SSH connected/endpoint OPEN on ON. |
 
 Targeted current-head smoke RV-001..RV-006 is **COMPLETE**. Do not re-run wholesale without a concrete regression reason.
 
@@ -133,8 +133,8 @@ PR #19 scope is **COMPLETE**. Runtime acceptance and repository merge gate are b
 |---|---|---|---|
 | RL-001 | Telegram RESTART replaces current Hermes SSH transport and returns one healthy tunnel | PASS | Live accepted Win10 device started with access enabled, Task Running and exactly one Hermes SSH PID. Telegram RESTART advanced command seq, old SSH PID disappeared, a different new PID appeared, count returned to exactly 1, access remained enabled. The active Hermes RDP session briefly entered connection-lost state during replacement and then recovered automatically without leaving/recreating the session. Telegram then showed agent ONLINE, desired/applied ON, SSH CONNECTED, endpoint OPEN, `Hermes=1/direct=0`, and successful last command `перезапуск туннеля`. |
 | RL-002 | Temporary Windows-side network loss auto-recovers Hermes transport | PASS | Scoped firewall loss killed old Hermes SSH PID. After the block was removed, agent automatically created a different SSH PID, count returned to exactly 1, access stayed enabled, Task stayed Running, command seq stayed unchanged (no Telegram ON/RESTART), and the temporary firewall rule was gone. RDP worked normally through the endpoint after recovery. The test held transport down long enough that the Microsoft RDP client exhausted its finite reconnect attempts (user observed roughly five retries) and stopped retrying; manual RDP reconnect then succeeded. This does not indicate Hermes recovery failure. RL-001 separately proves automatic continuity for a shorter transport interruption. |
-| RL-003 | Linux server reboot recovers services and clients | PENDING | Next Stage 2 scenario. |
-| RL-004 | Controller restart recovery | PENDING | Not yet run in Stage 2. |
+| RL-003 | Linux server reboot recovers services and clients | PASS | Pre-reboot baseline showed both Hermes services enabled+active, dedicated sshd listener `:7000` open, and the tested device endpoint listener open. A real server reboot was performed. After the machine returned, the user explicitly confirmed the server was back, Telegram/dashboard worked, and the already-open Hermes RDP session restored automatically and was usable again. This operationally proves controller, dedicated sshd and Windows reverse-tunnel recovery across a full server reboot on the tested deployment. |
+| RL-004 | Controller restart recovery | PENDING | Next Stage 2 scenario. |
 | RL-005 | Dedicated Hermes sshd restart recovery | PENDING | Not yet run in Stage 2. |
 | RL-006 | Repeated reconnects produce no duplicate/orphan Hermes SSH | PENDING | Not yet run in Stage 2. |
 | RL-007 | Two+ devices simultaneously healthy | PENDING | Not yet run in Stage 2. |
