@@ -178,13 +178,28 @@ function Stop-HermesProcesses {
 }
 
 function Ensure-OpenSshClient {
-    $SshPath = Join-Path $env:WINDIR 'System32\OpenSSH\ssh.exe'
-    $KeygenPath = Join-Path $env:WINDIR 'System32\OpenSSH\ssh-keygen.exe'
+    $CanonicalSystem32 = Join-Path $env:WINDIR 'System32'
+    $NativeSystem32 = $CanonicalSystem32
     if (
-        (Test-Path -LiteralPath $SshPath) -and
+        [Environment]::Is64BitOperatingSystem -and
+        -not [Environment]::Is64BitProcess
+    ) {
+        # A 32-bit PowerShell process is redirected away from real x64
+        # System32. Sysnative is the supported alias to reach native tools.
+        $NativeSystem32 = Join-Path $env:WINDIR 'Sysnative'
+    }
+
+    $SshPath = Join-Path $CanonicalSystem32 'OpenSSH\ssh.exe'
+    $ProbeSshPath = Join-Path $NativeSystem32 'OpenSSH\ssh.exe'
+    $KeygenPath = Join-Path $NativeSystem32 'OpenSSH\ssh-keygen.exe'
+
+    if (
+        (Test-Path -LiteralPath $ProbeSshPath) -and
         (Test-Path -LiteralPath $KeygenPath)
     ) {
         return @{
+            # Keep the canonical path in device.json. Scheduled Task runs in
+            # the native environment where Sysnative is not a real directory.
             ssh = $SshPath
             keygen = $KeygenPath
         }
@@ -200,17 +215,22 @@ function Ensure-OpenSshClient {
     }
     if ($Capability.State -ne 'Installed') {
         Write-Host 'Устанавливаю стандартный OpenSSH Client Windows...'
-        Add-WindowsCapability `
+        $InstallResult = Add-WindowsCapability `
             -Online `
-            -Name $Capability.Name |
-            Out-Null
+            -Name $Capability.Name
+        if ($InstallResult.RestartNeeded) {
+            Write-Host 'Windows сообщает, что для OpenSSH требуется перезагрузка.'
+        }
     }
 
     if (
-        -not (Test-Path -LiteralPath $SshPath) -or
+        -not (Test-Path -LiteralPath $ProbeSshPath) -or
         -not (Test-Path -LiteralPath $KeygenPath)
     ) {
-        throw 'OpenSSH Client не появился после установки компонента Windows.'
+        throw (
+            'OpenSSH Client отмечен как установлен, но системные ' +
+            'ssh.exe/ssh-keygen.exe не найдены.'
+        )
     }
 
     return @{
@@ -226,11 +246,57 @@ if ([Environment]::Is64BitOperatingSystem -ne $true) {
 }
 
 $Os = Get-CimInstance Win32_OperatingSystem
-if ($Os.ProductType -ne 1) {
-    throw 'Установщик предназначен для клиентской Windows.'
+$IsClientWindows = [int]$Os.ProductType -eq 1
+$IsServerWindows = [int]$Os.ProductType -in @(2, 3)
+if (-not ($IsClientWindows -or $IsServerWindows)) {
+    throw "Неподдерживаемый тип Windows: ProductType=$($Os.ProductType)."
 }
-if ($Os.Caption -notmatch 'Pro|Enterprise|Education|Server') {
+if (
+    $IsClientWindows -and
+    $Os.Caption -notmatch 'Pro|Enterprise|Education'
+) {
     throw "Редакция '$($Os.Caption)' не поддерживает входящие RDP-подключения."
+}
+if (
+    $IsServerWindows -and
+    $Os.Caption -notmatch 'Windows Server'
+) {
+    throw "Серверная редакция '$($Os.Caption)' не распознана как Windows Server."
+}
+
+# "Добавить ПК" is a fresh-pairing flow. Never stop a working Hermes client
+# when its durable local identity is already present. Repair/update is a
+# separate operation and must preserve the existing server registration.
+$ExistingConfigPath = Join-Path $BaseDir 'device.json'
+$ExistingPrivateKeyPath = Join-Path $BaseDir 'id_ed25519'
+$ExistingPublicKeyPath = "$ExistingPrivateKeyPath.pub"
+if (
+    (Test-Path -LiteralPath $ExistingConfigPath) -and
+    (Test-Path -LiteralPath $ExistingPrivateKeyPath) -and
+    (Test-Path -LiteralPath $ExistingPublicKeyPath)
+) {
+    try {
+        $ExistingConfig = Get-Content `
+            -LiteralPath $ExistingConfigPath `
+            -Raw |
+            ConvertFrom-Json
+    }
+    catch {
+        $ExistingConfig = $null
+    }
+    if (
+        $ExistingConfig -and
+        -not [string]::IsNullOrWhiteSpace([string]$ExistingConfig.device_id) -and
+        [int]$ExistingConfig.rdp_port -gt 0 -and
+        -not [string]::IsNullOrWhiteSpace([string]$ExistingConfig.ssh_key_path)
+    ) {
+        throw (
+            "Hermes RDP уже установлен на этом ПК (RDP-порт " +
+            "$($ExistingConfig.rdp_port)). Команда 'Добавить ПК' ничего " +
+            'не изменила. Для восстановления или обновления используйте ' +
+            'отдельный repair/update flow.'
+        )
+    }
 }
 
 if (-not $Name) {
@@ -283,6 +349,7 @@ if (Test-Path -LiteralPath $BaseDir) {
             -Force `
             -ErrorAction SilentlyContinue
 }
+
 New-Item -ItemType Directory -Path $BaseDir -Force | Out-Null
 
 $AgentPath = Join-Path $BaseDir 'HermesRdpAgent.ps1'
@@ -475,9 +542,9 @@ try {
 
     $TunnelProcess = Get-CimInstance `
         Win32_Process `
+        -Filter "Name='ssh.exe'" `
         -ErrorAction SilentlyContinue |
         Where-Object {
-            $_.Name -eq 'ssh.exe' -and
             $_.CommandLine -and
             $_.CommandLine.Contains($SshKeyPath)
         } |

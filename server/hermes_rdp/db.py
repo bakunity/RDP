@@ -394,18 +394,31 @@ class Registry:
     def queue_command(self, device_id: str, action: str) -> int:
         if action not in {"on", "off", "restart"}:
             raise ValueError("unsupported command")
+        timestamp = now()
         with self.connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             row = conn.execute(
-                "SELECT command_seq FROM devices WHERE id=? AND revoked=0", (device_id,)
+                "SELECT command_seq,pending_command FROM devices "
+                "WHERE id=? AND revoked=0",
+                (device_id,),
             ).fetchone()
             if not row:
                 raise KeyError(device_id)
+            if row["pending_command"]:
+                raise ValueError("previous command is still pending")
             seq = int(row["command_seq"]) + 1
+            desired_enabled = 0 if action == "off" else 1
             conn.execute(
-                "UPDATE devices SET command_seq=?,pending_command=?,pending_created_at=?,updated_at=? "
-                "WHERE id=?",
-                (seq, action, now(), now(), device_id),
+                "UPDATE devices SET enabled=?,command_seq=?,pending_command=?,"
+                "pending_created_at=?,updated_at=? WHERE id=? AND revoked=0",
+                (
+                    desired_enabled,
+                    seq,
+                    action,
+                    timestamp,
+                    timestamp,
+                    device_id,
+                ),
             )
         return seq
 
@@ -427,16 +440,18 @@ class Registry:
     def complete_command(
         self, device_id: str, seq: int, ok: bool, message: str
     ) -> None:
-        result = {
-            "seq": int(seq),
-            "ok": bool(ok),
-            "message": str(message)[:500],
-            "completed_at": now(),
-        }
         with self.connect() as conn:
             row = conn.execute(
-                "SELECT command_seq FROM devices WHERE id=?", (device_id,)
+                "SELECT command_seq,pending_command FROM devices WHERE id=?",
+                (device_id,),
             ).fetchone()
+            result = {
+                "seq": int(seq),
+                "action": str(row["pending_command"] or "") if row else "",
+                "ok": bool(ok),
+                "message": str(message)[:500],
+                "completed_at": now(),
+            }
             if not row or int(row["command_seq"]) != int(seq):
                 return
             conn.execute(

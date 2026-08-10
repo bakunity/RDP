@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import ssl
+import time
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
@@ -11,7 +12,7 @@ from urllib.parse import urlparse
 from . import __version__
 from .config import Config
 from .db import Registry
-from .tunnel import close_tunnel
+from .tunnel import close_tunnel, endpoint_listener_state
 
 
 LOG = logging.getLogger("hermes_rdp.api")
@@ -152,15 +153,49 @@ class ApiHandler(BaseHTTPRequestHandler):
         )
 
     def _telemetry(self, device_id: str) -> None:
-        if not self._device_auth(device_id):
+        device = self._device_auth(device_id)
+        if not device:
             self._json(HTTPStatus.UNAUTHORIZED, {"ok": False, "error": "unauthorized"})
             return
         body = self._read_json()
         telemetry = body.get("telemetry")
         if not isinstance(telemetry, dict):
             raise ValueError("telemetry object required")
+
+        # Endpoint truth belongs to the Linux server. A Windows-side TCP probe
+        # can be a false positive behind VPN/TUN/proxy routing, so never trust
+        # the client value for the public Hermes listener.
+        telemetry = dict(telemetry)
+        endpoint_state = endpoint_listener_state(int(device["rdp_port"]))
+        if endpoint_state is None:
+            telemetry.pop("endpoint_available", None)
+            telemetry["endpoint_source"] = "unknown"
+        else:
+            telemetry["endpoint_available"] = endpoint_state
+            telemetry["endpoint_source"] = "server_listener"
+
         command = self.server.registry.update_telemetry(device_id, telemetry)
-        self._json(HTTPStatus.OK, {"ok": True, "command": command})
+
+        # Heavy telemetry is leased only for the currently opened device view.
+        # Agents still poll every 3s for commands/heartbeat in background mode.
+        try:
+            live_until = int(self.server.registry.get_setting("live_until", "0") or 0)
+        except (TypeError, ValueError):
+            live_until = 0
+        telemetry_live = (
+            live_until > int(time.time())
+            and self.server.registry.get_setting("screen", "home") == "device"
+            and self.server.registry.get_setting("selected_device", "") == device_id
+        )
+
+        self._json(
+            HTTPStatus.OK,
+            {
+                "ok": True,
+                "command": command,
+                "telemetry_live": telemetry_live,
+            },
+        )
 
     def _command_result(self, device_id: str) -> None:
         if not self._device_auth(device_id):
