@@ -131,8 +131,8 @@ PR #19 scope is **COMPLETE**. Runtime acceptance and repository merge gate are b
 
 | ID | Scenario | Status | Evidence / boundary |
 |---|---|---|---|
-| RL-001 | Telegram RESTART replaces current Hermes SSH transport and returns one healthy tunnel | PENDING | Must prove PID replacement, access stays ON, process count returns to 1, endpoint OPEN and real RDP works. |
-| RL-002 | Temporary Windows network loss auto-recovers | PENDING | Not yet run in Stage 2. |
+| RL-001 | Telegram RESTART replaces current Hermes SSH transport and returns one healthy tunnel | PASS | Live accepted Win10 device started with access enabled, Task Running and exactly one Hermes SSH PID. Telegram RESTART advanced command seq, old SSH PID disappeared, a different new PID appeared, count returned to exactly 1, access remained enabled. The active Hermes RDP session briefly entered connection-lost state during replacement and then recovered automatically without leaving/recreating the session. Telegram then showed agent ONLINE, desired/applied ON, SSH CONNECTED, endpoint OPEN, `Hermes=1/direct=0`, and successful last command `перезапуск туннеля`. |
+| RL-002 | Temporary Windows network loss auto-recovers | PENDING | Next Stage 2 scenario. |
 | RL-003 | Linux server reboot recovers services and clients | PENDING | Not yet run in Stage 2. |
 | RL-004 | Controller restart recovery | PENDING | Not yet run in Stage 2. |
 | RL-005 | Dedicated Hermes sshd restart recovery | PENDING | Not yet run in Stage 2. |
