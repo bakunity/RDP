@@ -24,7 +24,8 @@ Do not repeat without a concrete regression reason:
 - Windows Server 2019 ProductType=3 fresh-install/current-head/RDP acceptance;
 - Win10 Pro 19045 x64 + 32-bit PowerShell fresh-install/Sysnative/current-head/RDP acceptance;
 - existing-install duplicate Add guard;
-- OpenSSH reverse RDP end-to-end, external-network RDP, Windows reboot recovery, Telegram OFF/ON and endpoint CLOSED/OPEN truth.
+- OpenSSH reverse RDP end-to-end, external-network RDP, Windows reboot recovery, Telegram OFF/ON and endpoint CLOSED/OPEN truth;
+- Stage 2 RL-001 Telegram RESTART end-to-end recovery.
 
 ## Deployment truth
 
@@ -34,28 +35,39 @@ Do not repeat without a concrete regression reason:
 
 ## Current stage — recovery / lifecycle matrix
 
-PR #19 merge gate is complete. Stage 2 is now active.
+PR #19 merge gate is complete. Stage 2 is active.
 
-Order:
+### RL-001 Telegram RESTART — COMPLETE PASS
 
-1. **RESTART command** must actually stop the current Hermes SSH transport and recreate a fresh single tunnel while keeping access enabled.
-2. Temporary Windows network loss -> automatic reconnect.
-3. Linux server reboot -> controller + dedicated sshd recover -> clients reconnect.
-4. Controller restart -> clients recover.
-5. Dedicated Hermes sshd restart -> clients recover.
-6. Repeated reconnects -> no duplicate/orphan Hermes SSH processes.
-7. Two+ devices simultaneously.
-8. One device failure must not affect another.
+Live-tested on the accepted Win10 x64/x86-PowerShell device:
+
+- before RESTART: access enabled, Task=`Running`, exactly one Hermes SSH PID;
+- Telegram RESTART advanced command sequence and killed the old Hermes SSH process;
+- a new different SSH PID appeared;
+- exactly one Hermes SSH process remained;
+- desired/applied access stayed ON;
+- agent stayed ONLINE;
+- SSH tunnel returned CONNECTED and public endpoint returned OPEN;
+- active RDP through Hermes briefly reported connection loss during transport replacement, then recovered automatically without the user leaving/recreating the RDP session;
+- dashboard returned `Hermes=1/direct=0` and last command `перезапуск туннеля` successful.
+
+Do not repeat RL-001 without a concrete regression reason.
+
+## Remaining Stage 2 order
+
+1. **Temporary Windows network loss -> automatic reconnect without manual action.**
+2. Linux server reboot -> controller + dedicated sshd recover -> clients reconnect.
+3. Controller restart -> clients recover.
+4. Dedicated Hermes sshd restart -> clients recover.
+5. Repeated reconnects -> no duplicate/orphan Hermes SSH processes.
+6. Two+ devices simultaneously.
+7. One device failure must not affect another.
 
 Windows reboot recovery is already PASS and is not repeated as a generic test.
 
 ## Exact next action
 
-Inspect and live-test the Telegram **RESTART** path on one accepted current-head Windows device. Source contract on merged `main` is:
-
-`restart` -> agent sets access enabled -> `Restart-SshTunnel` -> force-discover/stop Hermes SSH -> wait 1 second -> start one new SSH tunnel -> report command result.
-
-Acceptance requires proof that the SSH PID changes, process count returns to exactly 1, desired/applied access remains ON, endpoint returns OPEN, and a real RDP connection still works after RESTART.
+Run RL-002 on the accepted Win10 device by temporarily blocking only the Hermes OpenSSH transport path, leaving the user's general Internet/chat connectivity intact. Confirm the current tunnel drops, then remove the temporary block and prove the existing Scheduled Task/agent recreates exactly one SSH tunnel automatically with access still enabled, endpoint OPEN, and RDP usable again without manual Telegram ON/RESTART.
 
 ## Context rule
 
