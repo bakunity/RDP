@@ -49,7 +49,7 @@ A PASS proves the tested scenario/build boundary only. Relevant later code chang
 |---|---|---|---|
 | WI-001 | Normal x64 Windows OpenSSH installation | PASS | Fresh tested installation completed and tunnel worked. |
 | WI-002 | Win10 x64 under x86 PowerShell reaches native OpenSSH via `Sysnative` | PASS | Real Win10 Pro build 19045 showed x64 OS + 32-bit `SysWOW64` PowerShell, `Sysnative` visibility for native `ssh.exe`/`ssh-keygen.exe`, and successful native OpenSSH execution. |
-| WI-003 | Patched fresh full install from x86 PowerShell | PARTIAL PASS | Real target machine and clean-test baseline are prepared: x64 Win10 + x86 PowerShell confirmed; older Hermes install was archived intact with task export; active Hermes directory/task are now absent. Actual current-head pairing/install/tunnel/endpoint/RDP e2e remains. |
+| WI-003 | Patched fresh full install from x86 PowerShell | PARTIAL PASS | Real Win10 Pro 19045 x64 target ran elevated 32-bit PowerShell under `SysWOW64`; previous local Hermes install was archived intact so active Hermes dir/task were absent; immutable current-head installer `c51ed8...` then completed to `=== ГОТОВО ===`, created a new device registration, assigned endpoint and Scheduled Task, and reported OpenSSH transport. Remaining: post-install canonical System32 SSH path/key/task/one-SSH/current-agent checks plus real RDP endpoint connection. |
 | WI-004 | Existing valid installation protected from duplicate Add destructive actions | PASS | Task remained Running, one Hermes SSH process remained, identity/port preserved. |
 | WI-005 | Old duplicate-add behavior could stop working task before pair failure | CONFIRMED BUG / RESOLVED ON TESTED BUILD | Reproduced before guard; later guard live-accepted. |
 | WI-006 | Windows Server incorrectly rejected by installer ProductType gate | CONFIRMED BUG | Real Windows Server reproduced the old client-only rejection; source logic confirmed contradiction. |
@@ -67,7 +67,7 @@ A PASS proves the tested scenario/build boundary only. Relevant later code chang
 | PF-005 | Old 3-second telemetry loop could consume most of its interval | CONFIRMED REGRESSION | Measured heavy operations aligned with observed RDP micro-freezes. |
 | PF-006 | First split fast/background/on-demand telemetry fully removes regression | FAIL / INCOMPLETE FIX | Heavy CPU/RAM/process work moved off 3s path, but RDP NetTCPIP + SSH WMI remained too expensive. |
 | PF-007 | Background resources ~15s, observe resources ~3s/TOP ~6s | PASS | Current-head observation card showed resource age ~3s and populated TOP snapshot age 7s while countdown was active; ordinary background behavior remained healthy before/after observation. |
-| PF-008 | `НАБЛЮДАТЬ 60с` automatically stops heavy telemetry/live render | PASS | Live current-head sequence proved countdown/live resource+TOP cadence, then automatic return to `НабЛЮДАТЬ выключено` after lease expiry without manual stop. |
+| PF-008 | `НАБЛЮДАТЬ 60с` automatically stops heavy telemetry/live render | PASS | Live current-head sequence proved countdown/live resource+TOP cadence, then automatic return to `Наблюдение выключено` after lease expiry without manual stop. |
 | PF-009 | Second fast-path optimization removes NetTCPIP/WMI bottleneck from ordinary 3s loop | PASS | Live on MIPC head `c51ed8fa...`: cached SSH PID avg 21.63 ms, .NET RDP snapshot avg 19.68 ms, combined FAST core avg 27.46 ms / max 43.69 ms. Full SSH WMI refresh remained ~312.72 ms avg but is no longer ordinary per-cycle work. |
 | PF-010 | Overall subjective RDP performance after second optimization | PASS | On the accepted working Hermes path, user reported normal work is comfortable, smooth and free of noticeable micro-freezes; clearly better than before. No noticeable ~15-second periodic stall was reported. |
 
@@ -123,7 +123,7 @@ Targeted current-head smoke RV-001..RV-006 is **COMPLETE**. Do not re-run wholes
 
 ## Remaining acceptance before merge
 
-1. complete current-head fresh Win10 x64 install from PowerShell x86 and real endpoint test;
+1. finish Win10 x86 post-install smoke and real endpoint test;
 2. reconcile feature branch with current `main`, rerun CI and recheck mergeability;
 3. merge only after acceptance is green or remaining scenarios are explicitly split with evidence boundaries.
 
