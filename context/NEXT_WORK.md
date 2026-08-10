@@ -28,16 +28,23 @@ PR #19 is merged. Reconciled CI #175 passed. Current `main` contains the accepte
 
 Run one scenario at a time and record PASS/FAIL evidence.
 
-1. **Telegram RESTART**: current Hermes SSH PID must be replaced; access remains enabled; exactly one tunnel returns; endpoint returns OPEN; real RDP still works.
-2. Temporary Windows network loss -> automatic reconnect without manual action.
-3. Linux server reboot -> controller + dedicated sshd recover -> Windows clients reconnect.
-4. Controller restart -> clients recover.
-5. Dedicated Hermes sshd restart -> clients recover.
-6. Repeated reconnects -> no duplicate/orphan Hermes SSH processes.
-7. Two+ devices simultaneously remain healthy.
-8. Failure of one device does not affect another.
+Completed and removed from the active queue:
+
+- **RL-001 Telegram RESTART — PASS**: old Hermes SSH PID was replaced by a different PID, old process exited, count returned to one, access stayed ON, endpoint returned OPEN, and the already-open Hermes RDP session recovered automatically after a brief connection-lost interval.
+
+Current queue:
+
+1. **Temporary Windows network loss -> automatic reconnect without manual action.**
+2. Linux server reboot -> controller + dedicated sshd recover -> Windows clients reconnect.
+3. Controller restart -> clients recover.
+4. Dedicated Hermes sshd restart -> clients recover.
+5. Repeated reconnects -> no duplicate/orphan Hermes SSH processes.
+6. Two+ devices simultaneously remain healthy.
+7. Failure of one device does not affect another.
 
 Windows reboot recovery is already PASS and is not repeated without a regression reason.
+
+For RL-002, prefer a reversible temporary block scoped to the Hermes OpenSSH transport path rather than disabling the user's whole network adapter, so general Internet/chat access remains available. Acceptance: the existing SSH tunnel is lost, then after the temporary block is removed the agent recreates exactly one tunnel automatically, access remains enabled, endpoint returns OPEN and RDP works again without Telegram ON/RESTART.
 
 ## Stage 3 — device/security lifecycle
 
