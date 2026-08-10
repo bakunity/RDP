@@ -87,9 +87,10 @@ Do not re-run wholesale without a concrete regression reason:
 - observation auto-stop;
 - Windows Server full acceptance;
 - Win10 x64 + PowerShell x86 full acceptance;
-- Telegram RESTART full transport/RDP recovery;
-- automatic Hermes SSH transport recovery after temporary Windows-side network loss;
-- full Linux server reboot recovery with Telegram/dashboard and active RDP restoration.
+- RL-001 Telegram RESTART recovery;
+- RL-002 temporary Windows-side transport loss recovery;
+- RL-003 full Linux server reboot recovery;
+- RL-004 controller-only restart with uninterrupted RDP transport.
 
 ## Current stage — recovery / lifecycle matrix
 
@@ -97,18 +98,19 @@ Stage 2 is active after PR #19 merge.
 
 ### Completed
 
-**RL-001 RESTART — COMPLETE PASS.** Telegram RESTART replaced the existing Hermes SSH PID with a different PID, old PID exited, process count returned to exactly one, access remained ON, Task remained Running, endpoint returned OPEN, dashboard returned `Hermes=1/direct=0`, and the already-open RDP session automatically recovered after a brief connection-lost interval.
+**RL-001 RESTART — COMPLETE PASS.** Telegram RESTART replaced the existing Hermes SSH PID with a different PID, returned to exactly one process, kept access ON and restored the already-open RDP session after a brief interruption.
 
-**RL-002 TEMPORARY WINDOWS NETWORK LOSS — COMPLETE PASS.** A scoped temporary firewall block caused the old Hermes SSH PID to exit. After the block was removed, the existing agent automatically created a different single SSH process with access still enabled and Task still Running; command sequence did not change, proving recovery occurred without Telegram ON/RESTART. The RDP endpoint was usable after recovery. The test intentionally held transport down beyond the Microsoft RDP client's retry window, so that particular open client window required manual reconnect; RL-001 already proves automatic continuity for a shorter interruption.
+**RL-002 TEMPORARY WINDOWS NETWORK LOSS — COMPLETE PASS.** The agent automatically recreated exactly one Hermes SSH process after a scoped transport outage without Telegram ON/RESTART. RDP worked again; the intentionally long test exceeded the Microsoft RDP client retry window.
 
-**RL-003 LINUX SERVER REBOOT — COMPLETE PASS.** Pre-reboot baseline showed both Hermes services enabled+active, `:7000` open and the tested public RDP endpoint open. After a real server reboot, the server returned, Telegram/dashboard worked again, and the already-open Hermes RDP session automatically restored and remained usable. This proves controller, dedicated sshd and client tunnel recovery across a full server reboot on the tested deployment.
+**RL-003 LINUX SERVER REBOOT — COMPLETE PASS.** A real server reboot restored controller, dedicated sshd, Windows reverse tunnel, Telegram/dashboard and the already-open RDP session automatically.
+
+**RL-004 CONTROLLER RESTART — COMPLETE PASS.** `hermes-rdp.service` received a new controller PID while dedicated `hermes-rdp-sshd.service` and the active endpoint `sshd-session` kept their PIDs. Both listeners remained present, Telegram/dashboard worked, and active RDP had no interruption. Controller and transport lifecycle are isolated on the tested deployment.
 
 ### Next acceptance order
 
-1. controller restart recovery while dedicated sshd remains untouched;
-2. dedicated Hermes sshd restart recovery;
-3. repeated reconnects create no duplicate/orphan Hermes SSH processes;
-4. two+ devices work simultaneously;
-5. failure of one device does not affect another.
+1. dedicated Hermes sshd restart recovery;
+2. repeated reconnects create no duplicate/orphan Hermes SSH processes;
+3. two+ devices work simultaneously;
+4. failure of one device does not affect another.
 
 Windows reboot is already PASS and is not repeated generically.
