@@ -132,8 +132,8 @@ PR #19 scope is **COMPLETE**. Runtime acceptance and repository merge gate are b
 | ID | Scenario | Status | Evidence / boundary |
 |---|---|---|---|
 | RL-001 | Telegram RESTART replaces current Hermes SSH transport and returns one healthy tunnel | PASS | Live accepted Win10 device started with access enabled, Task Running and exactly one Hermes SSH PID. Telegram RESTART advanced command seq, old SSH PID disappeared, a different new PID appeared, count returned to exactly 1, access remained enabled. The active Hermes RDP session briefly entered connection-lost state during replacement and then recovered automatically without leaving/recreating the session. Telegram then showed agent ONLINE, desired/applied ON, SSH CONNECTED, endpoint OPEN, `Hermes=1/direct=0`, and successful last command `перезапуск туннеля`. |
-| RL-002 | Temporary Windows network loss auto-recovers | PENDING | Next Stage 2 scenario. |
-| RL-003 | Linux server reboot recovers services and clients | PENDING | Not yet run in Stage 2. |
+| RL-002 | Temporary Windows-side network loss auto-recovers Hermes transport | PASS | Scoped firewall loss killed old Hermes SSH PID. After the block was removed, agent automatically created a different SSH PID, count returned to exactly 1, access stayed enabled, Task stayed Running, command seq stayed unchanged (no Telegram ON/RESTART), and the temporary firewall rule was gone. User then manually reconnected Microsoft RDP and the endpoint worked normally. Scope: the already-open RDP client did not self-resume after this longer outage, so transport recovery is PASS while RDP client session continuity required manual reconnect. |
+| RL-003 | Linux server reboot recovers services and clients | PENDING | Next Stage 2 scenario. |
 | RL-004 | Controller restart recovery | PENDING | Not yet run in Stage 2. |
 | RL-005 | Dedicated Hermes sshd restart recovery | PENDING | Not yet run in Stage 2. |
 | RL-006 | Repeated reconnects produce no duplicate/orphan Hermes SSH | PENDING | Not yet run in Stage 2. |
