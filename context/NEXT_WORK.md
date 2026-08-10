@@ -30,21 +30,21 @@ Run one scenario at a time and record PASS/FAIL evidence.
 
 Completed and removed from the active queue:
 
-- **RL-001 Telegram RESTART — PASS**: old Hermes SSH PID was replaced by a different PID, old process exited, count returned to one, access stayed ON, endpoint returned OPEN, and the already-open Hermes RDP session recovered automatically after a brief connection-lost interval.
-- **RL-002 temporary Windows-side network loss — PASS**: the old Hermes SSH process exited under a scoped network block; after network restoration the agent automatically created one different SSH process with no Telegram command and access still enabled. RDP worked again. The test intentionally exceeded the Microsoft RDP client's reconnect window; that open client window then required manual reconnect.
-- **RL-003 Linux server reboot — PASS**: pre-reboot both Hermes services were enabled+active with `:7000` and the tested RDP endpoint listening; after a real server reboot the server returned, Telegram/dashboard recovered, and the already-open Hermes RDP session restored automatically.
+- **RL-001 Telegram RESTART — PASS**: old Hermes SSH PID replaced, one healthy tunnel returned, access stayed ON, endpoint returned OPEN, active RDP recovered after the short interruption.
+- **RL-002 temporary Windows-side network loss — PASS**: agent automatically recreated one Hermes SSH transport with no Telegram command; RDP worked again after recovery. The intentionally long outage exceeded Microsoft RDP's client retry window.
+- **RL-003 Linux server reboot — PASS**: real reboot restored server services, Telegram/dashboard, Windows reverse tunnel and the already-open RDP session automatically.
+- **RL-004 controller restart — PASS**: controller PID changed while dedicated sshd PID and active endpoint session PID stayed unchanged; listeners remained available, Telegram/dashboard worked, and RDP had no interruption.
 
 Current queue:
 
-1. **Controller restart -> controller recovers while dedicated sshd/RDP transport stays healthy.**
-2. Dedicated Hermes sshd restart -> clients recover.
-3. Repeated reconnects -> no duplicate/orphan Hermes SSH processes.
-4. Two+ devices simultaneously remain healthy.
-5. Failure of one device does not affect another.
+1. **Dedicated Hermes sshd restart -> Windows clients reconnect automatically.**
+2. Repeated reconnects -> no duplicate/orphan Hermes SSH processes.
+3. Two+ devices simultaneously remain healthy.
+4. Failure of one device does not affect another.
 
 Windows reboot recovery is already PASS and is not repeated without a regression reason.
 
-For RL-004, restart only `hermes-rdp.service`, not `hermes-rdp-sshd.service`. Keep an active Hermes RDP session open. Acceptance: controller PID changes and service returns active; dedicated sshd stays active; reverse-tunnel endpoint stays available; Telegram/dashboard returns; Windows-side ON/RESTART is not needed; and the active RDP transport remains usable. Any RDP interruption must be recorded explicitly.
+For RL-005, restart only `hermes-rdp-sshd.service`, not `hermes-rdp.service`. Keep an active Hermes RDP session open. Acceptance: controller remains active with unchanged PID; dedicated sshd gets a new PID and returns active; the old endpoint `sshd-session` is replaced; Windows reconnects automatically without Telegram ON/RESTART; exactly one endpoint listener returns; Telegram/dashboard remains healthy; and RDP recovery/continuity is recorded explicitly.
 
 ## Stage 3 — device/security lifecycle
 
