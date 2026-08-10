@@ -22,51 +22,22 @@ Ship a stable self-hosted product where a user can:
 
 **Hermes RDP v1.2.0 — Stabilization**
 
-Active implementation: PR #19, `fix/control-state-dashboard`. Accepted product head before reconciliation: `c51ed8fa2c090dbc731a0c06f357d899846e90ae`.
+PR #19 is merged. Reconciled CI #175 passed. Current `main` contains the accepted stabilization product code.
 
-## Stage 1 — finish PR #19 repository gate
+## Stage 2 — recovery / lifecycle matrix — ACTIVE
 
-All required live runtime acceptance is complete and removed from the active test queue:
+Run one scenario at a time and record PASS/FAIL evidence.
 
-- immutable MIPC update with identity/key/port preservation;
-- fast-path timing and subjective performance;
-- RV-001..RV-006 current-head regression smoke;
-- `НАБЛЮДАТЬ 60с` including automatic stop;
-- full Windows Server 2019 ProductType=3 acceptance;
-- full Win10 Pro 19045 x64 + 32-bit PowerShell acceptance, including Sysnative Microsoft OpenSSH selection, clean immutable current-head fresh install and real RDP through the assigned endpoint.
+1. **Telegram RESTART**: current Hermes SSH PID must be replaced; access remains enabled; exactly one tunnel returns; endpoint returns OPEN; real RDP still works.
+2. Temporary Windows network loss -> automatic reconnect without manual action.
+3. Linux server reboot -> controller + dedicated sshd recover -> Windows clients reconnect.
+4. Controller restart -> clients recover.
+5. Dedicated Hermes sshd restart -> clients recover.
+6. Repeated reconnects -> no duplicate/orphan Hermes SSH processes.
+7. Two+ devices simultaneously remain healthy.
+8. Failure of one device does not affect another.
 
-Do not repeat these live blocks without a concrete regression reason.
-
-### PR merge preparation — ACTIVE
-
-`main` advanced through context-only commits after the feature branch split. Comparison shows the main-only delta under `context/`; accepted product code remains on the feature branch.
-
-Before merge:
-
-- reconcile current `main` into `fix/control-state-dashboard` without changing accepted product code;
-- verify the reconciled diff/provenance;
-- rerun CI on the reconciled head;
-- recheck GitHub mergeability;
-- merge only if the reconciled gate is green.
-
-### PR #19 merge gate
-
-PR #19 can merge when reconciliation + post-reconciliation CI + final mergeability are green. Runtime acceptance is no longer a blocker.
-
-## Stage 2 — recovery / lifecycle matrix
-
-After PR #19:
-
-- RESTART really recreates/reconnects transport;
-- temporary Windows network loss -> reconnect;
-- Linux server reboot -> controller + dedicated sshd recover -> clients reconnect;
-- controller restart;
-- dedicated sshd restart;
-- repeated reconnect without duplicate/orphan Hermes SSH;
-- two+ devices simultaneously;
-- one device failure does not affect another.
-
-Windows reboot baseline is already PASS.
+Windows reboot recovery is already PASS and is not repeated without a regression reason.
 
 ## Stage 3 — device/security lifecycle
 
@@ -140,7 +111,7 @@ failure
 
 After behavior stabilizes:
 
-- rich architecture diagrams and lifecycle explanations;
+- architecture diagrams and lifecycle explanations;
 - server/client responsibilities;
 - pairing, ON/OFF/RESTART and state model;
 - trust chain and multi-device isolation;
@@ -179,4 +150,4 @@ Before release:
 
 ## Context-system follow-up
 
-Optional after PR #19 merge/reconciliation: lightweight context-hygiene/lint checks for required files, freshness, size and obvious contradictory status patterns.
+Optional after lifecycle work: lightweight context-hygiene/lint checks for required files, freshness, size and obvious contradictory status patterns.
