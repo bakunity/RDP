@@ -8,10 +8,11 @@ For immediate operational truth read `ACTIVE_WORK.md`; for scenario-level proof/
 
 - Repository: `bakunity/RDP`.
 - Published release: `v1.1.0` — OpenSSH transition release.
-- Active stabilization PR: **#19**, branch `fix/control-state-dashboard`.
-- Accepted product head before reconciliation: `c51ed8fa2c090dbc731a0c06f357d899846e90ae`.
 - Target release: **v1.2.0 — Stabilization**.
-- Product changes from PR #19 are not merged to `main` yet.
+- **PR #19 is merged into `main`.**
+- Reconciled PR head: `53f5b42c0a5d09f21a4df41c38a95ef533d0c6ec`.
+- Merge commit: `3f81bde44208df40e1a2753dcadb8397211b9255`.
+- Reconciled CI #175: **PASS** (Linux validation + Windows PowerShell 5.1 validation).
 
 ## Architecture — current
 
@@ -42,71 +43,64 @@ Durable boundaries:
 
 ## Deployment truth
 
-- Linux server is live on immutable `586e9446ea41262f1ed0d9c84ba72838a47d9bc5`.
-- MIPC Windows agent is live on immutable `c51ed8fa...`.
-- Accepted Windows Server 2019 device runs immutable `c51ed8...` and its real endpoint works.
-- Win10 Pro 19045 x64 fresh x86-PowerShell acceptance device runs immutable `c51ed8...` and its real endpoint works.
+- Linux server remains live on immutable `586e9446ea41262f1ed0d9c84ba72838a47d9bc5`.
+- Accepted Windows agents used product head `c51ed8fa2c090dbc731a0c06f357d899846e90ae`.
+- Repository reconciliation and merge did not change the already accepted product tree; current `main` contains the accepted PR product code plus current context.
 
-## Stabilization acceptance — COMPLETE for current product head
+## Stabilization acceptance — COMPLETE for PR #19 scope
 
 ### MIPC
 
-Accepted on `c51ed8...`:
-
 - fast-path timing PASS;
-- subjective smooth Hermes RDP PASS;
-- RV-001..RV-006 targeted classification/control/process smoke PASS;
+- subjective Hermes RDP performance PASS;
+- RV-001..RV-006 PASS;
 - `НАБЛЮДАТЬ 60с` including automatic stop PASS.
-
-Performance regression status: **RESOLVED FOR THE CURRENT TESTED WORKING PATH**.
 
 ### Windows Server
 
-Real clean acceptance is **COMPLETE PASS**:
-
-- Windows Server 2019 Datacenter, ProductType=3, x64, PowerShell 5.1;
-- fresh installer completed to `=== ГОТОВО ===`;
-- old client-only rejection is gone;
-- current-head agent update preserved identity/key/port/config;
-- Task=`Running`, exactly one Hermes `ssh.exe`, expected current-head fast-path implementation;
-- real RDP through assigned endpoint succeeded.
+- Windows Server 2019 Datacenter ProductType=3 clean install PASS;
+- current-head agent update preserving identity/key/port/config PASS;
+- exactly one Hermes SSH process / fast-path markers PASS;
+- real RDP through assigned endpoint PASS.
 
 ### Win10 x64 + PowerShell x86
 
-Real acceptance is **COMPLETE PASS**:
+- Windows 10 Pro 19045 x64 + PowerShell 5.1 x86 baseline PASS;
+- Sysnative Microsoft OpenSSH resolver PASS;
+- clean immutable current-head fresh install from x86 PowerShell PASS;
+- canonical `C:\Windows\System32\OpenSSH\ssh.exe`, keys, `known_hosts`, Task=`Running`, one Hermes SSH process PASS;
+- current fast path present / old executable NetTCPIP path absent PASS;
+- real RDP through newly assigned endpoint PASS.
 
-- Windows 10 Pro build 19045, x64 OS;
-- PowerShell 5.1 launched as a 32-bit `SysWOW64` process;
-- native Microsoft OpenSSH visible/executable through `Sysnative`;
-- previous local Hermes installation archived intact before clean fresh test;
-- immutable `c51ed8...` installer reached `=== ГОТОВО ===` from the same x86 shell;
-- config stores canonical `C:\Windows\System32\OpenSSH\ssh.exe`;
-- key/public key/`known_hosts` exist;
-- Task=`Running`, exactly one Hermes SSH process;
-- current `.NET` fast path, SSH PID cache and loopback peer helper present;
-- old executable `Get-NetTCPConnection` RDP path absent;
-- real RDP through newly assigned endpoint succeeded.
+The Windows x86/WOW64/Sysnative compatibility bug is closed for the accepted product head.
 
-The Windows x86/WOW64/Sysnative compatibility bug is therefore closed for the accepted product head.
+## Stable accepted baseline
 
-Do not repeat accepted MIPC/Windows runtime blocks without a concrete regression reason.
+Do not re-run wholesale without a concrete regression reason:
 
-## Repository / PR state
+- OpenSSH reverse RDP end-to-end;
+- external-network RDP;
+- Windows reboot recovery;
+- Telegram OFF/ON and endpoint CLOSED/OPEN truth;
+- existing-install guard;
+- MIPC current-head classification/control/performance acceptance;
+- observation auto-stop;
+- Windows Server full acceptance;
+- Win10 x64 + PowerShell x86 full acceptance.
 
-Live runtime acceptance is complete. Remaining work is repository-only merge preparation.
+## Current stage — recovery / lifecycle matrix
 
-Before reconciliation:
+Stage 2 is active after PR #19 merge.
 
-- PR #19 head is `c51ed8fa...`;
-- merge base with current `main` is `6cecc33d...`;
-- `main` advanced after branch split through context-only commits;
-- comparison from feature head to current `main` shows the `main`-only delta under `context/`;
-- GitHub currently reports PR mergeable, but this is not the final gate because CI must run on the reconciled head.
+Next acceptance order:
 
-## Immediate blockers before PR #19 merge
+1. Telegram `RESTART` actually replaces the Hermes SSH transport and returns to exactly one tunnel while access stays ON;
+2. temporary Windows network loss recovers automatically;
+3. Linux server reboot recovers controller + dedicated sshd and clients reconnect;
+4. controller restart recovery;
+5. dedicated Hermes sshd restart recovery;
+6. repeated reconnects create no duplicate/orphan Hermes SSH processes;
+7. two+ devices work simultaneously;
+8. failure of one device does not affect another.
 
-1. reconcile `fix/control-state-dashboard` with current `main` while preserving accepted product code;
-2. verify reconciled diff/provenance;
-3. rerun CI on the reconciled head;
-4. recheck mergeability;
-5. merge only when the reconciled gate is green.
+Windows reboot is already PASS and is not repeated generically.
