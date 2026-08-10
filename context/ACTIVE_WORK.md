@@ -58,20 +58,27 @@ Runtime compatibility baseline is **PASS**:
 - `Sysnative\OpenSSH\ssh.exe` and `ssh-keygen.exe` are visible;
 - native Microsoft OpenSSH executes successfully through `Sysnative`.
 
-The machine initially contained an older working Hermes installation created from normal x64 PowerShell. It was not overwritten. That installation was safely stopped, its Scheduled Task exported, and the entire local Hermes directory moved aside intact. Server registration was not deleted.
+The machine initially contained an older working Hermes installation created from normal x64 PowerShell. It was safely archived intact and its Scheduled Task exported, leaving no active Hermes directory/task for the fresh test.
 
-Fresh-test baseline is now **PASS**:
+### Fresh x86 install — INSTALLER PASS
 
-- `C:\ProgramData\HermesRDP` absent;
-- `Hermes RDP Agent` Scheduled Task absent;
-- archived prior installation exists for rollback;
-- current shell remains 32-bit PowerShell on x64 Windows.
+Using the same elevated PowerShell x86 process and immutable current head `c51ed8fa2c090dbc731a0c06f357d899846e90ae`, the fresh installer completed successfully to `=== ГОТОВО ===`:
 
-Exact next action: generate a fresh pair code in Telegram, then run the immutable current-head installer from this same elevated PowerShell x86 process with `RepositoryRef=c51ed8fa2c090dbc731a0c06f357d899846e90ae`. After install, verify canonical System32 SSH path, task/tunnel/endpoint and real RDP connectivity. Do not restore the archived old installation unless the test fails or acceptance is complete and rollback is intentionally chosen.
+- a new device registration was created;
+- an RDP endpoint was assigned;
+- transport reported `OpenSSH`;
+- `Hermes RDP Agent` Scheduled Task was created;
+- the installer did not fail on WOW64/System32 redirection.
+
+This is the key live proof that the patched installer can complete from x86 PowerShell on x64 Win10. Full WI-003 acceptance is not complete yet: post-install state and real endpoint usability still need live confirmation.
+
+Exact next action: inspect the newly installed config/task/process/agent state from the same x86 shell, confirming canonical `C:\Windows\System32\OpenSSH\ssh.exe`, key presence, Task=`Running`, exactly one Hermes SSH process, and current-head fast-path markers. Then perform one real RDP connection through the assigned endpoint.
+
+The archived old `ai` installation remains rollback material. Do not restore it until the fresh x86 acceptance is complete or a rollback is intentionally chosen.
 
 ## Remaining PR #19 acceptance
 
-1. complete the fresh patched Win10 x64 install from PowerShell x86 and real endpoint test;
+1. finish Win10 x86 post-install smoke and real RDP endpoint test;
 2. reconcile PR #19 with current `main`, rerun CI and recheck mergeability;
 3. merge only after acceptance is green or remaining scenarios are explicitly split with evidence boundaries.
 
