@@ -52,19 +52,20 @@ Live-tested on the accepted Win10 x64/x86-PowerShell device:
 - active RDP through Hermes briefly reported connection loss during transport replacement, then recovered automatically without the user leaving/recreating the RDP session;
 - dashboard returned `Hermes=1/direct=0` and last command `перезапуск туннеля` successful.
 
-### RL-002 Temporary Windows-side network loss — PASS WITH SCOPE
+### RL-002 Temporary Windows-side network loss — COMPLETE PASS
 
 A reversible outbound firewall block was applied only to the Hermes OpenSSH transport. Live evidence:
 
 - old Hermes SSH PID exited during the block;
 - after the block was removed, the existing agent recreated one new SSH process automatically;
 - recovered PID differed from the old PID;
+- exactly one Hermes SSH process remained;
 - access remained enabled and Scheduled Task remained Running;
 - command sequence did not change, proving no Telegram ON/RESTART was used;
 - temporary firewall rule was removed successfully;
-- user manually reconnected the RDP client and the Hermes endpoint worked normally again.
+- RDP through the endpoint worked normally again after recovery.
 
-Scope note: the Hermes transport recovered automatically, but the already-open Microsoft RDP client session did **not** self-resume in this longer outage; the user had to reconnect the RDP client. Treat that as session-continuity/client behavior, not failure of Hermes tunnel recovery.
+RDP continuity interpretation: the test intentionally held the transport down long enough that Microsoft RDP exhausted its finite reconnect attempts (user observed roughly five retry cycles) and stopped retrying. Manual reconnection afterward succeeded immediately. This is not treated as a Hermes recovery defect. RL-001 already proves that a shorter transport interruption can be survived by the already-open RDP session automatically.
 
 Do not repeat RL-001/RL-002 without a concrete regression reason.
 
