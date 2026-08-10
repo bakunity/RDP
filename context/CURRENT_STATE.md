@@ -47,9 +47,9 @@ Server is live on immutable head `586e9446ea41262f1ed0d9c84ba72838a47d9bc5`.
 
 MIPC Windows agent is live on immutable head `c51ed8fa2c090dbc731a0c06f357d899846e90ae`.
 
-The accepted Windows Server 2019 Datacenter device is also running immutable agent head `c51ed8...` after an in-place update preserving identity/key/port/config. Its real assigned Hermes RDP endpoint was successfully used after that update.
+The accepted Windows Server 2019 Datacenter device also runs immutable `c51ed8...`; its identity/key/port/config survived update and its real Hermes RDP endpoint works after the update.
 
-## Stabilization acceptance — current
+## Stabilization acceptance — accepted blocks
 
 ### MIPC
 
@@ -64,11 +64,7 @@ Performance regression status: **RESOLVED FOR THE CURRENT TESTED WORKING PATH**.
 
 ### Windows Server
 
-Old bug: installer rejected `ProductType != 1` before its later Server edition check.
-
-Current implementation accepts ProductType 2/3 for recognized Windows Server editions.
-
-Real clean acceptance is now **COMPLETE PASS**:
+Real clean acceptance is **COMPLETE PASS**:
 
 - Windows Server 2019 Datacenter, ProductType=3, x64, PowerShell 5.1;
 - no pre-existing Hermes directory/task before fresh install;
@@ -79,25 +75,35 @@ Real clean acceptance is now **COMPLETE PASS**:
 - expected current-head fast-path implementation installed;
 - real RDP session through the assigned Hermes endpoint succeeded after the update.
 
-Do not repeat Windows Server acceptance without a concrete regression reason.
+Do not repeat these accepted blocks without a concrete regression reason.
 
-## Windows compatibility — remaining
+## Windows compatibility — current stage
 
 ### Win10 x64 + x86 PowerShell
 
-Confirmed runtime behavior:
+Real target machine:
 
-- 64-bit Windows under 32-bit PowerShell experiences WOW64 redirection;
-- `Sysnative` reaches native Microsoft OpenSSH;
-- installer resolver stores canonical `System32` path and avoids PATH/Git SSH fallback.
+- Windows 10 Pro build 19045;
+- x64 OS;
+- PowerShell 5.1 running as 32-bit process from `SysWOW64`;
+- Microsoft OpenSSH capability installed;
+- native `ssh.exe` and `ssh-keygen.exe` visible through `Sysnative`;
+- native OpenSSH execution through `Sysnative` confirmed.
+
+The machine originally had an older Hermes client installed from normal x64 PowerShell. For a genuine fresh x86 acceptance test, that local installation was safely archived intact and its Scheduled Task exported; the server registration was not deleted.
+
+Current fresh-test baseline:
+
+- active `C:\ProgramData\HermesRDP` directory — absent;
+- active `Hermes RDP Agent` Scheduled Task — absent;
+- previous local install — archived for rollback;
+- current shell — still x86 PowerShell on x64 Windows.
 
 Status:
 
-- raw Sysnative visibility/probe — **PASS**;
-- existing-install guard — **PASS**;
-- genuinely fresh full patched install launched from x86 PowerShell — **IMPLEMENTED, NOT VALIDATED**.
-
-This is the only remaining live Windows compatibility acceptance before PR merge preparation.
+- Sysnative runtime/probe — **PASS**;
+- clean x86 fresh-test baseline — **PASS**;
+- current-head fresh pairing/install/task/tunnel/endpoint/RDP e2e — **PENDING**.
 
 ## Stable accepted baseline
 
@@ -112,7 +118,7 @@ Do not re-run wholesale without a concrete regression reason:
 - MIPC fast-path/performance acceptance;
 - PF-008 observation auto-stop;
 - complete Windows Server ProductType/current-head/end-to-end acceptance;
-- Win10 x64/x86 PowerShell Sysnative OpenSSH probe behavior.
+- Win10 x64/x86 PowerShell Sysnative OpenSSH runtime behavior.
 
 ## CI / PR state
 
@@ -120,6 +126,6 @@ Current PR head `c51ed8fa...` has green CI #139 from before the latest context-o
 
 ## Immediate blockers before PR #19 merge
 
-1. fresh Win10 x64 full install launched from PowerShell x86;
+1. complete the fresh Win10 x64 install from PowerShell x86 using immutable current-head code and prove its real endpoint;
 2. reconcile feature branch with current `main`, rerun CI and recheck mergeability;
 3. merge only after acceptance is green or remaining scenarios are explicitly split with evidence boundaries.
