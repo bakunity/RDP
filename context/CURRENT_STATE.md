@@ -90,7 +90,8 @@ Do not re-run wholesale without a concrete regression reason:
 - RL-001 Telegram RESTART recovery;
 - RL-002 temporary Windows-side transport loss recovery;
 - RL-003 full Linux server reboot recovery;
-- RL-004 controller-only restart with uninterrupted RDP transport.
+- RL-004 controller-only restart with uninterrupted RDP transport;
+- RL-005 dedicated sshd restart with automatic Windows tunnel and RDP recovery.
 
 ## Current stage — recovery / lifecycle matrix
 
@@ -104,13 +105,14 @@ Stage 2 is active after PR #19 merge.
 
 **RL-003 LINUX SERVER REBOOT — COMPLETE PASS.** A real server reboot restored controller, dedicated sshd, Windows reverse tunnel, Telegram/dashboard and the already-open RDP session automatically.
 
-**RL-004 CONTROLLER RESTART — COMPLETE PASS.** `hermes-rdp.service` received a new controller PID while dedicated `hermes-rdp-sshd.service` and the active endpoint `sshd-session` kept their PIDs. Both listeners remained present, Telegram/dashboard worked, and active RDP had no interruption. Controller and transport lifecycle are isolated on the tested deployment.
+**RL-004 CONTROLLER RESTART — COMPLETE PASS.** Controller PID changed while dedicated sshd and the active endpoint session stayed untouched. Both listeners remained present, Telegram/dashboard worked, and active RDP had no interruption.
+
+**RL-005 DEDICATED SSHD RESTART — COMPLETE PASS.** Restarting only `hermes-rdp-sshd.service` left the controller PID unchanged, replaced the dedicated sshd PID and endpoint session PID, restored `:7000` and the same public endpoint, and the Windows reverse tunnel plus already-open RDP session recovered automatically. Telegram/dashboard remained healthy.
 
 ### Next acceptance order
 
-1. dedicated Hermes sshd restart recovery;
-2. repeated reconnects create no duplicate/orphan Hermes SSH processes;
-3. two+ devices work simultaneously;
-4. failure of one device does not affect another.
+1. repeated reconnects create no duplicate/orphan Hermes SSH processes;
+2. two+ devices work simultaneously;
+3. failure of one device does not affect another.
 
 Windows reboot is already PASS and is not repeated generically.
