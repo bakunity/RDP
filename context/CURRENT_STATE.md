@@ -87,7 +87,8 @@ Do not re-run wholesale without a concrete regression reason:
 - observation auto-stop;
 - Windows Server full acceptance;
 - Win10 x64 + PowerShell x86 full acceptance;
-- Telegram RESTART full transport/RDP recovery.
+- Telegram RESTART full transport/RDP recovery;
+- automatic Hermes SSH transport recovery after temporary Windows-side network loss.
 
 ## Current stage — recovery / lifecycle matrix
 
@@ -97,14 +98,15 @@ Stage 2 is active after PR #19 merge.
 
 **RL-001 RESTART — COMPLETE PASS.** Telegram RESTART replaced the existing Hermes SSH PID with a different PID, old PID exited, process count returned to exactly one, access remained ON, Task remained Running, endpoint returned OPEN, dashboard returned `Hermes=1/direct=0`, and the already-open RDP session automatically recovered after a brief connection-lost interval.
 
+**RL-002 TEMPORARY WINDOWS NETWORK LOSS — PASS WITH SCOPE.** A scoped temporary firewall block caused the old Hermes SSH PID to exit. After the block was removed, the existing agent automatically created a different single SSH process with access still enabled and Task still Running; command sequence did not change, proving recovery occurred without Telegram ON/RESTART. The RDP endpoint was usable after recovery. The already-open Microsoft RDP client did not self-resume after this longer outage and required a manual RDP reconnect; this is recorded as session-continuity/client behavior, not Hermes transport recovery failure.
+
 ### Next acceptance order
 
-1. temporary Windows network loss recovers automatically without manual Telegram action;
-2. Linux server reboot recovers controller + dedicated sshd and clients reconnect;
-3. controller restart recovery;
-4. dedicated Hermes sshd restart recovery;
-5. repeated reconnects create no duplicate/orphan Hermes SSH processes;
-6. two+ devices work simultaneously;
-7. failure of one device does not affect another.
+1. Linux server reboot recovers controller + dedicated sshd and clients reconnect;
+2. controller restart recovery;
+3. dedicated Hermes sshd restart recovery;
+4. repeated reconnects create no duplicate/orphan Hermes SSH processes;
+5. two+ devices work simultaneously;
+6. failure of one device does not affect another.
 
 Windows reboot is already PASS and is not repeated generically.
