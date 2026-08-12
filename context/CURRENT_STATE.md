@@ -52,6 +52,7 @@ Do not re-run wholesale without a concrete regression reason:
 - RL-003 Linux server reboot;
 - RL-004 controller restart isolation;
 - RL-005 dedicated sshd restart recovery;
+- RL-007 simultaneous multi-device user smoke;
 - CP-001 slow/malformed TLS isolation;
 - CL-001 desired-state reconciliation independent of SSH transport;
 - CU-001 command timeout semantics;
@@ -71,16 +72,15 @@ Do not re-run wholesale without a concrete regression reason:
 
 **RL-006 — PARTIAL PASS.** Five repeated dedicated-sshd reconnect cycles were clean server-side. Final Windows process count on the original test machine remains deferred; do not repeat the stress sequence.
 
-**RL-007 — SERVER-SIDE PASS.** Four independent endpoints were simultaneously listening and passed TCP-through-tunnel checks. Only user-facing simultaneous dual-RDP smoke remains.
+**RL-007 — COMPLETE PASS.** Four independent endpoints were previously healthy server-side and passed TCP-through-tunnel checks. Final user-facing acceptance also passed: two simultaneous Microsoft RDP sessions to different Hermes devices were open and usable concurrently without mutual disruption.
 
 **RL-008 — PENDING.** Verify failure of one device does not affect another healthy device/session/endpoint.
 
 ## Current release gate
 
-The soak blockers that paused lifecycle acceptance are closed. Resume Stage 2 with the smallest remaining lifecycle checks:
+The soak blockers are closed and RL-007 is complete. Remaining Stage 2 work is intentionally small:
 
-1. finish RL-007 with simultaneous user-facing RDP sessions on two devices;
-2. run RL-008 one-device-failure isolation;
-3. optionally close RL-006 with one lightweight Windows `HermesSshCount == 1` check if the original tested machine is available.
+1. run RL-008 one-device-failure isolation with a reversible fault scoped to only one client;
+2. optionally close RL-006 with one lightweight Windows `HermesSshCount == 1` check if the original tested machine is available.
 
-Do not repeat CP-001, CL-001, CU-001 or the five-cycle RL-006 stress without a concrete regression reason.
+Do not repeat CP-001, CL-001, CU-001, RL-007 or the five-cycle RL-006 stress without a concrete regression reason.
