@@ -9,13 +9,38 @@ Purpose: first operational file after `context/README.md`. Contains current work
 - Repository: `bakunity/RDP`.
 - Published release: `v1.1.0`.
 - Target release: **v1.2.0 — Stabilization**.
-- PR #19 is merged into `main`; reconciled CI #175 passed.
+- PR #19 is merged and accepted.
+- PR #20 (`fix: prevent soak-time control plane deadlocks`) is merged into `main` as `dcda9d3890be390a90e9a967905f2cab3c6c7194`.
 
 ## Deployment truth
 
-- Linux server remains live on immutable `586e9446ea41262f1ed0d9c84ba72838a47d9bc5`.
-- Accepted Windows agents used product head `c51ed8fa2c090dbc731a0c06f357d899846e90ae`.
-- Dedicated OpenSSH transport is operational and remains isolated from controller lifecycle.
+- Live controller/app is deployed from immutable PR #20 head `77240e2d758f0ed4598553d4d903331229653f06`.
+- Final controller-only deploy passed: controller active, `/healthz` OK, configured repository ref exact, rollback backup `/var/backups/hermes-rdp/controller-20260812T095505Z`.
+- Dedicated `hermes-rdp-sshd.service` was not restarted by the final deploy; PID remained unchanged, preserving active OpenSSH transport.
+- MIPC agent live acceptance used immutable head `2a170b0f4961299227120afa2eb7c0fffb0f0d13`; subsequent PR #20 changes touched only server bot/registry/tests, not the Windows agent.
+
+## Stabilization blockers — CLOSED
+
+### CP-001 — TLS accept stall — COMPLETE PASS
+
+Fix moves TLS handshake into the accepted connection worker and bounds handshake/client socket timeouts. Live bounded repro held a silent raw TCP client on `:7443` while five parallel `/healthz` requests all passed in 16–20 ms; controller and dedicated sshd PIDs remained unchanged and active telemetry stayed fresh.
+
+Do not repeat the slow-handshake stress without a concrete regression reason.
+
+### CL-001 — desired OFF + local ON deadlock — COMPLETE PASS
+
+New Windows agent polls heartbeat/control before transport reconciliation and consumes durable `desired_enabled` independently of transient commands. Direct live acceptance on MIPC forced server desired OFF without queuing a new command (`command_seq` stayed 27). Agent remained online, converged applied access OFF, stopped SSH, closed endpoint within 5 seconds, then automatically recovered to ON/one SSH/open endpoint within 8 seconds after server desired state was restored.
+
+Do not repeat this deadlock reproduction without a concrete regression reason.
+
+### CU-001 — command pending forever — COMPLETE PASS
+
+Existing OSIO seq 14 OFF timed out after the configured 60 seconds: pending state cleared, durable desired OFF stayed false, timeout result preserved the same seq/action, and endpoint remained closed. Late command-result after timeout is now rejected so it cannot overwrite the timeout result; regression coverage passed in CI #210.
+
+## Telegram UI follow-up — COMPLETE PASS
+
+- Dashboard now auto-renders when command/tunnel state changes; user confirmed OFF/ON state and buttons update without manual `🔄 ОБНОВИТЬ`.
+- OFF and RESTART are separate full-width rows; user confirmed mobile Telegram renders both correctly.
 
 ## Stable accepted blocks
 
@@ -23,76 +48,31 @@ Do not repeat without a concrete regression reason:
 
 - OpenSSH reverse RDP end-to-end and external-network RDP;
 - Windows reboot recovery;
-- Telegram OFF/ON and endpoint CLOSED/OPEN truth on the accepted healthy path;
-- MIPC current-head performance/classification/Observe60 acceptance;
+- Telegram OFF/ON and endpoint CLOSED/OPEN truth;
+- MIPC performance/classification/Observe60 acceptance;
 - Windows Server 2019 current-head acceptance;
-- Win10 x64 + PowerShell x86/Sysnative current-head acceptance;
-- RL-001 Telegram RESTART recovery;
-- RL-002 temporary Windows-side transport loss recovery;
-- RL-003 Linux server reboot recovery;
-- RL-004 controller restart isolation;
-- RL-005 dedicated sshd restart recovery.
+- Win10 x64 + PowerShell x86/Sysnative acceptance;
+- RL-001..RL-005 lifecycle recovery;
+- CP-001, CL-001 and CU-001 stabilization acceptance;
+- Telegram UI auto-refresh/mobile button-layout acceptance.
 
-## Stage 2 evidence accumulated
+## Stage 2 remaining work
 
 ### RL-006 repeated reconnect stress — PARTIAL PASS
 
-Five consecutive dedicated-sshd restart cycles each removed the old endpoint session, created a different new `sshd-session`, returned exactly one listener on the tested endpoint and exactly one listener on `:7000`, and left the controller PID unchanged. Server side is PASS. Final Windows `ssh.exe` count was not collected because the RDP client later became unusable; do not repeat the five-cycle stress. When that Windows machine is available, only one final process-count check is needed.
+Five consecutive dedicated-sshd restart cycles were clean server-side. Final Windows process-count check on the original tested machine was not collected. Do not repeat the five-cycle stress; if that machine is available later, one lightweight `HermesSshCount == 1` check is sufficient.
 
-### RL-007 multi-device — SERVER-SIDE PASS
+### RL-007 multi-device — SERVER-SIDE PASS, USER SMOKE REMAINS
 
-Four independent endpoint listeners were simultaneously present on `:53389`, `:53390`, `:53392`, and `:53393`. TCP checks through all four endpoints passed while dedicated sshd remained healthy. User-facing simultaneous dual-RDP smoke was interrupted by newly discovered lifecycle defects below.
+Four independent endpoints were simultaneously healthy and TCP-through-tunnel passed server-side. Remaining acceptance is only the user-facing simultaneous dual-RDP smoke on two devices.
 
-## Release blockers discovered by soak / long-lived operation
+### RL-008 failure isolation — PENDING
 
-### CP-001 — HTTPS API accept path can stall on TLS handshake — CONFIRMED BUG
-
-After roughly a day of operation, Telegram showed all active devices offline while multiple OpenSSH endpoint listeners remained alive. Live forensics showed:
-
-- `hermes-rdp.service` still `active` and `:7443` still LISTEN;
-- local `/healthz` timed out;
-- listener backlog reached `Recv-Q 6 / backlog 5`;
-- an external connection remained established on `:7443`;
-- the API thread was blocked in socket receive (`tcp_recvmsg`);
-- Windows telemetry stopped globally while independent OpenSSH tunnels remained alive.
-
-Current server code wraps the listening HTTP socket in TLS before `ThreadingHTTPServer` can hand accepted connections to worker threads, so a stalled TLS handshake can block the accept path.
-
-Controller-only restart recovered the API without restarting dedicated sshd. `/healthz` immediately passed and active Windows clients resumed telemetry with `last_seen` age about one second.
-
-**v1.2.0 release blocker:** TLS handshake must be isolated per accepted connection and bounded by timeout; one slow/malformed client must never block global API acceptance.
-
-### CL-001 — desired OFF + local ON can deadlock command delivery — CONFIRMED BUG
-
-Live reproduced on device `пк osio` / endpoint `:53390`:
-
-- device had already stopped telemetry long before the OFF button was pressed;
-- Telegram OFF stored desired access OFF and queued command seq 14;
-- pending `off` remained unresolved for many hours; last confirmed result remained seq 13 `on`;
-- server endpoint was CLOSED;
-- Windows continued repeatedly attempting SSH authentication;
-- the repeated SSH fingerprint exactly matched OSIO's registered Ed25519 key;
-- server rejected that key because `authorize_ssh_key()` permits only devices with `enabled=1`;
-- Windows agent attempts transport reconciliation before posting telemetry, so failed `Start-SshTunnel` aborts that loop iteration before it can fetch the pending OFF command.
-
-This creates a control deadlock: server desired OFF blocks SSH, local agent still believes ON, SSH start fails, heartbeat/control poll is skipped, pending OFF is never received.
-
-**v1.2.0 release blocker:** heartbeat/control polling must remain functional even when tunnel start/recovery fails. Transport reconciliation cannot gate telemetry/control delivery.
-
-### CU-001 — pending command can remain "executing" indefinitely — CONFIRMED UX/STATE BUG
-
-OSIO command seq 14 remained pending for many hours with no result, and Telegram continued showing execution in progress. Deterministic timeout/state handling is now promoted from later UX work into the stabilization fix. Timeout semantics must not break durable desired-state reconciliation for offline devices.
+Verify one device transport/client failure does not disturb another healthy device or its endpoint/session.
 
 ## Exact next action
 
-Pause RL-007/RL-008 acceptance and implement a dedicated stabilization fix branch covering:
-
-1. per-connection TLS handshake with bounded timeout so API accept remains available;
-2. Windows agent heartbeat/control path independent from SSH start/recovery failure;
-3. safe command timeout/status semantics that preserve durable desired state;
-4. regression tests for both confirmed deadlocks/stalls.
-
-After CI, deploy server fix first, update at least one Windows agent, reproduce the previously failing conditions in bounded form, then resume RL-007/RL-008.
+Resume Stage 2 with **RL-007 user-facing simultaneous dual-RDP smoke**. Keep it bounded: open two already-healthy Hermes endpoints at the same time and confirm both sessions remain usable concurrently. If PASS, move directly to RL-008 isolation. Do not re-run CP/CL/CU or the five-cycle RL-006 stress.
 
 ## Context rule
 
