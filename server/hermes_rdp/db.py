@@ -513,26 +513,43 @@ class Registry:
 
     def complete_command(
         self, device_id: str, seq: int, ok: bool, message: str
-    ) -> None:
+    ) -> bool:
+        timestamp = now()
         with self.connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
             row = conn.execute(
-                "SELECT command_seq,pending_command FROM devices WHERE id=?",
+                "SELECT command_seq,pending_command FROM devices "
+                "WHERE id=? AND revoked=0",
                 (device_id,),
             ).fetchone()
+            if (
+                not row
+                or int(row["command_seq"]) != int(seq)
+                or not row["pending_command"]
+            ):
+                return False
+
+            action = str(row["pending_command"])
             result = {
                 "seq": int(seq),
-                "action": str(row["pending_command"] or "") if row else "",
+                "action": action,
                 "ok": bool(ok),
                 "message": str(message)[:500],
-                "completed_at": now(),
+                "completed_at": timestamp,
             }
-            if not row or int(row["command_seq"]) != int(seq):
-                return
-            conn.execute(
+            cursor = conn.execute(
                 "UPDATE devices SET pending_command=NULL,pending_created_at=NULL,"
-                "last_result_json=?,updated_at=? WHERE id=?",
-                (json.dumps(result, ensure_ascii=False), now(), device_id),
+                "last_result_json=?,updated_at=? "
+                "WHERE id=? AND revoked=0 AND command_seq=? AND pending_command=?",
+                (
+                    json.dumps(result, ensure_ascii=False),
+                    timestamp,
+                    device_id,
+                    int(seq),
+                    action,
+                ),
             )
+            return cursor.rowcount == 1
 
     def rename_device(self, device_id: str, name: str) -> None:
         clean = name.strip()[:64]
