@@ -12,36 +12,31 @@ Ship a stable self-hosted product where a user can install Hermes on Debian/Ubun
 
 **Hermes RDP v1.2.0 — Stabilization**
 
-PR #19 is merged and accepted. PR #20 is merged and live-accepted; the soak blockers CP-001, CL-001 and CU-001 are closed.
+PR #19 is merged and accepted. PR #20 is merged and live-accepted; the soak blockers CP-001, CL-001 and CU-001 are closed. RL-007 simultaneous multi-device user smoke is also COMPLETE PASS.
 
 ## Immediate work — Stage 2 lifecycle completion
 
-### 1. RL-007 — simultaneous multi-device user smoke
+### 1. RL-008 — one-device failure isolation
 
-Server-side evidence is already PASS: four independent public RDP endpoints were simultaneously listening and all four TCP-through-tunnel checks passed. Remaining work is intentionally small:
+Deliberately disturb only one selected test device/transport and verify another healthy device remains unaffected:
 
-- open standard Microsoft RDP sessions to two already-healthy Hermes devices at the same time;
-- verify both sessions remain independently usable for a short bounded interval;
-- verify neither session causes endpoint/tunnel loss on the other device;
-- no repeated infrastructure stress is needed.
+- keep a real Hermes RDP session open on healthy device B;
+- apply the smallest reversible transport/client fault only to device A;
+- verify device B heartbeat stays fresh;
+- verify device B SSH tunnel/listener stays present;
+- verify device B active RDP session remains usable;
+- verify controller and dedicated sshd remain healthy.
 
-### 2. RL-008 — one-device failure isolation
+Do not restart shared infrastructure. Do not repeat earlier CP/CL/CU or multi-cycle sshd stress.
 
-After RL-007, deliberately disturb only one selected test device/transport and verify another healthy device remains unaffected:
-
-- other device heartbeat stays fresh;
-- other device SSH tunnel/listener stays present;
-- other device RDP session remains usable;
-- controller and dedicated sshd remain healthy.
-
-Use the smallest reversible fault that proves isolation. Do not restart all infrastructure or repeat earlier stress sequences.
-
-### 3. RL-006 — optional final lightweight Windows count
+### 2. RL-006 — optional final lightweight Windows count
 
 Server-side repeated reconnect stress is already PASS after five clean dedicated-sshd cycles. Final Windows process count on the original tested machine was not collected. If that exact machine is available, perform only one check that normal ON state has exactly one Hermes `ssh.exe`. Do not repeat the five-cycle test.
 
-## Stabilization evidence retained — do not repeat
+## Completed Stage 2 evidence retained
 
+- RL-001..RL-005: COMPLETE PASS.
+- RL-007: four simultaneous server-side endpoints/TCP checks PASS plus two simultaneous user-facing Microsoft RDP sessions to different Hermes devices PASS.
 - CP-001: per-connection TLS handshake + bounded timeout; live slow-client acceptance COMPLETE PASS.
 - CL-001: heartbeat/control independent of SSH transport; direct desired OFF/local ON reconciliation COMPLETE PASS.
 - CU-001: 60-second transient command timeout with durable desired state and late-result rejection; COMPLETE PASS.
