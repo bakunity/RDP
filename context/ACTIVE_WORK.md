@@ -53,6 +53,7 @@ Do not repeat without a concrete regression reason:
 - Windows Server 2019 current-head acceptance;
 - Win10 x64 + PowerShell x86/Sysnative acceptance;
 - RL-001..RL-005 lifecycle recovery;
+- RL-007 simultaneous multi-device user smoke;
 - CP-001, CL-001 and CU-001 stabilization acceptance;
 - Telegram UI auto-refresh/mobile button-layout acceptance.
 
@@ -62,9 +63,9 @@ Do not repeat without a concrete regression reason:
 
 Five consecutive dedicated-sshd restart cycles were clean server-side. Final Windows process-count check on the original tested machine was not collected. Do not repeat the five-cycle stress; if that machine is available later, one lightweight `HermesSshCount == 1` check is sufficient.
 
-### RL-007 multi-device — SERVER-SIDE PASS, USER SMOKE REMAINS
+### RL-007 multi-device — COMPLETE PASS
 
-Four independent endpoints were simultaneously healthy and TCP-through-tunnel passed server-side. Remaining acceptance is only the user-facing simultaneous dual-RDP smoke on two devices.
+Server-side evidence already showed four independent endpoints simultaneously healthy with successful TCP-through-tunnel checks. Final user-facing smoke also passed: two Microsoft RDP sessions to different Hermes devices were open and usable at the same time without mutual disruption.
 
 ### RL-008 failure isolation — PENDING
 
@@ -72,7 +73,7 @@ Verify one device transport/client failure does not disturb another healthy devi
 
 ## Exact next action
 
-Resume Stage 2 with **RL-007 user-facing simultaneous dual-RDP smoke**. Keep it bounded: open two already-healthy Hermes endpoints at the same time and confirm both sessions remain usable concurrently. If PASS, move directly to RL-008 isolation. Do not re-run CP/CL/CU or the five-cycle RL-006 stress.
+Run **RL-008 one-device failure isolation** using the smallest reversible fault. Keep one healthy Hermes RDP session open on device B, disturb only device A, and prove device B heartbeat, tunnel/listener and active RDP remain healthy. Do not restart shared controller/sshd infrastructure and do not repeat CP/CL/CU or the five-cycle RL-006 stress.
 
 ## Context rule
 
