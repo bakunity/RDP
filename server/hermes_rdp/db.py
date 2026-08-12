@@ -89,10 +89,17 @@ def normalize_ssh_public_key(value: str) -> str:
 
 
 class Registry:
-    def __init__(self, db_path: str | Path, port_start: int, port_end: int):
+    def __init__(
+        self,
+        db_path: str | Path,
+        port_start: int,
+        port_end: int,
+        command_timeout_seconds: int = 60,
+    ):
         self.db_path = Path(db_path)
         self.port_start = int(port_start)
         self.port_end = int(port_end)
+        self.command_timeout_seconds = max(1, int(command_timeout_seconds))
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.init_schema()
 
@@ -362,6 +369,7 @@ class Registry:
         return data
 
     def list_devices(self, include_revoked: bool = False) -> list[dict[str, Any]]:
+        self.expire_stale_commands(self.command_timeout_seconds)
         where = "" if include_revoked else "WHERE revoked=0"
         with self.connect() as conn:
             rows = conn.execute(
@@ -370,6 +378,10 @@ class Registry:
         return [self._device_row(row) for row in rows]
 
     def get_device(self, device_id: str) -> dict[str, Any]:
+        self.expire_stale_commands(
+            self.command_timeout_seconds,
+            device_id=device_id,
+        )
         with self.connect() as conn:
             row = conn.execute("SELECT * FROM devices WHERE id=?", (device_id,)).fetchone()
         if not row:
@@ -377,6 +389,10 @@ class Registry:
         return self._device_row(row)
 
     def update_telemetry(self, device_id: str, telemetry: dict[str, Any]) -> dict[str, Any] | None:
+        self.expire_stale_commands(
+            self.command_timeout_seconds,
+            device_id=device_id,
+        )
         timestamp = now()
         with self.connect() as conn:
             conn.execute(
@@ -394,6 +410,10 @@ class Registry:
     def queue_command(self, device_id: str, action: str) -> int:
         if action not in {"on", "off", "restart"}:
             raise ValueError("unsupported command")
+        self.expire_stale_commands(
+            self.command_timeout_seconds,
+            device_id=device_id,
+        )
         timestamp = now()
         with self.connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
@@ -443,13 +463,7 @@ class Registry:
         *,
         device_id: str | None = None,
     ) -> int:
-        """Expire only transient execution state, preserving desired access.
-
-        `enabled` is the durable desired state. A timed-out command is removed
-        from the in-flight slot so the UI cannot remain stuck forever, but the
-        desired flag is deliberately left unchanged. A reconnecting agent can
-        still converge from `desired_enabled` returned by the telemetry API.
-        """
+        """Expire transient execution state while preserving desired access."""
         timeout = max(1, int(timeout_seconds))
         timestamp = now()
         cutoff = timestamp - timeout
@@ -547,6 +561,7 @@ class Registry:
                 raise KeyError(device_id)
 
     def cleanup(self) -> None:
+        self.expire_stale_commands(self.command_timeout_seconds)
         cutoff = now() - 86400
         with self.connect() as conn:
             conn.execute(
