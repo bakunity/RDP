@@ -65,6 +65,7 @@ class TelegramBot:
         self.offset = 0
         self.lock = threading.RLock()
         self.last_render = 0.0
+        self.last_device_signature: tuple[Any, ...] | None = None
 
     def api_call(self, method: str, payload: dict[str, Any] | None = None, timeout: int = 40):
         request = urllib.request.Request(
@@ -256,20 +257,59 @@ class TelegramBot:
             return
         self._answer(callback_id)
 
+    def _device_signature(self) -> tuple[Any, ...] | None:
+        if self.registry.get_setting("screen", "home") != "device":
+            return None
+        device_id = self.registry.get_setting("selected_device", "") or ""
+        if not device_id:
+            return None
+        try:
+            device = self.registry.get_device(device_id)
+        except KeyError:
+            return None
+
+        telemetry = device.get("telemetry") or {}
+        last_result = device.get("last_result") or {}
+        return (
+            device_id,
+            bool(device.get("enabled", True)),
+            str(device.get("pending_command") or ""),
+            int(device.get("command_seq") or 0),
+            int(last_result.get("seq") or 0),
+            bool(last_result.get("ok")) if last_result else None,
+            str(last_result.get("status") or ""),
+            str(last_result.get("action") or ""),
+            self._online(device),
+            telemetry.get("access_enabled"),
+            telemetry.get("ssh_tunnel_running"),
+            telemetry.get("ssh_process_count"),
+            telemetry.get("endpoint_available"),
+        )
+
     def _live_loop(self) -> None:
         was_active = False
         while not self.stop_event.wait(3):
             try:
+                screen = self.registry.get_setting("screen", "home")
+                if screen != "device":
+                    self.last_device_signature = None
+                    was_active = False
+                    continue
+
                 active = self._live_active()
                 if active:
-                    if self.registry.get_setting("screen", "home") == "device":
-                        self.render()
+                    self.render()
                     was_active = True
                     continue
+
                 if was_active:
                     was_active = False
-                    if self.registry.get_setting("screen", "home") == "device":
-                        self.render()
+                    self.render()
+                    continue
+
+                signature = self._device_signature()
+                if signature != self.last_device_signature:
+                    self.render()
             except Exception as exc:
                 LOG.debug("live render failed: %s", exc)
 
@@ -491,10 +531,20 @@ class TelegramBot:
                 [{"text": "⏳ КОМАНДА ВЫПОЛНЯЕТСЯ", "callback_data": "refresh"}]
             ]
         elif desired_access:
-            control_rows = [[
-                {"text": "🔴 ВЫКЛЮЧИТЬ ДОСТУП", "callback_data": f"cmd:off:{device['id']}"},
-                {"text": "♻️ ПЕРЕЗАПУСК", "callback_data": f"cmd:restart:{device['id']}"},
-            ]]
+            control_rows = [
+                [
+                    {
+                        "text": "🔴 ВЫКЛЮЧИТЬ ДОСТУП",
+                        "callback_data": f"cmd:off:{device['id']}",
+                    }
+                ],
+                [
+                    {
+                        "text": "♻️ ПЕРЕЗАПУСК",
+                        "callback_data": f"cmd:restart:{device['id']}",
+                    }
+                ],
+            ]
         else:
             control_rows = [[
                 {"text": "🟢 ВКЛЮЧИТЬ ДОСТУП", "callback_data": f"cmd:on:{device['id']}"},
@@ -551,6 +601,9 @@ class TelegramBot:
             return self._delete(device) if screen == "delete" else self._device(device)
         return self._home()
 
+    def _remember_device_signature(self) -> None:
+        self.last_device_signature = self._device_signature()
+
     def render(self, force_new: bool = False) -> None:
         with self.lock:
             text, keyboard = self._render_content()
@@ -568,10 +621,12 @@ class TelegramBot:
                         },
                     )
                     self.last_render = time.time()
+                    self._remember_device_signature()
                     return
                 except Exception as exc:
                     value = str(exc).lower()
                     if "message is not modified" in value:
+                        self._remember_device_signature()
                         return
                     if "message to edit not found" not in value and "message can't be edited" not in value:
                         raise
@@ -586,3 +641,4 @@ class TelegramBot:
             )
             self.registry.set_setting("dashboard_message_id", str(result["message_id"]))
             self.last_render = time.time()
+            self._remember_device_signature()
