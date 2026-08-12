@@ -12,68 +12,43 @@ Ship a stable self-hosted product where a user can install Hermes on Debian/Ubun
 
 **Hermes RDP v1.2.0 — Stabilization**
 
-PR #19 is merged and its acceptance remains valid. Long-lived soak testing discovered new release blockers outside that original scope.
+PR #19 is merged and accepted. PR #20 is merged and live-accepted; the soak blockers CP-001, CL-001 and CU-001 are closed.
 
-## Immediate stabilization blockers — ACTIVE
+## Immediate work — Stage 2 lifecycle completion
 
-Lifecycle matrix work is paused before RL-007/RL-008 completion until the following are fixed.
+### 1. RL-007 — simultaneous multi-device user smoke
 
-### 1. CP-001 — HTTPS API TLS accept stall
+Server-side evidence is already PASS: four independent public RDP endpoints were simultaneously listening and all four TCP-through-tunnel checks passed. Remaining work is intentionally small:
 
-Confirmed live after long-lived operation: controller process remained `active` and `:7443` remained listening, but local `/healthz` timed out, listener backlog saturated, an external connection remained established, and the API thread blocked in socket receive. All Windows heartbeat/telemetry stopped while independent OpenSSH reverse tunnels remained alive. Controller-only restart restored API and telemetry without touching dedicated sshd.
+- open standard Microsoft RDP sessions to two already-healthy Hermes devices at the same time;
+- verify both sessions remain independently usable for a short bounded interval;
+- verify neither session causes endpoint/tunnel loss on the other device;
+- no repeated infrastructure stress is needed.
 
-Required implementation:
+### 2. RL-008 — one-device failure isolation
 
-- accept raw TCP first;
-- perform TLS handshake inside the per-connection worker rather than on the shared listening socket;
-- enforce a short handshake timeout and bounded request I/O timeout;
-- malformed/slow clients must only consume their own worker and must not block new accepts;
-- regression test must demonstrate a deliberately stalled TLS client cannot stop `/healthz` or a second normal request.
+After RL-007, deliberately disturb only one selected test device/transport and verify another healthy device remains unaffected:
 
-### 2. CL-001 — transport failure blocks heartbeat/control
+- other device heartbeat stays fresh;
+- other device SSH tunnel/listener stays present;
+- other device RDP session remains usable;
+- controller and dedicated sshd remain healthy.
 
-Confirmed live on OSIO. Server desired state became OFF while Windows local state was still ON. Server correctly rejected OSIO's SSH key because desired `enabled=0`; the rejected fingerprint exactly matched OSIO's registered key. Windows agent tried `Start-SshTunnel` before `/telemetry`, the SSH failure aborted the cycle, and the agent therefore could not receive its pending OFF command.
+Use the smallest reversible fault that proves isolation. Do not restart all infrastructure or repeat earlier stress sequences.
 
-Required implementation:
+### 3. RL-006 — optional final lightweight Windows count
 
-- heartbeat/control polling must run even if SSH start/recovery fails;
-- transport reconciliation must be isolated from API polling errors;
-- desired OFF must converge from local ON without requiring successful SSH authentication;
-- failed transport start should be reportable as telemetry/error state rather than suppressing heartbeat;
-- regression test must cover server desired OFF + local ON + SSH authorization failure and prove command delivery still occurs.
+Server-side repeated reconnect stress is already PASS after five clean dedicated-sshd cycles. Final Windows process count on the original tested machine was not collected. If that exact machine is available, perform only one check that normal ON state has exactly one Hermes `ssh.exe`. Do not repeat the five-cycle test.
 
-### 3. CU-001 — deterministic command status/timeout
+## Stabilization evidence retained — do not repeat
 
-Live OSIO command remained pending for many hours and Telegram kept showing execution. Required design must distinguish desired state from command-delivery/result state so a UI timeout does not destroy eventual desired-state convergence when an offline device returns.
+- CP-001: per-connection TLS handshake + bounded timeout; live slow-client acceptance COMPLETE PASS.
+- CL-001: heartbeat/control independent of SSH transport; direct desired OFF/local ON reconciliation COMPLETE PASS.
+- CU-001: 60-second transient command timeout with durable desired state and late-result rejection; COMPLETE PASS.
+- Telegram UI: automatic post-command dashboard refresh and full-width OFF/RESTART mobile layout; COMPLETE PASS.
+- CI #210 on final PR #20 head: Windows PowerShell 5.1 PASS, Linux full release checks PASS.
 
-Minimum v1.2.0 outcome:
-
-- no endless "executing" state;
-- explicit queued/offline/timeout/failure semantics;
-- overlapping command behavior remains deterministic;
-- returning client still converges to current desired access state.
-
-## Stage 2 evidence retained
-
-- RL-001..RL-005: COMPLETE PASS.
-- RL-006: server-side PASS after five repeated reconnects; final Windows process-count check deferred. Do not repeat the stress sequence.
-- RL-007: four simultaneous endpoint listeners and TCP-through-tunnel checks PASS server-side; user-facing completion paused by the blockers above.
-- RL-008: not yet run.
-
-After the stabilization fix is CI-green and live-accepted, resume with the smallest remaining RL-006 Windows count check if available, then finish RL-007 and RL-008.
-
-## Next implementation sequence
-
-1. Create a dedicated fix branch from current `main`.
-2. Fix server TLS accept/handshake lifecycle with regression tests.
-3. Fix Windows heartbeat/control ordering with regression tests and PowerShell 5.1 parsing.
-4. Add command timeout/status semantics without conflating desired state with delivery state.
-5. Run full Linux + Windows CI.
-6. Deploy server fix with rollback anchor; verify API stays responsive under a stalled TLS connection.
-7. Update one Windows test client; reproduce the former OSIO deadlock in bounded form and prove heartbeat/command convergence.
-8. Roll out to remaining test clients, then resume RL-007/RL-008.
-
-## Later stages
+## After Stage 2
 
 ### Device/security lifecycle
 
@@ -81,15 +56,15 @@ Verify unique Ed25519 identity, cross-device isolation, key revocation, DELETE b
 
 ### Safe migration / updater / rollback
 
-Harden legacy Windows archival, server updater provenance/rollback and Windows updater health/rollback. Server updater still needs immutable-source resolution and deployed-SHA recording.
+Harden legacy Windows archival, server updater provenance/rollback and Windows updater health/rollback. Server updater still needs stronger immutable-source/deployed-SHA recording and explicit health-based rollback behavior.
 
 ### Command / pairing / repair UX
 
-After CU-001 is resolved: expired-pair retry UX, explicit repair/update flow, and final Russian dashboard terminology.
+Add expired-pair retry UX, explicit repair/update flow, and finish Russian dashboard terminology where needed.
 
 ### Documentation / website / release
 
-Rebuild docs and Website v2 only after runtime behavior stabilizes. Before v1.2.0 tag: reconcile release notes with evidence, archive release evidence, compact active context, ensure docs match runtime, publish immutable tag and document rollback/recovery.
+Before v1.2.0 tag: reconcile release notes with evidence, archive release evidence, compact active context, ensure docs match runtime, publish immutable tag, and document rollback/recovery. Website v2 follows runtime stabilization rather than preceding it.
 
 ## Context-system follow-up
 
