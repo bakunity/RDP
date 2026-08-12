@@ -12,8 +12,10 @@ import time
 import unittest
 import urllib.request
 from pathlib import Path
+from types import SimpleNamespace
 
 from hermes_rdp.api import create_api_server
+from hermes_rdp.bot import TelegramBot
 from hermes_rdp.config import Config
 from hermes_rdp.db import Registry, now
 
@@ -161,6 +163,58 @@ class SoakStabilizationTests(unittest.TestCase):
             self.assertGreater(next_seq, seq)
             self.assertTrue(registry.get_device(device_id)["enabled"])
 
+    def test_late_command_result_cannot_overwrite_timeout(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_name:
+            registry = Registry(
+                Path(temp_name) / "state.sqlite3",
+                53389,
+                53391,
+                command_timeout_seconds=60,
+            )
+            code = registry.create_pair_code()
+            device, _ = registry.pair_device(
+                code=code,
+                display_name="PC",
+                machine_name="PC",
+                fingerprint="machine",
+                ssh_public_key=ed25519_key(42),
+            )
+            device_id = device["id"]
+            seq = registry.queue_command(device_id, "off")
+
+            with registry.connect() as conn:
+                conn.execute(
+                    "UPDATE devices SET pending_created_at=? WHERE id=?",
+                    (now() - 120, device_id),
+                )
+
+            self.assertEqual(
+                registry.expire_stale_commands(60, device_id=device_id),
+                1,
+            )
+            timed_out = registry.get_device(device_id)["last_result"]
+
+            accepted = registry.complete_command(
+                device_id,
+                seq,
+                True,
+                "late success",
+            )
+            self.assertFalse(accepted)
+            after_late = registry.get_device(device_id)
+            self.assertEqual(after_late["last_result"], timed_out)
+            self.assertIsNone(after_late["pending_command"])
+            self.assertFalse(after_late["enabled"])
+
+            next_seq = registry.queue_command(device_id, "on")
+            self.assertGreater(next_seq, seq)
+            self.assertFalse(
+                registry.complete_command(device_id, seq, True, "older result")
+            )
+            pending = registry.get_device(device_id)
+            self.assertEqual(pending["command_seq"], next_seq)
+            self.assertEqual(pending["pending_command"], "on")
+
     def test_agent_polls_control_before_attempting_transport_recovery(self) -> None:
         text = (ROOT / "client/HermesRdpAgent.ps1").read_text(encoding="utf-8-sig")
         loop = text[text.index("while ($true)") :]
@@ -198,6 +252,107 @@ class SoakStabilizationTests(unittest.TestCase):
         )
         self.assertIn("process_request_thread", text)
         self.assertIn("tls_handshake_timeout_seconds", text)
+
+    def test_dashboard_actions_are_mobile_friendly(self) -> None:
+        bot = TelegramBot.__new__(TelegramBot)
+        bot.config = SimpleNamespace(
+            public_host="example.test",
+            online_after_seconds=15,
+        )
+        bot.registry = SimpleNamespace(
+            get_setting=lambda key, default=None: default,
+        )
+        timestamp = int(time.time())
+        device = {
+            "id": "device-1",
+            "display_name": "PC",
+            "machine_name": "PC",
+            "rdp_port": 53389,
+            "enabled": True,
+            "last_seen": timestamp,
+            "pending_command": None,
+            "last_result": None,
+            "telemetry": {
+                "resource_captured_at": timestamp,
+                "access_enabled": True,
+                "ssh_tunnel_running": True,
+                "ssh_process_count": 1,
+                "endpoint_available": True,
+                "rdp_hermes_connections": 0,
+                "rdp_direct_connections": 0,
+                "sessions": [],
+            },
+        }
+
+        _, keyboard = bot._device(device)
+        rows = keyboard["inline_keyboard"]
+
+        self.assertEqual(len(rows[0]), 1)
+        self.assertEqual(rows[0][0]["text"], "🔴 ВЫКЛЮЧИТЬ ДОСТУП")
+        self.assertEqual(len(rows[1]), 1)
+        self.assertEqual(rows[1][0]["text"], "♻️ ПЕРЕЗАПУСК")
+
+    def test_dashboard_signature_tracks_control_state_changes(self) -> None:
+        timestamp = int(time.time())
+        device = {
+            "id": "device-1",
+            "enabled": True,
+            "last_seen": timestamp,
+            "command_seq": 1,
+            "pending_command": None,
+            "last_result": None,
+            "telemetry": {
+                "access_enabled": True,
+                "ssh_tunnel_running": True,
+                "ssh_process_count": 1,
+                "endpoint_available": True,
+            },
+        }
+
+        class RegistryStub:
+            def get_setting(self, key, default=None):
+                values = {
+                    "screen": "device",
+                    "selected_device": "device-1",
+                }
+                return values.get(key, default)
+
+            def get_device(self, device_id):
+                self.assert_device(device_id)
+                return device
+
+            @staticmethod
+            def assert_device(device_id):
+                if device_id != "device-1":
+                    raise KeyError(device_id)
+
+        bot = TelegramBot.__new__(TelegramBot)
+        bot.config = SimpleNamespace(online_after_seconds=15)
+        bot.registry = RegistryStub()
+
+        before = bot._device_signature()
+        device["pending_command"] = "off"
+        device["command_seq"] = 2
+        pending = bot._device_signature()
+        self.assertNotEqual(before, pending)
+
+        device["pending_command"] = None
+        device["enabled"] = False
+        device["last_result"] = {
+            "seq": 2,
+            "action": "off",
+            "ok": True,
+        }
+        device["telemetry"]["access_enabled"] = False
+        device["telemetry"]["ssh_tunnel_running"] = False
+        device["telemetry"]["ssh_process_count"] = 0
+        device["telemetry"]["endpoint_available"] = False
+        completed = bot._device_signature()
+        self.assertNotEqual(pending, completed)
+
+        source = (ROOT / "server/hermes_rdp/bot.py").read_text(encoding="utf-8")
+        self.assertIn("if signature != self.last_device_signature:", source)
+        self.assertIn("self._remember_device_signature()", source)
 
 
 if __name__ == "__main__":
