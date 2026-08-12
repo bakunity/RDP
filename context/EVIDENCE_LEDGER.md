@@ -1,6 +1,6 @@
 # Hermes RDP — Evidence Ledger
 
-Updated: 2026-08-10
+Updated: 2026-08-12
 
 Purpose: durable project evidence that survives chat compression. This file records demonstrated facts, confirmed failures/root causes, and explicit revalidation obligations. It is not a transcript.
 
@@ -136,11 +136,21 @@ PR #19 scope is **COMPLETE**. Runtime acceptance and repository merge gate are b
 | RL-003 | Linux server reboot recovers services and clients | PASS | Pre-reboot baseline showed both Hermes services enabled+active, dedicated sshd listener `:7000` open, and the tested device endpoint listener open. A real server reboot was performed. After the machine returned, the user explicitly confirmed the server was back, Telegram/dashboard worked, and the already-open Hermes RDP session restored automatically and was usable again. This operationally proves controller, dedicated sshd and Windows reverse-tunnel recovery across a full server reboot on the tested deployment. |
 | RL-004 | Controller restart recovery / transport isolation | PASS | Live controller-only restart changed `hermes-rdp.service` PID from 698 to 2048 and returned active. Dedicated `hermes-rdp-sshd.service` PID remained 697, active endpoint `sshd-session` PID remained 1071, and listeners on `:7000` and the tested public RDP endpoint remained present. User confirmed Telegram/dashboard continued working and the active RDP session had no interruption. This proves controller lifecycle is isolated from RDP transport on the tested deployment. |
 | RL-005 | Dedicated Hermes sshd restart recovery | PASS | Live restart of only `hermes-rdp-sshd.service` kept controller PID unchanged at 2304. Dedicated sshd PID changed from 697 to 2821 and returned active. The tested endpoint `sshd-session` PID changed from 1071 to 2852; listeners on `:7000` and the same public RDP endpoint returned. User confirmed the already-open RDP session automatically recovered and Telegram/dashboard remained healthy. This proves automatic Windows reverse-tunnel recovery after dedicated sshd lifecycle restart without controller restart or Telegram recovery action. |
-| RL-006 | Repeated reconnects produce no duplicate/orphan Hermes SSH | PENDING | Next Stage 2 scenario. |
-| RL-007 | Two+ devices simultaneously healthy | PENDING | Not yet run in Stage 2. |
-| RL-008 | One device failure isolated from another | PENDING | Not yet run in Stage 2. |
+| RL-006 | Repeated reconnects produce no duplicate/orphan Hermes SSH | PARTIAL PASS | Five consecutive dedicated-sshd restart cycles each removed the old endpoint `sshd-session`, created a different new session, returned exactly one endpoint listener and exactly one `:7000` listener, and left controller PID unchanged. Final Windows `ssh.exe` count was not collected because the RDP client later became unusable. Do not repeat the five-cycle stress; one later Windows process-count check is sufficient. |
+| RL-007 | Two+ devices simultaneously healthy | PARTIAL PASS | Four independent endpoints (`:53389`, `:53390`, `:53392`, `:53393`) were simultaneously listening and TCP-through-tunnel checks passed for all four. User-facing simultaneous dual-RDP completion was interrupted by newly discovered soak-test blockers. |
+| RL-008 | One device failure isolated from another | PENDING | Not yet run; paused until CP-001/CL-001/CU-001 are fixed. |
 
 Windows reboot recovery remains historical PASS (`TR-003`) and is not duplicated as a new Stage 2 obligation.
+
+## Soak-test stabilization blockers
+
+| ID | Scenario | Status | Evidence / boundary |
+|---|---|---|---|
+| CP-001 | One stalled TLS connection can block global HTTPS API acceptance | FAIL / CONFIRMED BUG | After long-lived operation `hermes-rdp.service` stayed active and `:7443` stayed LISTEN, but local `/healthz` timed out. Listener backlog reached Recv-Q 6 with configured backlog 5; multiple sockets accumulated, including an established external connection; API thread kernel stack showed blocking socket receive. Windows telemetry stopped globally while independent OpenSSH endpoints remained alive. Current server wraps the shared listening HTTP socket with TLS, so handshake occurs before ThreadingHTTPServer can dispatch a worker. Controller-only restart restored `/healthz` and active clients resumed telemetry immediately without restarting dedicated sshd. |
+| CL-001 | Desired OFF + local ON can deadlock heartbeat/control delivery | FAIL / CONFIRMED BUG | Live OSIO state: desired access false, command seq 14 `off` pending for many hours, last confirmed result seq 13 `on`, endpoint closed, telemetry stale. After global API recovery OSIO repeatedly attempted SSH; the rejected Ed25519 fingerprint exactly matched OSIO's registered key. Server SSH authorization requires `enabled=1`, while the Windows agent attempts SSH recovery before posting telemetry. Failed `Start-SshTunnel` aborts the cycle before `/telemetry`, so the agent cannot fetch the pending OFF that would change its local state. |
+| CU-001 | Pending command can remain shown as executing indefinitely | FAIL / CONFIRMED BUG | OSIO seq 14 remained pending for many hours without command result and Telegram continued showing execution. Command timeout/status semantics must be added without destroying durable desired-state convergence for returning offline devices. |
+
+These blockers are release-facing for v1.2.0. RL-007/RL-008 remain paused until fixes are CI-green and live-revalidated.
 
 ## Update triggers
 
