@@ -17,15 +17,57 @@ from .tunnel import close_tunnel, endpoint_listener_state
 
 LOG = logging.getLogger("hermes_rdp.api")
 MAX_BODY = 128 * 1024
+TLS_HANDSHAKE_TIMEOUT_SECONDS = 5
+CLIENT_SOCKET_TIMEOUT_SECONDS = 30
 
 
 class ApiServer(ThreadingHTTPServer):
     daemon_threads = True
+    request_queue_size = 64
 
-    def __init__(self, address: tuple[str, int], config: Config, registry: Registry):
+    def __init__(
+        self,
+        address: tuple[str, int],
+        config: Config,
+        registry: Registry,
+        tls_context: ssl.SSLContext,
+    ):
         self.config = config
         self.registry = registry
+        self.tls_context = tls_context
+        self.tls_handshake_timeout_seconds = TLS_HANDSHAKE_TIMEOUT_SECONDS
+        self.client_socket_timeout_seconds = CLIENT_SOCKET_TIMEOUT_SECONDS
         super().__init__(address, ApiHandler)
+
+    def process_request_thread(self, request, client_address) -> None:
+        """Perform TLS in the worker thread, never in the accept loop.
+
+        Wrapping the listening socket makes SSLSocket.accept() perform the TLS
+        handshake before ThreadingHTTPServer can dispatch the connection. A
+        client that opens TCP and then stalls can therefore block all new API
+        traffic. Keep the listener plain TCP and wrap each accepted socket only
+        after ThreadingMixIn has moved it to its own worker thread.
+        """
+        active_request = request
+        try:
+            request.settimeout(self.tls_handshake_timeout_seconds)
+            active_request = self.tls_context.wrap_socket(
+                request,
+                server_side=True,
+                do_handshake_on_connect=True,
+            )
+            active_request.settimeout(self.client_socket_timeout_seconds)
+            self.finish_request(active_request, client_address)
+        except (ssl.SSLError, TimeoutError, OSError) as exc:
+            LOG.debug(
+                "TLS/client connection from %s closed: %s",
+                client_address[0],
+                exc,
+            )
+        except Exception:
+            self.handle_error(active_request, client_address)
+        finally:
+            self.shutdown_request(active_request)
 
 
 class ApiHandler(BaseHTTPRequestHandler):
@@ -162,6 +204,14 @@ class ApiHandler(BaseHTTPRequestHandler):
         if not isinstance(telemetry, dict):
             raise ValueError("telemetry object required")
 
+        # Expire only the transient command execution state. The durable
+        # desired access flag remains untouched and is returned independently,
+        # so an offline client can still converge when it comes back later.
+        self.server.registry.expire_stale_commands(
+            self.server.config.command_timeout_seconds,
+            device_id=device_id,
+        )
+
         # Endpoint truth belongs to the Linux server. A Windows-side TCP probe
         # can be a false positive behind VPN/TUN/proxy routing, so never trust
         # the client value for the public Hermes listener.
@@ -175,6 +225,7 @@ class ApiHandler(BaseHTTPRequestHandler):
             telemetry["endpoint_source"] = "server_listener"
 
         command = self.server.registry.update_telemetry(device_id, telemetry)
+        current = self.server.registry.get_device(device_id)
 
         # Heavy telemetry is leased only for the currently opened device view.
         # Agents still poll every 3s for commands/heartbeat in background mode.
@@ -193,6 +244,7 @@ class ApiHandler(BaseHTTPRequestHandler):
             {
                 "ok": True,
                 "command": command,
+                "desired_enabled": bool(current["enabled"]),
                 "telemetry_live": telemetry_live,
             },
         )
@@ -224,9 +276,7 @@ class ApiHandler(BaseHTTPRequestHandler):
 
 
 def create_api_server(config: Config, registry: Registry) -> ApiServer:
-    server = ApiServer(("0.0.0.0", config.api_port), config, registry)
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.minimum_version = ssl.TLSVersion.TLSv1_2
     context.load_cert_chain(config.tls_cert_file, config.tls_key_file)
-    server.socket = context.wrap_socket(server.socket, server_side=True)
-    return server
+    return ApiServer(("0.0.0.0", config.api_port), config, registry, context)
