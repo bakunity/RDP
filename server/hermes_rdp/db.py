@@ -89,10 +89,17 @@ def normalize_ssh_public_key(value: str) -> str:
 
 
 class Registry:
-    def __init__(self, db_path: str | Path, port_start: int, port_end: int):
+    def __init__(
+        self,
+        db_path: str | Path,
+        port_start: int,
+        port_end: int,
+        command_timeout_seconds: int = 60,
+    ):
         self.db_path = Path(db_path)
         self.port_start = int(port_start)
         self.port_end = int(port_end)
+        self.command_timeout_seconds = max(1, int(command_timeout_seconds))
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.init_schema()
 
@@ -362,6 +369,7 @@ class Registry:
         return data
 
     def list_devices(self, include_revoked: bool = False) -> list[dict[str, Any]]:
+        self.expire_stale_commands(self.command_timeout_seconds)
         where = "" if include_revoked else "WHERE revoked=0"
         with self.connect() as conn:
             rows = conn.execute(
@@ -370,13 +378,21 @@ class Registry:
         return [self._device_row(row) for row in rows]
 
     def get_device(self, device_id: str) -> dict[str, Any]:
+        self.expire_stale_commands(
+            self.command_timeout_seconds,
+            device_id=device_id,
+        )
         with self.connect() as conn:
             row = conn.execute("SELECT * FROM devices WHERE id=?", (device_id,)).fetchone()
         if not row:
             raise KeyError(device_id)
         return self._device_row(row)
 
-    def update_telemetry(self, device_id: str, telemetry: dict[str, Any]) -> dict[str, Any]:
+    def update_telemetry(self, device_id: str, telemetry: dict[str, Any]) -> dict[str, Any] | None:
+        self.expire_stale_commands(
+            self.command_timeout_seconds,
+            device_id=device_id,
+        )
         timestamp = now()
         with self.connect() as conn:
             conn.execute(
@@ -394,6 +410,10 @@ class Registry:
     def queue_command(self, device_id: str, action: str) -> int:
         if action not in {"on", "off", "restart"}:
             raise ValueError("unsupported command")
+        self.expire_stale_commands(
+            self.command_timeout_seconds,
+            device_id=device_id,
+        )
         timestamp = now()
         with self.connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
@@ -437,28 +457,99 @@ class Registry:
             "created_at": int(row["pending_created_at"] or 0),
         }
 
+    def expire_stale_commands(
+        self,
+        timeout_seconds: int,
+        *,
+        device_id: str | None = None,
+    ) -> int:
+        """Expire transient execution state while preserving desired access."""
+        timeout = max(1, int(timeout_seconds))
+        timestamp = now()
+        cutoff = timestamp - timeout
+        where = (
+            "pending_command IS NOT NULL AND pending_created_at IS NOT NULL "
+            "AND pending_created_at<=?"
+        )
+        params: list[Any] = [cutoff]
+        if device_id is not None:
+            where += " AND id=?"
+            params.append(device_id)
+
+        expired = 0
+        with self.connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            rows = conn.execute(
+                "SELECT id,command_seq,pending_command,pending_created_at "
+                f"FROM devices WHERE {where}",
+                tuple(params),
+            ).fetchall()
+            for row in rows:
+                result = {
+                    "seq": int(row["command_seq"]),
+                    "action": str(row["pending_command"] or ""),
+                    "ok": False,
+                    "status": "timeout",
+                    "message": (
+                        f"Нет подтверждения от агента за {timeout} сек.; "
+                        "целевое состояние сохранено"
+                    ),
+                    "completed_at": timestamp,
+                }
+                cursor = conn.execute(
+                    "UPDATE devices SET pending_command=NULL,pending_created_at=NULL,"
+                    "last_result_json=?,updated_at=? "
+                    "WHERE id=? AND command_seq=? AND pending_command=?",
+                    (
+                        json.dumps(result, ensure_ascii=False),
+                        timestamp,
+                        str(row["id"]),
+                        int(row["command_seq"]),
+                        str(row["pending_command"]),
+                    ),
+                )
+                expired += max(0, int(cursor.rowcount))
+        return expired
+
     def complete_command(
         self, device_id: str, seq: int, ok: bool, message: str
-    ) -> None:
+    ) -> bool:
+        timestamp = now()
         with self.connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
             row = conn.execute(
-                "SELECT command_seq,pending_command FROM devices WHERE id=?",
+                "SELECT command_seq,pending_command FROM devices "
+                "WHERE id=? AND revoked=0",
                 (device_id,),
             ).fetchone()
+            if (
+                not row
+                or int(row["command_seq"]) != int(seq)
+                or not row["pending_command"]
+            ):
+                return False
+
+            action = str(row["pending_command"])
             result = {
                 "seq": int(seq),
-                "action": str(row["pending_command"] or "") if row else "",
+                "action": action,
                 "ok": bool(ok),
                 "message": str(message)[:500],
-                "completed_at": now(),
+                "completed_at": timestamp,
             }
-            if not row or int(row["command_seq"]) != int(seq):
-                return
-            conn.execute(
+            cursor = conn.execute(
                 "UPDATE devices SET pending_command=NULL,pending_created_at=NULL,"
-                "last_result_json=?,updated_at=? WHERE id=?",
-                (json.dumps(result, ensure_ascii=False), now(), device_id),
+                "last_result_json=?,updated_at=? "
+                "WHERE id=? AND revoked=0 AND command_seq=? AND pending_command=?",
+                (
+                    json.dumps(result, ensure_ascii=False),
+                    timestamp,
+                    device_id,
+                    int(seq),
+                    action,
+                ),
             )
+            return cursor.rowcount == 1
 
     def rename_device(self, device_id: str, name: str) -> None:
         clean = name.strip()[:64]
@@ -487,6 +578,7 @@ class Registry:
                 raise KeyError(device_id)
 
     def cleanup(self) -> None:
+        self.expire_stale_commands(self.command_timeout_seconds)
         cutoff = now() - 86400
         with self.connect() as conn:
             conn.execute(

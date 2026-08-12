@@ -29,6 +29,7 @@ class Config:
     close_tunnel_helper: Path
     online_after_seconds: int = 15
     pair_ttl_seconds: int = 900
+    command_timeout_seconds: int = 60
 
     @property
     def api_base_url(self) -> str:
@@ -93,4 +94,5 @@ def load_config(path: str | Path = DEFAULT_CONFIG) -> Config:
         ),
         online_after_seconds=int(data.get("online_after_seconds", 15)),
         pair_ttl_seconds=int(data.get("pair_ttl_seconds", 900)),
+        command_timeout_seconds=max(5, int(data.get("command_timeout_seconds", 60))),
     )

@@ -19,7 +19,12 @@ def main() -> None:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
     config = load_config()
-    registry = Registry(config.db_path, config.port_start, config.port_end)
+    registry = Registry(
+        config.db_path,
+        config.port_start,
+        config.port_end,
+        config.command_timeout_seconds,
+    )
     api_server = create_api_server(config, registry)
     bot = TelegramBot(config, registry)
 

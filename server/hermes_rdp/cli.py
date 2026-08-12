@@ -49,7 +49,12 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     args = build_parser().parse_args()
     config = load_config()
-    registry = Registry(config.db_path, config.port_start, config.port_end)
+    registry = Registry(
+        config.db_path,
+        config.port_start,
+        config.port_end,
+        config.command_timeout_seconds,
+    )
 
     if args.command == "pair" and args.pair_command == "create":
         code = registry.create_pair_code(
