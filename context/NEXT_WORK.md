@@ -1,160 +1,96 @@
 # Hermes RDP — Next Work / Goal Vector
 
-Updated: 2026-08-10
+Updated: 2026-08-12
 
 For exact immediate action read `ACTIVE_WORK.md`. This file is the remaining product-level queue; completed work is removed rather than kept for history.
 
 ## North-star goal
 
-Ship a stable self-hosted product where a user can:
-
-1. install Hermes on a clean Debian/Ubuntu server;
-2. add supported Windows / Windows Server devices through Telegram;
-3. paste one generated elevated-PowerShell command;
-4. receive a persistent per-device endpoint;
-5. connect with standard Microsoft Remote Desktop from another network;
-6. trust every Telegram status;
-7. survive reboots/network interruptions automatically;
-8. update safely without losing access;
-9. operate the system from coherent documentation.
+Ship a stable self-hosted product where a user can install Hermes on Debian/Ubuntu, add supported Windows devices through Telegram, receive persistent per-device endpoints, connect with standard Microsoft Remote Desktop, trust every displayed status, survive reboots/network failures automatically, and update safely without losing access.
 
 ## Current release target
 
 **Hermes RDP v1.2.0 — Stabilization**
 
-PR #19 is merged. Reconciled CI #175 passed. Current `main` contains the accepted stabilization product code.
+PR #19 is merged and its acceptance remains valid. Long-lived soak testing discovered new release blockers outside that original scope.
 
-## Stage 2 — recovery / lifecycle matrix — ACTIVE
+## Immediate stabilization blockers — ACTIVE
 
-Run one scenario at a time and record PASS/FAIL evidence.
+Lifecycle matrix work is paused before RL-007/RL-008 completion until the following are fixed.
 
-Completed and removed from the active queue:
+### 1. CP-001 — HTTPS API TLS accept stall
 
-- **RL-001 Telegram RESTART — PASS**: old Hermes SSH PID replaced, one healthy tunnel returned, access stayed ON, endpoint returned OPEN, active RDP recovered after the short interruption.
-- **RL-002 temporary Windows-side network loss — PASS**: agent automatically recreated one Hermes SSH transport with no Telegram command; RDP worked again after recovery. The intentionally long outage exceeded Microsoft RDP's client retry window.
-- **RL-003 Linux server reboot — PASS**: real reboot restored server services, Telegram/dashboard, Windows reverse tunnel and the already-open RDP session automatically.
-- **RL-004 controller restart — PASS**: controller PID changed while dedicated sshd PID and active endpoint session PID stayed unchanged; listeners remained available, Telegram/dashboard worked, and RDP had no interruption.
-- **RL-005 dedicated Hermes sshd restart — PASS**: controller stayed untouched; dedicated sshd and endpoint session were replaced; Windows automatically recreated the reverse tunnel; the same public endpoint returned; Telegram/dashboard stayed healthy; and the already-open RDP session recovered automatically.
+Confirmed live after long-lived operation: controller process remained `active` and `:7443` remained listening, but local `/healthz` timed out, listener backlog saturated, an external connection remained established, and the API thread blocked in socket receive. All Windows heartbeat/telemetry stopped while independent OpenSSH reverse tunnels remained alive. Controller-only restart restored API and telemetry without touching dedicated sshd.
 
-Current queue:
+Required implementation:
 
-1. **Repeated reconnects -> no duplicate/orphan Hermes SSH processes.**
-2. Two+ devices simultaneously remain healthy.
-3. Failure of one device does not affect another.
+- accept raw TCP first;
+- perform TLS handshake inside the per-connection worker rather than on the shared listening socket;
+- enforce a short handshake timeout and bounded request I/O timeout;
+- malformed/slow clients must only consume their own worker and must not block new accepts;
+- regression test must demonstrate a deliberately stalled TLS client cannot stop `/healthz` or a second normal request.
 
-Windows reboot recovery is already PASS and is not repeated without a regression reason.
+### 2. CL-001 — transport failure blocks heartbeat/control
 
-For RL-006, use a bounded repeated-reconnect smoke rather than a prolonged outage. Recreate the dedicated transport several times, waiting for the tested endpoint to return after each cycle. Acceptance: every cycle returns exactly one endpoint session; no stale session/listener accumulates; Windows ends with exactly one Hermes `ssh.exe`; access remains enabled; controller and Telegram/dashboard remain healthy; and RDP remains usable after the sequence. Whether the already-open RDP client visually reconnects on every individual cycle is useful observation but not the primary RL-006 gate.
+Confirmed live on OSIO. Server desired state became OFF while Windows local state was still ON. Server correctly rejected OSIO's SSH key because desired `enabled=0`; the rejected fingerprint exactly matched OSIO's registered key. Windows agent tried `Start-SshTunnel` before `/telemetry`, the SSH failure aborted the cycle, and the agent therefore could not receive its pending OFF command.
 
-## Stage 3 — device/security lifecycle
+Required implementation:
 
-Verify formally:
+- heartbeat/control polling must run even if SSH start/recovery fails;
+- transport reconciliation must be isolated from API polling errors;
+- desired OFF must converge from local ON without requiring successful SSH authentication;
+- failed transport start should be reportable as telemetry/error state rather than suppressing heartbeat;
+- regression test must cover server desired OFF + local ON + SSH authorization failure and prove command delivery still occurs.
 
-- unique Ed25519 identity per device;
-- first device key cannot claim second endpoint;
-- private key never reaches server;
-- revoked key cannot authenticate;
-- DELETE revokes API token + SSH key;
-- DELETE closes endpoint;
-- freed port reused only after safe cleanup;
-- admin SSH remains independent;
-- Telegram authorization remains owner-limited;
-- no Defender exclusions required.
+### 3. CU-001 — deterministic command status/timeout
 
-## Stage 4 — safe migration / updater / rollback
+Live OSIO command remained pending for many hours and Telegram kept showing execution. Required design must distinguish desired state from command-delivery/result state so a UI timeout does not destroy eventual desired-state convergence when an offline device returns.
 
-### Legacy Windows migration
+Minimum v1.2.0 outcome:
 
-Replace fragile recursive protected-directory backup with whole-directory archival/rename and scoped ACL fallback only when necessary.
+- no endless "executing" state;
+- explicit queued/offline/timeout/failure semantics;
+- overlapping command behavior remains deterministic;
+- returning client still converges to current desired access state.
 
-### Server updater
+## Stage 2 evidence retained
 
-Target contract:
+- RL-001..RL-005: COMPLETE PASS.
+- RL-006: server-side PASS after five repeated reconnects; final Windows process-count check deferred. Do not repeat the stress sequence.
+- RL-007: four simultaneous endpoint listeners and TCP-through-tunnel checks PASS server-side; user-facing completion paused by the blockers above.
+- RL-008: not yet run.
 
-```text
-resolve immutable source SHA
- -> backup
- -> stage
- -> syntax/config checks
- -> restart
- -> health checks
- -> reconnect/endpoint smoke
- -> record deployed SHA
- -> commit
+After the stabilization fix is CI-green and live-accepted, resume with the smallest remaining RL-006 Windows count check if available, then finish RL-007 and RL-008.
 
-failure
- -> automatic rollback
- -> restart previous version
- -> verify previous health
-```
+## Next implementation sequence
 
-Current updater still does not resolve/print/store exact downloaded commit when given a mutable branch ref.
+1. Create a dedicated fix branch from current `main`.
+2. Fix server TLS accept/handshake lifecycle with regression tests.
+3. Fix Windows heartbeat/control ordering with regression tests and PowerShell 5.1 parsing.
+4. Add command timeout/status semantics without conflating desired state with delivery state.
+5. Run full Linux + Windows CI.
+6. Deploy server fix with rollback anchor; verify API stays responsive under a stalled TLS connection.
+7. Update one Windows test client; reproduce the former OSIO deadlock in bounded form and prove heartbeat/command convergence.
+8. Roll out to remaining test clients, then resume RL-007/RL-008.
 
-### Windows client updater
+## Later stages
 
-Target:
+### Device/security lifecycle
 
-```text
-backup agent/config identity
- -> stage new agent
- -> parse/start checks
- -> heartbeat/tunnel health
- -> keep update
+Verify unique Ed25519 identity, cross-device isolation, key revocation, DELETE behavior, safe port reuse, owner-limited Telegram authorization, admin-SSH independence, and no Defender exclusions.
 
-failure
- -> restore previous agent
- -> restart task
- -> verify previous access
-```
+### Safe migration / updater / rollback
 
-## Stage 5 — command / pairing / repair UX
+Harden legacy Windows archival, server updater provenance/rollback and Windows updater health/rollback. Server updater still needs immutable-source resolution and deployed-SHA recording.
 
-- deterministic command timeout;
-- concise expired-pairing-code retry UX;
-- explicit repair/update flow instead of abusing `Добавить ПК`;
-- finalize Russian dashboard terminology after latest live deployment.
+### Command / pairing / repair UX
 
-## Stage 6 — documentation rebuild
+After CU-001 is resolved: expired-pair retry UX, explicit repair/update flow, and final Russian dashboard terminology.
 
-After behavior stabilizes:
+### Documentation / website / release
 
-- architecture diagrams and lifecycle explanations;
-- server/client responsibilities;
-- pairing, ON/OFF/RESTART and state model;
-- trust chain and multi-device isolation;
-- failure/recovery/update behavior;
-- stale FRP/version sweep;
-- polished README structure/badges/links.
-
-Core statement:
-
-> All Windows devices are equal clients. Only the Hermes Linux server has a special infrastructure role.
-
-## Stage 7 — Website v2
-
-Explain product first:
-
-```text
-Windows devices -> one Hermes server -> standard RDP clients
-                         |
-                         -> Telegram control
-```
-
-Then OpenSSH, Ed25519 isolation, pinning, persistent endpoints and telemetry.
-
-## Stage 8 — final v1.2.0 acceptance / release
-
-Before release:
-
-- release-facing items are PASS or explicitly excluded;
-- release draft reconciled with evidence ledger;
-- release evidence snapshot archived;
-- `ACTIVE_WORK/CURRENT_STATE/NEXT_WORK` compacted to released truth/next cycle;
-- superseded context retired;
-- docs/README match actual runtime;
-- published tag immutable;
-- rollback/recovery story documented.
+Rebuild docs and Website v2 only after runtime behavior stabilizes. Before v1.2.0 tag: reconcile release notes with evidence, archive release evidence, compact active context, ensure docs match runtime, publish immutable tag and document rollback/recovery.
 
 ## Context-system follow-up
 
-Optional after lifecycle work: lightweight context-hygiene/lint checks for required files, freshness, size and obvious contradictory status patterns.
+Optional after lifecycle work: lightweight context-hygiene/lint checks for required files, freshness, size and contradictory status patterns.
