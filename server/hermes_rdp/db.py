@@ -376,7 +376,7 @@ class Registry:
             raise KeyError(device_id)
         return self._device_row(row)
 
-    def update_telemetry(self, device_id: str, telemetry: dict[str, Any]) -> dict[str, Any]:
+    def update_telemetry(self, device_id: str, telemetry: dict[str, Any]) -> dict[str, Any] | None:
         timestamp = now()
         with self.connect() as conn:
             conn.execute(
@@ -436,6 +436,66 @@ class Registry:
             "action": str(row["pending_command"]),
             "created_at": int(row["pending_created_at"] or 0),
         }
+
+    def expire_stale_commands(
+        self,
+        timeout_seconds: int,
+        *,
+        device_id: str | None = None,
+    ) -> int:
+        """Expire only transient execution state, preserving desired access.
+
+        `enabled` is the durable desired state. A timed-out command is removed
+        from the in-flight slot so the UI cannot remain stuck forever, but the
+        desired flag is deliberately left unchanged. A reconnecting agent can
+        still converge from `desired_enabled` returned by the telemetry API.
+        """
+        timeout = max(1, int(timeout_seconds))
+        timestamp = now()
+        cutoff = timestamp - timeout
+        where = (
+            "pending_command IS NOT NULL AND pending_created_at IS NOT NULL "
+            "AND pending_created_at<=?"
+        )
+        params: list[Any] = [cutoff]
+        if device_id is not None:
+            where += " AND id=?"
+            params.append(device_id)
+
+        expired = 0
+        with self.connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            rows = conn.execute(
+                "SELECT id,command_seq,pending_command,pending_created_at "
+                f"FROM devices WHERE {where}",
+                tuple(params),
+            ).fetchall()
+            for row in rows:
+                result = {
+                    "seq": int(row["command_seq"]),
+                    "action": str(row["pending_command"] or ""),
+                    "ok": False,
+                    "status": "timeout",
+                    "message": (
+                        f"Нет подтверждения от агента за {timeout} сек.; "
+                        "целевое состояние сохранено"
+                    ),
+                    "completed_at": timestamp,
+                }
+                cursor = conn.execute(
+                    "UPDATE devices SET pending_command=NULL,pending_created_at=NULL,"
+                    "last_result_json=?,updated_at=? "
+                    "WHERE id=? AND command_seq=? AND pending_command=?",
+                    (
+                        json.dumps(result, ensure_ascii=False),
+                        timestamp,
+                        str(row["id"]),
+                        int(row["command_seq"]),
+                        str(row["pending_command"]),
+                    ),
+                )
+                expired += max(0, int(cursor.rowcount))
+        return expired
 
     def complete_command(
         self, device_id: str, seq: int, ok: bool, message: str
