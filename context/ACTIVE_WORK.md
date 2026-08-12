@@ -1,6 +1,6 @@
 # Hermes RDP — Active Work
 
-Updated: 2026-08-10
+Updated: 2026-08-12
 
 Purpose: first operational file after `context/README.md`. Contains current work only; completed/superseded detail belongs elsewhere.
 
@@ -9,82 +9,91 @@ Purpose: first operational file after `context/README.md`. Contains current work
 - Repository: `bakunity/RDP`.
 - Published release: `v1.1.0`.
 - Target release: **v1.2.0 — Stabilization**.
-- **PR #19 is MERGED.**
-- Reconciled PR head: `53f5b42c0a5d09f21a4df41c38a95ef533d0c6ec`.
-- Merge commit now on `main`: `3f81bde44208df40e1a2753dcadb8397211b9255`.
-- CI #175 on the reconciled PR head: **PASS** for Linux validation and Windows PowerShell 5.1 validation.
-
-## Accepted stabilization blocks
-
-Do not repeat without a concrete regression reason:
-
-- MIPC fast-path timing and subjective performance;
-- RV-001..RV-006 classification/control/process smoke;
-- `НАБЛЮДАТЬ 60с` including automatic stop;
-- Windows Server 2019 ProductType=3 fresh-install/current-head/RDP acceptance;
-- Win10 Pro 19045 x64 + 32-bit PowerShell fresh-install/Sysnative/current-head/RDP acceptance;
-- existing-install duplicate Add guard;
-- OpenSSH reverse RDP end-to-end, external-network RDP, Windows reboot recovery, Telegram OFF/ON and endpoint CLOSED/OPEN truth;
-- Stage 2 RL-001 Telegram RESTART end-to-end recovery;
-- Stage 2 RL-002 automatic Hermes transport recovery after temporary Windows-side network loss;
-- Stage 2 RL-003 Linux server reboot recovery;
-- Stage 2 RL-004 controller restart isolation;
-- Stage 2 RL-005 dedicated Hermes sshd restart recovery.
+- PR #19 is merged into `main`; reconciled CI #175 passed.
 
 ## Deployment truth
 
-- Linux server remains on immutable `586e9446ea41262f1ed0d9c84ba72838a47d9bc5`.
+- Linux server remains live on immutable `586e9446ea41262f1ed0d9c84ba72838a47d9bc5`.
 - Accepted Windows agents used product head `c51ed8fa2c090dbc731a0c06f357d899846e90ae`.
-- Merge/reconciliation changed repository history/context, not the already accepted product behavior.
+- Dedicated OpenSSH transport is operational and remains isolated from controller lifecycle.
 
-## Current stage — recovery / lifecycle matrix
+## Stable accepted blocks
 
-PR #19 merge gate is complete. Stage 2 is active.
+Do not repeat without a concrete regression reason:
 
-### RL-001 Telegram RESTART — COMPLETE PASS
+- OpenSSH reverse RDP end-to-end and external-network RDP;
+- Windows reboot recovery;
+- Telegram OFF/ON and endpoint CLOSED/OPEN truth on the accepted healthy path;
+- MIPC current-head performance/classification/Observe60 acceptance;
+- Windows Server 2019 current-head acceptance;
+- Win10 x64 + PowerShell x86/Sysnative current-head acceptance;
+- RL-001 Telegram RESTART recovery;
+- RL-002 temporary Windows-side transport loss recovery;
+- RL-003 Linux server reboot recovery;
+- RL-004 controller restart isolation;
+- RL-005 dedicated sshd restart recovery.
 
-Live-tested on the accepted Win10 x64/x86-PowerShell device. RESTART replaced the old Hermes SSH PID with a different PID, returned to exactly one SSH process, kept access ON, returned endpoint OPEN, and the already-open RDP session automatically recovered after the short transport interruption.
+## Stage 2 evidence accumulated
 
-### RL-002 Temporary Windows-side network loss — COMPLETE PASS
+### RL-006 repeated reconnect stress — PARTIAL PASS
 
-A reversible transport-scoped firewall block killed the old Hermes SSH process. After removing the block, the existing agent automatically created one new SSH process with access still enabled and without Telegram ON/RESTART. RDP through the endpoint worked again. The intentionally long outage exceeded the Microsoft RDP client's reconnect window; that client behavior is not treated as Hermes recovery failure.
+Five consecutive dedicated-sshd restart cycles each removed the old endpoint session, created a different new `sshd-session`, returned exactly one listener on the tested endpoint and exactly one listener on `:7000`, and left the controller PID unchanged. Server side is PASS. Final Windows `ssh.exe` count was not collected because the RDP client later became unusable; do not repeat the five-cycle stress. When that Windows machine is available, only one final process-count check is needed.
 
-### RL-003 Linux server reboot — COMPLETE PASS
+### RL-007 multi-device — SERVER-SIDE PASS
 
-A real `systemctl reboot` was performed after a healthy baseline. The server returned, Telegram/dashboard recovered, Windows reverse transport returned without manual recovery action, and the already-open RDP session automatically restored.
+Four independent endpoint listeners were simultaneously present on `:53389`, `:53390`, `:53392`, and `:53393`. TCP checks through all four endpoints passed while dedicated sshd remained healthy. User-facing simultaneous dual-RDP smoke was interrupted by newly discovered lifecycle defects below.
 
-### RL-004 Controller restart isolation — COMPLETE PASS
+## Release blockers discovered by soak / long-lived operation
 
-Controller-only restart changed the controller PID and returned `active` while dedicated `hermes-rdp-sshd.service`, the existing endpoint `sshd-session`, `:7000`, and the public RDP endpoint all remained untouched. Telegram/dashboard stayed healthy and active RDP had no interruption.
+### CP-001 — HTTPS API accept path can stall on TLS handshake — CONFIRMED BUG
 
-### RL-005 Dedicated Hermes sshd restart — COMPLETE PASS
+After roughly a day of operation, Telegram showed all active devices offline while multiple OpenSSH endpoint listeners remained alive. Live forensics showed:
 
-Live restart of only `hermes-rdp-sshd.service` proved transport recovery independently of the controller:
+- `hermes-rdp.service` still `active` and `:7443` still LISTEN;
+- local `/healthz` timed out;
+- listener backlog reached `Recv-Q 6 / backlog 5`;
+- an external connection remained established on `:7443`;
+- the API thread was blocked in socket receive (`tcp_recvmsg`);
+- Windows telemetry stopped globally while independent OpenSSH tunnels remained alive.
 
-- controller PID remained unchanged and controller stayed `active`;
-- dedicated sshd PID changed and returned `active`;
-- old endpoint `sshd-session` PID was replaced by a new session PID;
-- dedicated SSH listener `:7000` and the same public RDP endpoint returned;
-- Windows reverse tunnel reconnected automatically without Telegram ON/RESTART;
-- the already-open RDP session automatically recovered after the brief transport interruption;
-- Telegram/dashboard remained healthy.
+Current server code wraps the listening HTTP socket in TLS before `ThreadingHTTPServer` can hand accepted connections to worker threads, so a stalled TLS handshake can block the accept path.
 
-This proves the dedicated transport service can be restarted independently and the Windows client automatically recreates the reverse tunnel on the tested deployment.
+Controller-only restart recovered the API without restarting dedicated sshd. `/healthz` immediately passed and active Windows clients resumed telemetry with `last_seen` age about one second.
 
-Do not repeat RL-001..RL-005 without a concrete regression reason.
+**v1.2.0 release blocker:** TLS handshake must be isolated per accepted connection and bounded by timeout; one slow/malformed client must never block global API acceptance.
 
-## Remaining Stage 2 order
+### CL-001 — desired OFF + local ON can deadlock command delivery — CONFIRMED BUG
 
-1. **Repeated reconnects -> no duplicate/orphan Hermes SSH processes.**
-2. Two+ devices simultaneously.
-3. One device failure must not affect another.
+Live reproduced on device `пк osio` / endpoint `:53390`:
 
-Windows reboot recovery is already PASS and is not repeated as a generic test.
+- device had already stopped telemetry long before the OFF button was pressed;
+- Telegram OFF stored desired access OFF and queued command seq 14;
+- pending `off` remained unresolved for many hours; last confirmed result remained seq 13 `on`;
+- server endpoint was CLOSED;
+- Windows continued repeatedly attempting SSH authentication;
+- the repeated SSH fingerprint exactly matched OSIO's registered Ed25519 key;
+- server rejected that key because `authorize_ssh_key()` permits only devices with `enabled=1`;
+- Windows agent attempts transport reconciliation before posting telemetry, so failed `Start-SshTunnel` aborts that loop iteration before it can fetch the pending OFF command.
+
+This creates a control deadlock: server desired OFF blocks SSH, local agent still believes ON, SSH start fails, heartbeat/control poll is skipped, pending OFF is never received.
+
+**v1.2.0 release blocker:** heartbeat/control polling must remain functional even when tunnel start/recovery fails. Transport reconciliation cannot gate telemetry/control delivery.
+
+### CU-001 — pending command can remain "executing" indefinitely — CONFIRMED UX/STATE BUG
+
+OSIO command seq 14 remained pending for many hours with no result, and Telegram continued showing execution in progress. Deterministic timeout/state handling is now promoted from later UX work into the stabilization fix. Timeout semantics must not break durable desired-state reconciliation for offline devices.
 
 ## Exact next action
 
-Run RL-006 as a bounded repeated-reconnect stress smoke on the accepted Win10 device. Recreate the transport several times, waiting for a healthy endpoint after every cycle rather than keeping it down continuously. Acceptance: every cycle returns to exactly one endpoint `sshd-session`; Windows ends with exactly one Hermes `ssh.exe`; no stale endpoint listener or orphan process accumulates; access remains enabled; controller stays healthy; Telegram/dashboard stays healthy; and RDP remains usable after the sequence. RDP-client continuity during every individual cycle is observational, not the primary RL-006 acceptance target.
+Pause RL-007/RL-008 acceptance and implement a dedicated stabilization fix branch covering:
+
+1. per-connection TLS handshake with bounded timeout so API accept remains available;
+2. Windows agent heartbeat/control path independent from SSH start/recovery failure;
+3. safe command timeout/status semantics that preserve durable desired state;
+4. regression tests for both confirmed deadlocks/stalls.
+
+After CI, deploy server fix first, update at least one Windows agent, reproduce the previously failing conditions in bounded form, then resume RL-007/RL-008.
 
 ## Context rule
 
-Checkpoint meaningful PASS/FAIL/root-cause/deployment transitions continuously. Record outcomes, not raw terminal transcripts. Never store pairing codes, tokens, private keys or ready-to-use secret material in context.
+Checkpoint meaningful PASS/FAIL/root-cause/deployment transitions continuously. Record outcomes, not raw terminal transcripts. Never store pairing codes, API tokens, private keys or ready-to-use secret material in context.
