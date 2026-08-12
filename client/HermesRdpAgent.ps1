@@ -682,22 +682,35 @@ function Invoke-CommandAction {
             switch ([string]$Command.action) {
                 'on' {
                     $State.enabled = $true
-                    $Message = Start-SshTunnel
                 }
                 'off' {
                     $State.enabled = $false
-                    $Message = Stop-SshTunnel
                 }
                 'restart' {
                     $State.enabled = $true
-                    $Message = Restart-SshTunnel
                 }
                 default {
                     throw "Неизвестная команда: $($Command.action)"
                 }
             }
+
+            # Persist control-plane state before touching transport. A failed
+            # SSH action must never leave the agent believing the opposite of
+            # the server's durable desired state.
             $State.last_command_seq = [int]$Command.seq
             Write-JsonFile -Path $StatePath -Value $State
+
+            switch ([string]$Command.action) {
+                'on' {
+                    $Message = Start-SshTunnel
+                }
+                'off' {
+                    $Message = Stop-SshTunnel
+                }
+                'restart' {
+                    $Message = Restart-SshTunnel
+                }
+            }
         }
     }
     catch {
@@ -727,38 +740,25 @@ $Config = Read-JsonFile -Path $ConfigPath
 $script:Http = [HermesRdp.AgentPinnedHttpClientFactory]::Create(
     [string]$Config.api_fingerprint
 )
-$State = Get-AgentState
 
-if ($State.enabled) {
-    try {
-        [void](Get-SshProcesses -ForceRefresh)
-        [void](Start-SshTunnel)
-    }
-    catch {
-        Write-AgentLog $_.Exception.Message
-    }
+try {
+    [void](Get-SshProcesses -ForceRefresh)
 }
-else {
-    [void](Stop-SshTunnel)
+catch {
+    Write-AgentLog "Initial SSH discovery failed: $($_.Exception.Message)"
 }
 
 Write-AgentLog 'Hermes RDP OpenSSH Agent started'
 
 while ($true) {
     $Cycle = [Diagnostics.Stopwatch]::StartNew()
+
+    # Control/heartbeat always runs before transport reconciliation. This is
+    # deliberate: if SSH is rejected or broken, the agent must still be able
+    # to learn a new desired state and receive OFF/ON/RESTART commands.
     try {
         $State = Get-AgentState
         $SshProcesses = @(Get-SshProcesses)
-
-        if ($State.enabled -and $SshProcesses.Count -eq 0) {
-            [void](Start-SshTunnel)
-            $SshProcesses = @(Get-SshProcesses)
-        }
-        elseif (-not $State.enabled -and $SshProcesses.Count -gt 0) {
-            [void](Stop-SshTunnel)
-            $SshProcesses = @()
-        }
-
         $Telemetry = Get-Telemetry `
             -State $State `
             -SshProcesses $SshProcesses `
@@ -776,12 +776,41 @@ while ($true) {
             $script:LiveTelemetry = [bool]$Response.telemetry_live
         }
 
-        if ($Response.command) {
+        if (
+            $Response -and
+            $Response.PSObject.Properties['desired_enabled']
+        ) {
+            $DesiredEnabled = [bool]$Response.desired_enabled
+            if ([bool]$State.enabled -ne $DesiredEnabled) {
+                $State.enabled = $DesiredEnabled
+                Write-JsonFile -Path $StatePath -Value $State
+            }
+        }
+
+        if ($Response -and $Response.command) {
             Invoke-CommandAction -Command $Response.command
         }
     }
     catch {
-        Write-AgentLog "Loop error: $($_.Exception.Message)"
+        Write-AgentLog "Control poll error: $($_.Exception.Message)"
+    }
+
+    # Transport recovery is intentionally isolated from the control poll.
+    # Failure here is logged and retried next cycle without suppressing the
+    # next heartbeat/control request.
+    try {
+        $State = Get-AgentState
+        $SshProcesses = @(Get-SshProcesses)
+
+        if ($State.enabled -and $SshProcesses.Count -eq 0) {
+            [void](Start-SshTunnel)
+        }
+        elseif (-not $State.enabled -and $SshProcesses.Count -gt 0) {
+            [void](Stop-SshTunnel)
+        }
+    }
+    catch {
+        Write-AgentLog "Transport reconcile error: $($_.Exception.Message)"
     }
     finally {
         $Cycle.Stop()
