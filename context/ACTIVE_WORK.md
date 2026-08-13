@@ -100,15 +100,25 @@ Read-only live server inventory proved the admin and Hermes SSH boundaries are s
 
 No restart was required. Do not repeat SEC-007 without an sshd/service-boundary regression reason.
 
-### SEC-008 no Windows security weakening — ACTIVE
+### SEC-008 no Windows security weakening — ENVIRONMENT GATE FAIL / PRODUCT NOT YET FAIL
 
 Repository search found no Hermes code using `Set-MpPreference`, `Add-MpPreference`, `MpPreference`, `ExclusionPath`, `DisableRealtimeMonitoring` or Defender-specific modification calls. The installer uses normal Microsoft OpenSSH/RDP/firewall/service/task configuration and does not intentionally request Defender exclusions or disable protection.
 
-Remaining acceptance is a bounded read-only check on the freshly live-accepted `SEC005 TEST` Windows PC proving Hermes is healthy while Windows Defender real-time protection is enabled and no Hermes path/process is present in Defender exclusions. Do not change Defender settings during this test.
+The first live Windows security-state check on `SEC005 TEST` showed:
+
+- Microsoft Defender AM service enabled and Antivirus enabled;
+- RealTimeProtectionEnabled = False;
+- BehaviorMonitorEnabled = False;
+- no Hermes path exclusion;
+- no Hermes-related process exclusion;
+- no broad `.ps1`/`.exe` extension exclusion detected;
+- Hermes task remained Running with exactly one matching SSH process on the accepted device.
+
+Therefore the acceptance harness returned `SEC008=FAIL`, but this is currently an **environment/security-state blocker**, not a confirmed Hermes product failure. The test machine did not satisfy the prerequisite "Defender real-time protection enabled", so it cannot yet prove whether Hermes works under that protection state. Do not weaken Defender or add exclusions to make Hermes pass.
 
 ## Exact next action
 
-Run the read-only **SEC-008 Windows security-state check** on the live `SEC005 TEST` PC. Confirm Defender antivirus/real-time protection is enabled, inspect configured exclusion paths/processes without printing unrelated sensitive values, prove no exclusion targets `C:\ProgramData\HermesRDP`, `ssh.exe`, `powershell.exe` or the Hermes agent, and simultaneously confirm the Hermes task is Running with exactly one matching SSH process. If PASS, Stage 3 device/security lifecycle is complete except SEC-004 remains honestly marked fixture-unavailable rather than live-exercised.
+Run one bounded **read-only Defender-state diagnosis** on `SEC005 TEST`. Determine why real-time and behavior monitoring are off: inspect Defender status/preferences, policy values, service state, tamper-protection state and any registered third-party antivirus product, while printing no unrelated exclusion lists or secrets. Do not change Defender settings yet. If the cause is an existing local/policy/third-party security configuration independent of Hermes, classify SEC-008 as environment-blocked and then choose a safe acceptance fixture with Defender real-time protection enabled; if evidence points to Hermes changing the state, treat it as a product blocker and investigate source/runtime provenance before any further security test.
 
 ## Context rule
 
