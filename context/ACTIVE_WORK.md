@@ -47,17 +47,19 @@ The expected retired archive was absent, then a read-only search across `C:\Prog
 
 Retain SEC-004 as not live-exercised because the old client fixture no longer exists. Server-side hard-revoke evidence remains COMPLETE PASS from SEC-003.
 
-### SEC-005 deterministic released-port reuse — FAIL / CONFIRMED STARTUP RACE
+### SEC-005 deterministic released-port reuse — FAIL / CONFIRMED INSTALLER STARTUP + RETRY BUG
 
 A genuinely clean Windows PC passed the precheck with no Hermes config, key, task or process. Fresh pairing using the normal Telegram installer then failed after pairing with `SSH-туннель не запустился`; `agent.log` contained only the startup line.
 
-Source-level contradiction confirms an installer/agent startup race: the installer starts the Scheduled Task, sleeps only 8 seconds, then requires an `ssh.exe` process or aborts. The accepted PR #20 control-first agent performs telemetry/API control work before transport reconciliation, and its pinned HTTP client may wait up to 20 seconds. Therefore a healthy fresh agent is allowed to still be inside its initial control cycle when the installer declares tunnel startup failure. The installer catch then unregisters the task, kills Hermes processes and attempts `revoke-self` for the newly paired identity. Local config/key files are not removed by that catch, so failed-pair cleanup/retry behavior also needs verification before rerunning Add.
+Source-level contradiction confirms an installer/agent startup race: the installer starts the Scheduled Task, sleeps only 8 seconds, then requires an `ssh.exe` process or aborts. The accepted PR #20 control-first agent performs telemetry/API control work before transport reconciliation, and its pinned HTTP client may wait up to 20 seconds. Therefore a healthy fresh agent is allowed to still be inside its initial control cycle when the installer declares tunnel startup failure.
+
+Post-failure Windows evidence: the installer catch successfully removed the Scheduled Task and stopped both the agent and SSH processes, but left `device.json`, the Ed25519 private key and public key on disk. The failed identity had been assigned released port `53391`. This residual state is itself a retry-path defect: the normal Add installer guard sees a valid local config plus keypair and will treat the machine as already installed even if `revoke-self` successfully removed the server registration. Do not rerun Add on this PC until cleanup/retry semantics are fixed or the bounded test cleanup is explicitly performed.
 
 This is a real v1.2.0 stabilization bug, not a security isolation failure and not evidence that port reuse itself is unsafe.
 
 ## Exact next action
 
-Do not rerun the Telegram installer yet. First perform a read-only post-failure cleanup check on the fresh Windows PC and server: determine whether the failed task/processes were removed, whether local `device.json`/Ed25519 files remain, whether the newly paired server registration was successfully revoked, whether `53391` is again unassigned/closed, and whether an existing healthy control device remains unaffected. Then fix installer startup acceptance so it waits for a bounded healthy outcome rather than assuming SSH must exist after exactly 8 seconds; add regression coverage before retrying SEC-005.
+Perform a read-only server post-failure check: verify whether `revoke-self` removed the failed fresh registration, whether `53391` is again unassigned and not listening, and whether MIPC remains healthy. Then fix both parts of the installer failure path: bounded startup acceptance compatible with control-first agent timing, and cleanup/retry semantics so a failed fresh install cannot strand a local identity that blocks Add. Add regression coverage before retrying SEC-005.
 
 Remaining Stage 3 gates after SEC-005: owner-limited Telegram authorization, admin SSH :22 independence from tunnel sshd :7000, and confirmation that no Defender exclusions/security weakening are required.
 
