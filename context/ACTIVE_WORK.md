@@ -74,17 +74,29 @@ PR #21 was merged using expected head `d1f901a070aa8db006059378d263d7b72214fbb4`
 
 Do not repeat SEC-005 without a concrete installer/allocator regression reason.
 
-### SEC-006 owner-limited Telegram authorization — SOURCE BOUNDARY CONFIRMED / LIVE NEGATIVE PENDING
+### SEC-006 owner-limited Telegram authorization — COMPLETE PASS
 
-Read-only source inspection confirms the controller has one configured `telegram_chat_id`. `TelegramBot._authorized()` extracts both the update chat ID and the acting user ID and returns true only when **both** equal that configured owner ID. Therefore an owner acting in a different/group chat is denied, and a different actor in the owner's chat is also denied. Unauthorized ordinary messages are ignored; unauthorized callbacks receive `Нет доступа` and return before callback/device mutation logic.
+Source inspection established one configured `telegram_chat_id`. `TelegramBot._authorized()` requires both the update chat ID and acting user ID to equal that configured owner ID; unauthorized messages return before any device/control mutation path.
 
-No source change is required at this point. The remaining acceptance is one bounded live-config authorization check that calls only `_authorized()` with synthetic updates and never invokes Telegram API, registry writes, device commands or secrets output.
+Bounded live-config synthetic authorization check passed without Telegram API calls, registry writes or owner-ID output:
+
+- owner in owner/private chat: allowed;
+- wrong actor in owner chat: denied;
+- owner in wrong chat: denied;
+- wrong actor/wrong chat: denied;
+- unauthorized callback actor: denied.
+
+No source change is required. Do not repeat SEC-006 without an authorization-model regression reason.
+
+### SEC-007 admin SSH independence from Hermes tunnel sshd — ACTIVE
+
+Source boundary confirms Hermes uses a dedicated OpenSSH daemon with its own `/etc/hermes-rdp/sshd_config`, dedicated host key, PID file and systemd service. The tunnel daemon listens on configured `ssh_bind_port` (default `7000`) and is started as `sshd -D -e -f /etc/hermes-rdp/sshd_config`; it does not modify or replace the system/admin sshd configuration. The installer separately opens the configured Hermes tunnel port in UFW.
+
+The remaining acceptance is a read-only live server check proving system/admin SSH `:22` and Hermes tunnel SSH `:7000` are owned by distinct listeners/process/service boundaries and both remain healthy simultaneously. Do not restart either sshd during this check.
 
 ## Exact next action
 
-Run the read-only **SEC-006 live-config negative authorization check** on the Linux server. It should prove owner/private-chat = allowed, wrong actor in owner chat = denied, owner in wrong chat = denied, and wrong actor/wrong chat = denied without printing the real owner ID. If PASS, mark SEC-006 COMPLETE and proceed to admin SSH `:22` independence from Hermes sshd `:7000`.
-
-Remaining Stage 3 gate after that: confirmation that Hermes requires no Defender exclusions or other security weakening.
+Run the read-only **SEC-007 SSH independence inventory** on Linux: inspect listeners/PIDs for ports `22` and configured Hermes `ssh_bind_port`, resolve each process command line and cgroup/systemd unit, verify Hermes uses `/etc/hermes-rdp/sshd_config`, verify admin listener is not the Hermes service, and confirm both ports accept TCP locally. If PASS, proceed to the final Stage 3 gate: confirmation that Hermes requires no Defender exclusions or other security weakening.
 
 ## Context rule
 
