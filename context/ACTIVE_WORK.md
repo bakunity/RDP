@@ -2,52 +2,39 @@
 
 Updated: 2026-08-13
 
-Purpose: first operational file after `context/README.md`.
-
 ## Repository / release
 
 - Repository: `bakunity/RDP`.
 - Published release: `v1.1.0`.
 - Target release: **v1.2.0 — Stabilization**.
-- PR #19 through PR #25 are merged and accepted.
-- PR #24 accepted head: `a5c02747bdfef15128d3e4d31c4c268cb74760f8`; merge commit `f7e3c9e271a75cb2fdc52b564b22f76af47e70d8`.
-- PR #25 accepted head: `0e2e7aef77ab1df804b70d9fd29d4b5736fbac60`; merge commit `0077efd59394a815385ecbf3940b851039e40f1d`.
-- CI #272 on PR #25 head: Windows PowerShell 5.1 PASS and Linux full release checks PASS.
+- PR #19 through PR #25: merged / runtime accepted.
+- PR #26: merged; documentation reconciliation complete. Merge commit `b3e49e9caff0229ce9f626094393fbf1692878de`.
+- PR #27: draft final release PR on branch `release-v1.2.0`.
+- PR #27 CI #279: Linux full release checks PASS; Windows PowerShell 5.1 validation PASS.
 
 ## Deployment truth
 
-- Live Linux controller/app is deployed from exact accepted PR #25 head `0e2e7aef77ab1df804b70d9fd29d4b5736fbac60` via the transactional server updater; deployment returned `UPDATE=PASS` and created a rollback backup.
-- Dedicated Hermes tunnel sshd remains separate from admin SSH.
-- `SEC005 TEST` remains healthy after updater, repair success/rollback acceptance and final Microsoft RDP smoke.
+- Live Linux controller/app remains deployed from exact accepted PR #25 head `0e2e7aef77ab1df804b70d9fd29d4b5736fbac60`.
+- Production runtime is not changed by PR #26 or unmerged PR #27.
+- `SEC005 TEST` remains healthy after updater, repair and final Microsoft RDP acceptance.
 
-## Stage 4 — Safe migration / updater / rollback — COMPLETE
+## Completed stabilization scope
 
-- UPD-001..UPD-006: COMPLETE / LIVE-ACCEPTED.
-- Do not repeat without a concrete updater regression reason.
+- Stage 3 device/security: COMPLETE, except SEC-004 remains fixture-unavailable by design.
+- Stage 4 server + Windows transactional updater: COMPLETE / LIVE-ACCEPTED.
+- Explicit Windows Repair engine: COMPLETE / LIVE-ACCEPTED.
+- Telegram Repair + new pairing-code UX: COMPLETE / LIVE-ACCEPTED.
+- Do not repeat completed live tests without a concrete regression reason.
 
-## Explicit repair engine — COMPLETE / LIVE-ACCEPTED
+## Current release gate
 
-PR #24 provides bounded local Windows repair for an already-registered device. It preserves existing config, device identity, Ed25519 keypair, known-hosts and RDP port; can rebuild the canonical SYSTEM Scheduled Task/agent runtime; and rolls back the previous local runtime snapshot on failure.
+PR #27 synchronizes version metadata to `1.2.0`, adds final release-note path, updates CHANGELOG/README release status and retires the temporary v1.2 draft.
 
-- REP-001 missing agent/task recovery: COMPLETE PASS.
-- REP-002 forced post-mutation failure rollback: COMPLETE PASS.
-- Final ordinary Microsoft RDP connection after both tests: PASS.
+The branch passes CI, but PR #27 intentionally remains **draft / unmerged** because merging it may trigger the repository release workflow and publish/tag `v1.2.0`.
 
-Deliberate limitation remains: missing local identity/config/private-key/known-hosts material is not silently regenerated; that requires a separate owner-authorized recovery/rekey design.
+**Next action requires explicit final release approval:** mark PR #27 ready, merge exact accepted head, then verify the generated `v1.2.0` tag/GitHub Release and release links.
 
-## Telegram repair / pairing UX — COMPLETE / LIVE-ACCEPTED
-
-PR #25 keeps fresh pairing and existing-device repair explicitly separate.
-
-- UX-001 existing-device repair screen: COMPLETE PASS. Telegram renders the selected device, endpoint, immutable repair command, device-ID guard and complete parameter invocation without embedding device token/private key.
-- UX-002 pairing retry/new-code behavior: COMPLETE PASS. `НОВЫЙ КОД` creates a different one-time code and the rendered installer command updates to the same new value.
-- No pairing code or other secret material is stored in durable context.
-
-## Exact next action
-
-Proceed to the **v1.2.0 release-prep pass**: review Russian recovery/edge-state terminology, reconcile user-facing docs with the accepted OpenSSH/updater/repair/Telegram UX model, and prepare release notes/tagging without reopening completed live tests.
-
-RDP trusted-certificate work is a separate planned track after the release-prep pass: bind a hostname-matching certificate to the Windows RDP listener; HTTPS certificate configuration alone does not replace the RDP listener certificate.
+RDP trusted-certificate work remains a separate post-release track.
 
 ## Context rule
 
