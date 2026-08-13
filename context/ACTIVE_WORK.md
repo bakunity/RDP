@@ -1,6 +1,6 @@
 # Hermes RDP — Active Work
 
-Updated: 2026-08-12
+Updated: 2026-08-13
 
 Purpose: first operational file after `context/README.md`. Contains current work only; completed/superseded detail belongs elsewhere.
 
@@ -54,6 +54,7 @@ Do not repeat without a concrete regression reason:
 - Win10 x64 + PowerShell x86/Sysnative acceptance;
 - RL-001..RL-005 lifecycle recovery;
 - RL-007 simultaneous multi-device user smoke;
+- RL-008 one-device failure isolation;
 - CP-001, CL-001 and CU-001 stabilization acceptance;
 - Telegram UI auto-refresh/mobile button-layout acceptance.
 
@@ -61,19 +62,19 @@ Do not repeat without a concrete regression reason:
 
 ### RL-006 repeated reconnect stress — PARTIAL PASS
 
-Five consecutive dedicated-sshd restart cycles were clean server-side. Final Windows process-count check on the original tested machine was not collected. Do not repeat the five-cycle stress; if that machine is available later, one lightweight `HermesSshCount == 1` check is sufficient.
+Five consecutive dedicated-sshd restart cycles were clean server-side. Final Windows process-count check on the original tested machine was not collected. Do not repeat the five-cycle stress; if that exact machine is available later, one lightweight `HermesSshCount == 1` check is sufficient.
 
 ### RL-007 multi-device — COMPLETE PASS
 
 Server-side evidence already showed four independent endpoints simultaneously healthy with successful TCP-through-tunnel checks. Final user-facing smoke also passed: two Microsoft RDP sessions to different Hermes devices were open and usable at the same time without mutual disruption.
 
-### RL-008 failure isolation — PENDING
+### RL-008 failure isolation — COMPLETE PASS
 
-Verify one device transport/client failure does not disturb another healthy device or its endpoint/session.
+A bounded live test held only MIPC (`:53389`) in durable desired OFF for 12 seconds without queueing a command. MIPC endpoint closed and its agent applied OFF/SSH count 0; other healthy devices kept fresh telemetry and open listeners throughout. Shared controller and dedicated sshd PIDs stayed unchanged, MIPC command sequence stayed unchanged, and MIPC automatically restored to ON/one SSH/open endpoint after desired state was restored. User confirmed the MIPC RDP session dropped as intended while the second active RDP session stayed continuously usable without interruption.
 
 ## Exact next action
 
-Run **RL-008 one-device failure isolation** using the smallest reversible fault. Keep one healthy Hermes RDP session open on device B, disturb only device A, and prove device B heartbeat, tunnel/listener and active RDP remain healthy. Do not restart shared controller/sshd infrastructure and do not repeat CP/CL/CU or the five-cycle RL-006 stress.
+Core Stage 2 lifecycle acceptance is complete except the deferred RL-006 single Windows process-count closure. Do not repeat the five-cycle stress. If the exact original RL-006 Windows machine is available, perform only one lightweight `HermesSshCount == 1` check; otherwise proceed to the next product stage: device/security lifecycle acceptance.
 
 ## Context rule
 
