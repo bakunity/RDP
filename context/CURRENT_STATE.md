@@ -12,7 +12,8 @@ For immediate operational truth read `ACTIVE_WORK.md`; for scenario-level proof/
 - PR #19 merged and accepted.
 - PR #20 merged; merge commit `dcda9d3890be390a90e9a967905f2cab3c6c7194`.
 - PR #21 merged; merge commit `12ba13080e25e935fb7cc17ece7852005c964c29`.
-- PR #22 `fix: make server updater transactional` is open, mergeable, current head `bc9ee48da570e4d85e1a50cd3b41a631f064609e`; CI #249 passed Linux and Windows PowerShell 5.1 validation.
+- PR #22 merged; accepted head `bc9ee48da570e4d85e1a50cd3b41a631f064609e`, merge commit `ba21a9f969c3ad8ad6760ac423056afb6bb7bd00`.
+- CI #249 on PR #22 head passed Linux full release checks and Windows PowerShell 5.1 validation.
 
 ## Architecture — current
 
@@ -34,8 +35,8 @@ Durable boundaries remain: all Windows machines are equal clients; Linux is infr
 
 ## Deployment truth
 
-- Live controller/app is deployed from immutable PR #22 head `bc9ee48da570e4d85e1a50cd3b41a631f064609e` after successful transactional-updater live acceptance.
-- Previous live repository ref was `77240e2d758f0ed4598553d4d903331229653f06`.
+- Live controller/app is deployed from immutable accepted PR #22 head `bc9ee48da570e4d85e1a50cd3b41a631f064609e`.
+- UPD-004 deliberately attempted a post-mutation failure against an older ref and automatically restored this exact accepted live state.
 - Dedicated Hermes sshd remains separate from system/admin sshd.
 - MIPC accepted Windows agent remains the PR #20 control-first agent.
 
@@ -53,7 +54,7 @@ Do not re-run wholesale without a concrete regression reason:
 - Telegram dashboard auto-refresh/mobile layout;
 - SEC-001, SEC-002, SEC-003, SEC-005, SEC-006, SEC-007, SEC-008;
 - PR #21 fresh-install readiness/rollback correction;
-- UPD-003 transactional server updater success path on PR #22 head.
+- PR #22 transactional server updater success + automatic rollback.
 
 ## Stage 3 device/security evidence
 
@@ -67,12 +68,18 @@ Stage 3 is COMPLETE. SEC-004 remains intentionally `NOT LIVE-EXERCISED / FIXTURE
 
 **UPD-001 — COMPLETE PASS.** Read-only runtime/source inventory proved healthy immutable deployment baseline.
 
-**UPD-002 — CONFIRMED BUG.** Legacy `update-server.sh` backups did not include the live SQLite DB, so rollback state was incomplete.
+**UPD-002 — CONFIRMED BUG / RESOLVED.** Legacy `update-server.sh` backups omitted the live SQLite DB. PR #22 now takes a consistent database snapshot and records rollback provenance.
 
-**UPD-003 — COMPLETE PASS.** PR #22 transactional updater successfully updated production from `77240e2d...` to exact head `bc9ee48d...`; services and health stayed good after restart, device state and DB metadata were preserved, rollback backup now includes a valid SQLite snapshot plus old config and provenance metadata, and all four active endpoint listeners recovered.
+**UPD-003 — COMPLETE PASS.** Transactional server updater updated production to exact PR #22 head with services/health good, device state and DB metadata preserved, valid SQLite/config/provenance backup created, and all four active endpoint listeners recovered.
+
+**UPD-004 — COMPLETE PASS.** Deliberate post-mutation failure triggered automatic rollback. Ref/config/app/unit hashes, DB ownership/mode, device signature and database integrity were restored; both services, `/healthz`, `hermes-rdpctl doctor` and all prior endpoints recovered. `ROLLBACK=PASS` was reported and no rollback failure was observed.
+
+The **server updater portion of Stage 4 is COMPLETE / LIVE-ACCEPTED**.
 
 ## Current release gate
 
-Run **UPD-004 bounded automatic rollback acceptance** before merging PR #22. Use a temporary local copy of the exact updater with a deliberate test-only failure inserted after deployment mutation. Acceptance requires automatic rollback to restore current ref/config, app/unit hashes, DB/device state and permissions, both Hermes services/health, and endpoint listeners.
+Proceed to **Windows updater / repair hardening**.
 
-After UPD-004 passes, continue with Windows updater/repair hardening and live acceptance, then command/pairing/repair UX, release docs and the v1.2.0 immutable tag.
+Current `scripts/update-client.ps1` is not yet transactional: it stops the healthy task/processes before candidate download, backs up only the agent script, restores only on parse failure, does not restart the old task on that rollback path, has no bounded post-start readiness gate, and has no runtime automatic rollback if a syntactically valid candidate cannot establish a healthy tunnel.
+
+Next implementation must preserve device identity/config/private key/known-hosts/port and Scheduled Task state, stage/parse the candidate before disrupting the working agent where possible, use bounded readiness, and restore the prior agent/task state on activation failure. After regression coverage + CI, run bounded Windows success-path and forced-failure rollback acceptance on a non-critical test device.
