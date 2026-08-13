@@ -2,7 +2,7 @@
 
 Updated: 2026-08-13
 
-Purpose: first operational file after `context/README.md`. Contains current work only; completed/superseded detail belongs elsewhere.
+Purpose: first operational file after `context/README.md`. Contains current work only; completed/superseded detail belongs in the evidence/history files.
 
 ## Repository / release
 
@@ -14,114 +14,77 @@ Purpose: first operational file after `context/README.md`. Contains current work
 
 ## Deployment truth
 
-- Live controller/app is deployed from immutable PR #20 head `77240e2d758f0ed4598553d4d903331229653f06`.
-- Final controller-only deploy passed: controller active, `/healthz` OK, configured repository ref exact.
-- Dedicated `hermes-rdp-sshd.service` was not restarted by that deploy.
-- MIPC accepted Windows agent is the PR #20 control-first agent; later PR #20 changes did not touch the Windows agent.
-- PR #21 changes Windows installer behavior and tests; no production Linux service deploy was required for SEC-005 acceptance.
+- Live controller/app remains deployed from immutable PR #20 head `77240e2d758f0ed4598553d4d903331229653f06`.
+- Dedicated `hermes-rdp-sshd.service` remains separate from admin SSH.
+- MIPC accepted Windows agent remains the PR #20 control-first agent.
+- PR #21 changed Windows fresh-install readiness/rollback behavior and required no production Linux service deploy.
 
 ## Stage 2 lifecycle
 
 - RL-001..RL-005: COMPLETE PASS.
-- RL-006: PARTIAL PASS; five-cycle server-side reconnect stress passed, only one optional deferred Windows process-count check remains on the exact original device.
+- RL-006: PARTIAL PASS; five-cycle server-side reconnect stress passed, with only the optional original-machine one-process check uncollected.
 - RL-007: COMPLETE PASS.
 - RL-008: COMPLETE PASS.
 
-## Stage 3 — Device / Security lifecycle — ACTIVE
+## Stage 3 — Device / Security lifecycle — COMPLETE
 
 ### SEC-001 device identity uniqueness — COMPLETE PASS
 
-Live inventory showed unique Ed25519 SSH public keys, RDP ports, device IDs and API token hashes. No duplicates were present.
+Active inventory proved unique device IDs, API token hashes, Ed25519 keys and RDP ports.
 
 ### SEC-002 cross-device SSH isolation — COMPLETE PASS
 
-Effective sshd policy and actual `AuthorizedKeysCommand` mapped each active key only to its own device and own `permitlisten` port. An unregistered Ed25519 key was denied. Live negative-forward acceptance on MIPC also passed: the registered MIPC key authenticated, but an unauthorized reverse port was rejected while the normal assigned tunnel stayed up.
+Each registered key is constrained to its own `permitlisten` endpoint. An unregistered key was denied and a valid device key could not request an unauthorized reverse port.
 
 ### SEC-003 hard revoke / DELETE lifecycle — COMPLETE PASS
 
-The intentionally retired `ai` device was used as the destructive test object after a protected SQLite backup was created. Telegram DELETE hard-removed the registration. Post-delete live acceptance proved the old device record, token hash and SSH public key are absent from the current registry; the old SSH key is denied; the old endpoint remained closed; the old RDP port became unassigned/reusable; MIPC remained healthy throughout.
-
-Do not restore the deleted `ai` registration from backup during normal continuation. The backup exists only as rollback/evidence for the bounded test.
+Telegram DELETE hard-removed the retired device registration; its API/SSH authorization disappeared, endpoint stayed closed, port became reusable, and the healthy control device remained unaffected.
 
 ### SEC-004 stale deleted-client reclaim — NOT LIVE-EXERCISED / FIXTURE UNAVAILABLE
 
-The expected retired client archive was absent, and the bounded read-only search returned no matching deleted `ai` local identity. This is not a product FAIL and does not invalidate SEC-003. Do not reconstruct or expose old token/private-key material merely to manufacture the test.
+The deleted client fixture no longer existed locally. Do not reconstruct secrets merely to manufacture this test. This is not a product FAIL and does not invalidate SEC-003.
 
 ### SEC-005 deterministic released-port reuse — RESOLVED / LIVE-ACCEPTED
 
-Initial fresh install on a genuinely clean Windows PC exposed two real installer bugs:
-
-- fixed 8-second post-task startup assumption raced the control-first agent before SSH transport reconciliation;
-- after successful server `revoke-self`, local `device.json` and Ed25519 keypair residue remained and blocked a clean Add retry.
-
-Server rollback after the failed attempt passed: failed registration removed, released port `53391` closed/unassigned and allocator-selected again, MIPC unaffected.
-
-PR #21 `fix: harden Windows installer startup readiness` implemented bounded readiness polling, stable matching SSH-PID acceptance, richer startup diagnostics, explicit pairing-start state, safe snapshot restoration after known successful `revoke-self`, and credential preservation when pairing/revoke outcome is uncertain. Regression tests were added.
-
-Exact live-tested code boundary before merge: `bc286d7abaf3cd8a712f92ec7f633dba8cd4547d`. Current PR head before merge was `d1f901a070aa8db006059378d263d7b72214fbb4`; CI #234 was COMPLETE PASS.
-
-Live retry acceptance on Windows passed:
-
-- installer reached `=== ГОТОВО ===`;
-- a fresh device identity and fresh Ed25519 key were created;
-- released port `53391` was reused;
-- Scheduled Task stayed Running with exactly one matching Hermes SSH process;
-- current identity/key differed from the archived failed attempt;
-- final Linux post-check showed one active owner of `53391`, fresh telemetry, listener open, TCP-through-tunnel working, failed identity absent, deleted prior device identity/key not reused, and MIPC healthy;
-- user successfully connected through Microsoft RDP to the reused endpoint.
-
-PR #21 was merged using expected head `d1f901a070aa8db006059378d263d7b72214fbb4`; merge commit `12ba13080e25e935fb7cc17ece7852005c964c29`.
-
-Do not repeat SEC-005 without a concrete installer/allocator regression reason.
+PR #21 fixed the real fresh-install startup race and stale-local-residue retry problem. A genuinely fresh identity/key safely reused released port `53391`; local and server post-checks passed, MIPC stayed healthy, and real Microsoft RDP succeeded.
 
 ### SEC-006 owner-limited Telegram authorization — COMPLETE PASS
 
-Source inspection established one configured `telegram_chat_id`. `TelegramBot._authorized()` requires both the update chat ID and acting user ID to equal that configured owner ID; unauthorized messages return before any device/control mutation path.
+Live-config synthetic checks proved only the configured owner acting in the configured private chat is authorized; wrong actor/chat combinations and unauthorized callbacks are denied before mutation logic.
 
-Bounded live-config synthetic authorization check passed without Telegram API calls, registry writes or owner-ID output:
+### SEC-007 admin SSH independence — COMPLETE PASS
 
-- owner in owner/private chat: allowed;
-- wrong actor in owner chat: denied;
-- owner in wrong chat: denied;
-- wrong actor/wrong chat: denied;
-- unauthorized callback actor: denied.
+Live inventory proved admin SSH `:22` and Hermes tunnel sshd `:7000` are distinct process/config/systemd boundaries and are healthy simultaneously.
 
-No source change is required. Do not repeat SEC-006 without an authorization-model regression reason.
+### SEC-008 no Windows security weakening — COMPLETE PASS
 
-### SEC-007 admin SSH independence from Hermes tunnel sshd — COMPLETE PASS
+Repository inspection found no Hermes Defender-disable or exclusion logic. Initial failure was traced to a pre-existing local `DisableRealtimeMonitoring=1` policy on the unmanaged Hyper-V test VM, not Hermes.
 
-Read-only live server inventory proved the admin and Hermes SSH boundaries are separate and healthy simultaneously:
+The local disabling policy was removed and normal Defender protection enabled. Final acceptance then proved simultaneously:
 
-- Hermes tunnel sshd listens on `7000`, is active under `hermes-rdp-sshd.service`, runs with `/etc/hermes-rdp/sshd_config`, and owns the tunnel listener;
-- Hermes sshd does not own admin port `22`;
-- system `ssh.service` is separately active with its own control group/unit;
-- listeners are present on both `22` and `7000` and both accept local TCP;
-- process/config/service boundaries are distinct.
-
-No restart was required. Do not repeat SEC-007 without an sshd/service-boundary regression reason.
-
-### SEC-008 no Windows security weakening — DEFENDER ENABLE STEP PASS / FINAL ACCEPTANCE PENDING
-
-Repository search found no Hermes code using `Set-MpPreference`, `Add-MpPreference`, Defender exclusion calls or `DisableRealtimeMonitoring`. The installer uses normal Microsoft OpenSSH/RDP/firewall/service/task configuration and does not intentionally request Defender exclusions or disable protection.
-
-Initial live security-state checks found Hermes healthy with no Hermes path/process/broad extension exclusions, but Defender real-time protection was disabled by a local policy value `DisableRealtimeMonitoring=1` on the SEC005 TEST VM. The VM is not domain/Entra/Workplace joined and has no active EnterpriseMgmt/MDM evidence, so this was classified as a local/manual or leftover policy rather than a Hermes requirement.
-
-The bounded reversible enable step now passed:
-
-- `DisableRealtimeMonitoring` policy value removed (`NOT_SET`);
-- Defender preference `DisableRealtimeMonitoring=False`;
+- `AMServiceEnabled=True`;
+- `AntivirusEnabled=True`;
 - `RealTimeProtectionEnabled=True`;
 - `BehaviorMonitorEnabled=True`;
 - `AMRunningMode=Normal`;
-- Hermes Scheduled Task remained Running;
-- exactly one matching Hermes `ssh.exe` remained alive;
-- device stayed on port `53391`.
+- policy `DisableRealtimeMonitoring` absent;
+- no Hermes path/process exclusion;
+- no broad `.ps1`/`.exe` exclusion;
+- Hermes Scheduled Task Running;
+- exactly one Hermes `ssh.exe`;
+- device remained on `53391`.
 
-This proves enabling normal Defender protection did not immediately break the Hermes tunnel. SEC-008 is not final until one read-only final acceptance re-checks Defender protection + no Hermes exclusions + healthy Hermes task/SSH and the user confirms a real Microsoft RDP connection still succeeds while protection remains enabled.
+The user was already connected to this VM through Hermes RDP for the whole Defender-enable/final-check sequence, so the active Hermes RDP session also remained usable while normal Defender real-time/behavior protection was enabled.
+
+Do not restore the old local Defender-disable policy during normal continuation.
 
 ## Exact next action
 
-Run the final read-only SEC-008 acceptance on `SEC005 TEST`: confirm Defender real-time/behavior protection are still enabled, no Hermes path/process or broad `.ps1`/`.exe` exclusions exist, the Hermes task is Running with exactly one matching SSH process, then perform one real RDP connection to the existing `53391` endpoint. If both pass, mark SEC-008 COMPLETE PASS and Stage 3 device/security lifecycle complete, with SEC-004 remaining honestly fixture-unavailable.
+Stage 3 is complete. Proceed to the next v1.2.0 stabilization stage: **safe migration / updater / rollback**.
+
+Start with a read-only source/runtime inventory of the current server updater and Windows update/repair paths. Identify provenance recording, backup boundaries, health checks and automatic rollback behavior before changing code or running destructive update tests.
+
+After updater/rollback hardening, remaining product work is command/pairing/repair UX, then release documentation/tagging.
 
 ## Context rule
 
