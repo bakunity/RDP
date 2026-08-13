@@ -41,9 +41,15 @@ The intentionally retired `ai` device was used as the destructive test object af
 
 Do not restore the deleted `ai` registration from backup during normal continuation. The backup exists only as rollback evidence for this bounded test.
 
+### SEC-004 stale deleted-client reclaim — TEST FIXTURE UNAVAILABLE
+
+The expected retired Windows archive path `C:\ProgramData\HermesRDP.pre-x86-20260810-083418` was checked on the candidate PC and does not exist there; `device.json` is therefore unavailable at that path. This is not a product FAIL and does not weaken SEC-003 server-side revoke evidence. Do not manufacture old API tokens or private keys from server data.
+
+If another local `HermesRDP*` directory containing the deleted `ai` identity exists, a bounded old-client negative test may still be performed. Otherwise keep SEC-004 as not live-exercised due missing client fixture and move to deterministic port-reuse acceptance with a fresh identity.
+
 ## Exact next action
 
-Proceed to the remaining device/security lifecycle gates. First design **SEC-004 stale deleted-client rejection / endpoint reclaim protection** from the actual API and Windows client behavior. Prefer a bounded test using the retired `ai` client only if its old local installation/archive is available; do not expose or copy its API token/private key. If that Windows client is unavailable, preserve SEC-003 as server-side hard-revoke proof and move to deterministic live port-reuse acceptance with a fresh identity rather than manufacturing old-client credentials.
+Perform one read-only search on the retired Windows PC for any `C:\ProgramData\HermesRDP*` directories and identify whether any `device.json` still matches deleted `ai` (`:53391`) without printing secrets. If none exists, stop searching and proceed to safe deterministic port reuse with a fresh identity.
 
 Remaining Stage 3 gates after that: safe deterministic port reuse with a new identity, owner-limited Telegram authorization, admin SSH :22 independence from tunnel sshd :7000, and confirmation that no Defender exclusions/security weakening are required.
 
