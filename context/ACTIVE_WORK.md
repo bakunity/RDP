@@ -9,95 +9,58 @@ Purpose: first operational file after `context/README.md`. Contains current work
 - Repository: `bakunity/RDP`.
 - Published release: `v1.1.0`.
 - Target release: **v1.2.0 — Stabilization**.
-- PR #19, PR #20 and PR #21 are merged and accepted.
-- PR #22 `fix: make server updater transactional` is open and mergeable.
-- PR #22 current head: `bc9ee48da570e4d85e1a50cd3b41a631f064609e`.
-- CI #249 on that head: Linux PASS and Windows PowerShell 5.1 PASS.
+- PR #19, PR #20, PR #21 and PR #22 are merged and accepted.
+- PR #22 title: `fix: make server updater transactional`.
+- PR #22 accepted head: `bc9ee48da570e4d85e1a50cd3b41a631f064609e`.
+- PR #22 merge commit: `ba21a9f969c3ad8ad6760ac423056afb6bb7bd00`.
+- CI #249 on the accepted PR #22 head: Linux PASS and Windows PowerShell 5.1 PASS.
 
 ## Deployment truth
 
-- Live controller/app is now deployed from immutable PR #22 head `bc9ee48da570e4d85e1a50cd3b41a631f064609e` via the new transactional updater success path.
-- Previous live repository ref before that update was `77240e2d758f0ed4598553d4d903331229653f06`.
+- Live controller/app remains deployed from immutable PR #22 head `bc9ee48da570e4d85e1a50cd3b41a631f064609e`.
+- The bounded UPD-004 forced-failure test rolled back to that same accepted live state.
 - Dedicated `hermes-rdp-sshd.service` remains separate from admin SSH.
 - MIPC accepted Windows agent remains the PR #20 control-first agent.
-- PR #21 changed Windows fresh-install readiness/rollback behavior and required no Linux service deploy.
 
-## Stage 2 lifecycle
+## Completed stabilization evidence retained
 
-- RL-001..RL-005: COMPLETE PASS.
-- RL-006: PARTIAL PASS; five-cycle server-side reconnect stress passed, with only the optional original-machine one-process check uncollected.
-- RL-007: COMPLETE PASS.
-- RL-008: COMPLETE PASS.
-
-## Stage 3 — Device / Security lifecycle — COMPLETE
-
-- SEC-001 unique per-device identity: COMPLETE PASS.
-- SEC-002 cross-device SSH/forward isolation: COMPLETE PASS.
-- SEC-003 hard DELETE/revoke lifecycle: COMPLETE PASS.
-- SEC-004 stale deleted-client reclaim: NOT LIVE-EXERCISED / FIXTURE UNAVAILABLE; do not reconstruct credentials to manufacture this test.
-- SEC-005 deterministic released-port reuse: RESOLVED / LIVE-ACCEPTED through PR #21.
-- SEC-006 owner-limited Telegram authorization: COMPLETE PASS.
-- SEC-007 admin SSH `:22` vs Hermes sshd `:7000` independence: COMPLETE PASS.
-- SEC-008 no Windows security weakening: COMPLETE PASS with normal Defender real-time/behavior protection enabled and no Hermes/broad exclusions; the Hermes RDP session remained usable throughout the final protection-enable acceptance.
+- Stage 2 lifecycle: RL-001..RL-005, RL-007 and RL-008 COMPLETE PASS; RL-006 remains PARTIAL only for the optional exact-machine final one-process count.
+- Stage 3 device/security: COMPLETE; SEC-004 remains fixture-unavailable rather than falsely live-tested.
+- PR #21 fresh-install readiness/retry rollback: RESOLVED / LIVE-ACCEPTED.
 
 ## Stage 4 — Safe migration / updater / rollback — ACTIVE
 
-### UPD-001 runtime/source baseline — COMPLETE PASS
+### Server updater — COMPLETE / LIVE-ACCEPTED
 
-Read-only production inventory established:
+**UPD-001 — COMPLETE PASS.** Read-only production inventory proved healthy immutable baseline and exposed the legacy backup boundary.
 
-- configured repository ref was immutable `77240e2d758f0ed4598553d4d903331229653f06`;
-- controller and dedicated tunnel sshd were active;
-- `/healthz` returned 200;
-- SQLite DB existed and runtime was healthy;
-- five historical `update-*` backups existed;
-- deployment has no local Git metadata, so config provenance is the operative deployment source record.
+**UPD-002 — CONFIRMED BUG / RESOLVED BY PR #22.** Legacy `update-server.sh` backups did not include `/var/lib/hermes-rdp/state.sqlite3`.
 
-### UPD-002 legacy updater backup boundary — CONFIRMED BUG
+**UPD-003 — COMPLETE PASS.** Exact PR #22 head updated production successfully. Both Hermes services and `/healthz` were healthy, device state and DB metadata stayed unchanged, consistent SQLite/config/provenance backup was created, and all four active endpoint listeners recovered.
 
-The latest pre-PR22 updater backup contained `/opt/hermes-rdp` and config but **did not contain `/var/lib/hermes-rdp/state.sqlite3`**. The old updater therefore did not provide a complete state rollback anchor even though operations documentation requires database backup.
+**UPD-004 — COMPLETE PASS.** A temporary local updater copy injected a deliberate post-mutation failure while targeting an older immutable ref. Automatic rollback reported `ROLLBACK=PASS` and restored repository ref, config/app/unit hashes, DB ownership/mode, device-state signature, database integrity, service health, `hermes-rdpctl doctor`, and all prior endpoint listeners.
 
-### PR #22 hardening — IMPLEMENTED / CI PASS
+PR #22 was merged only after CI plus UPD-003 and UPD-004 passed.
 
-PR #22 now:
+### Windows updater / repair — CURRENT GATE
 
-- resolves requested ref to an exact commit SHA before download;
-- records the resolved SHA as `repository_ref` and the requested ref separately;
-- pins the Windows installer URL to the resolved SHA;
-- creates a consistent SQLite backup with `sqlite3.Connection.backup()` plus `PRAGMA quick_check`;
-- writes non-secret update metadata into the rollback backup;
-- arms automatic rollback before the first deployment mutation;
-- restores app/config/units/database on post-mutation failure;
-- gates success on services, `/healthz`, `hermes-rdpctl doctor`, sshd config validation and DB quick-check.
+The existing `scripts/update-client.ps1` still has weaker recovery semantics than the now-accepted server updater. Source inventory established that it:
 
-### UPD-003 transactional updater success path — COMPLETE PASS
-
-Live update from `77240e2d...` to exact PR #22 head `bc9ee48d...` completed with `UPDATE=PASS`.
-
-Post-check proved simultaneously:
-
-- configured ref changed to the exact target SHA;
-- both Hermes services healthy and `/healthz=200`;
-- device registry signature unchanged;
-- live DB owner/group/mode unchanged;
-- rollback backup contains app/config/database/update metadata;
-- backup DB `PRAGMA quick_check` passed;
-- backup metadata correctly records target and previous ref;
-- backup config contains the previous deployment ref;
-- all four pre-update active endpoint listeners recovered;
-- both controller and dedicated sshd restarted as expected.
+- backs up only `HermesRdpAgent.ps1`;
+- stops the Scheduled Task and Hermes processes before downloading the replacement agent;
+- restores the old agent only for PowerShell parse errors;
+- does not restart the old task on that parse-error rollback path;
+- has no bounded runtime-readiness gate after `Start-ScheduledTask`;
+- has no automatic rollback if the new agent parses but fails to establish a healthy Hermes tunnel;
+- has no explicit repair entry point distinct from update/install.
 
 ## Exact next action
 
-Run **UPD-004 bounded automatic rollback acceptance** using a temporary copy of the exact PR #22 updater with one deliberate local fault injected after deployment mutation and before success commit. The test must prove automatic rollback restores:
+Proceed with **Windows updater/repair hardening** before any destructive Windows live test.
 
-- the current `bc9ee48d...` repository ref/config;
-- app/unit hashes;
-- database/device state and permissions;
-- controller + dedicated sshd health;
-- endpoint listeners.
+First design a transactional `update-client.ps1` boundary that preserves device identity/config/private key/known-hosts/port and existing task definition, downloads and validates the candidate before stopping the working agent where possible, uses bounded readiness after activation, and automatically restores the previous agent/task state if activation fails.
 
-Do not merge PR #22 until UPD-004 rollback acceptance passes. After server updater rollback is live-accepted, harden and test the Windows updater/repair path.
+Then add regression coverage and CI. Only after that should a bounded live Windows success-path and forced-failure rollback test run on a non-critical test device.
 
 ## Context rule
 
