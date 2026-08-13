@@ -21,60 +21,30 @@ Purpose: first operational file after `context/README.md`. Contains current work
 
 ## Stabilization blockers — CLOSED
 
-### CP-001 — TLS accept stall — COMPLETE PASS
+CP-001, CL-001 and CU-001 are COMPLETE PASS and must not be repeated without a concrete regression reason. Telegram dashboard auto-refresh and mobile control-button layout are also live-accepted.
 
-Fix moves TLS handshake into the accepted connection worker and bounds handshake/client socket timeouts. Live bounded repro held a silent raw TCP client on `:7443` while five parallel `/healthz` requests all passed in 16–20 ms; controller and dedicated sshd PIDs remained unchanged and active telemetry stayed fresh.
+## Stage 2 lifecycle
 
-Do not repeat the slow-handshake stress without a concrete regression reason.
+- RL-001..RL-005: COMPLETE PASS.
+- RL-006: PARTIAL PASS; server-side five-cycle reconnect stress passed, only one deferred Windows process-count closure remains. Do not repeat the stress.
+- RL-007: COMPLETE PASS; two simultaneous Microsoft RDP sessions to different Hermes devices worked concurrently.
+- RL-008: COMPLETE PASS; holding only MIPC OFF dropped only MIPC while other device/session remained stable, shared service PIDs stayed unchanged, and MIPC restored automatically.
 
-### CL-001 — desired OFF + local ON deadlock — COMPLETE PASS
+## Stage 3 — Device / Security lifecycle — ACTIVE
 
-New Windows agent polls heartbeat/control before transport reconciliation and consumes durable `desired_enabled` independently of transient commands. Direct live acceptance on MIPC forced server desired OFF without queuing a new command (`command_seq` stayed 27). Agent remained online, converged applied access OFF, stopped SSH, closed endpoint within 5 seconds, then automatically recovered to ON/one SSH/open endpoint within 8 seconds after server desired state was restored.
+### SEC-001 device identity uniqueness — COMPLETE PASS
 
-Do not repeat this deadlock reproduction without a concrete regression reason.
+Live inventory of five active devices showed every device has an Ed25519 SSH key, unique SSH public key, unique RDP port, unique device ID and unique API token hash. No duplicates were present.
 
-### CU-001 — command pending forever — COMPLETE PASS
+### SEC-002 cross-device SSH isolation — POLICY PASS
 
-Existing OSIO seq 14 OFF timed out after the configured 60 seconds: pending state cleared, durable desired OFF stayed false, timeout result preserved the same seq/action, and endpoint remained closed. Late command-result after timeout is now rejected so it cannot overwrite the timeout result; regression coverage passed in CI #210.
+Live effective `sshd -T` policy verified public-key-only auth, remote forwarding only, `PermitOpen none`, no TTY/agent/X11/session channels, and the Hermes `AuthorizedKeysCommand`. For every active device, registry and actual AuthorizedKeysCommand mapped its key back to itself and emitted only its own `permitlisten="0.0.0.0:<rdp_port>"`. A syntactically valid unregistered Ed25519 public key was denied. No device exposed any other registered RDP port through its authorization line.
 
-## Telegram UI follow-up — COMPLETE PASS
-
-- Dashboard now auto-renders when command/tunnel state changes; user confirmed OFF/ON state and buttons update without manual `🔄 ОБНОВИТЬ`.
-- OFF and RESTART are separate full-width rows; user confirmed mobile Telegram renders both correctly.
-
-## Stable accepted blocks
-
-Do not repeat without a concrete regression reason:
-
-- OpenSSH reverse RDP end-to-end and external-network RDP;
-- Windows reboot recovery;
-- Telegram OFF/ON and endpoint CLOSED/OPEN truth;
-- MIPC performance/classification/Observe60 acceptance;
-- Windows Server 2019 current-head acceptance;
-- Win10 x64 + PowerShell x86/Sysnative acceptance;
-- RL-001..RL-005 lifecycle recovery;
-- RL-007 simultaneous multi-device user smoke;
-- RL-008 one-device failure isolation;
-- CP-001, CL-001 and CU-001 stabilization acceptance;
-- Telegram UI auto-refresh/mobile button-layout acceptance.
-
-## Stage 2 remaining work
-
-### RL-006 repeated reconnect stress — PARTIAL PASS
-
-Five consecutive dedicated-sshd restart cycles were clean server-side. Final Windows process-count check on the original tested machine was not collected. Do not repeat the five-cycle stress; if that exact machine is available later, one lightweight `HermesSshCount == 1` check is sufficient.
-
-### RL-007 multi-device — COMPLETE PASS
-
-Server-side evidence already showed four independent endpoints simultaneously healthy with successful TCP-through-tunnel checks. Final user-facing smoke also passed: two Microsoft RDP sessions to different Hermes devices were open and usable at the same time without mutual disruption.
-
-### RL-008 failure isolation — COMPLETE PASS
-
-A bounded live test held only MIPC (`:53389`) in durable desired OFF for 12 seconds without queueing a command. MIPC endpoint closed and its agent applied OFF/SSH count 0; other healthy devices kept fresh telemetry and open listeners throughout. Shared controller and dedicated sshd PIDs stayed unchanged, MIPC command sequence stayed unchanged, and MIPC automatically restored to ON/one SSH/open endpoint after desired state was restored. User confirmed the MIPC RDP session dropped as intended while the second active RDP session stayed continuously usable without interruption.
+Remaining SEC-002 gate: one bounded live OpenSSH negative-forward test with a real registered client key requesting a free but unauthorized reverse port. Existing primary tunnel must remain running; failure must be due the server permitlisten restriction, not port collision.
 
 ## Exact next action
 
-Core Stage 2 lifecycle acceptance is complete except the deferred RL-006 single Windows process-count closure. Do not repeat the five-cycle stress. If the exact original RL-006 Windows machine is available, perform only one lightweight `HermesSshCount == 1` check; otherwise proceed to the next product stage: device/security lifecycle acceptance.
+Select one currently unused RDP-range port on the server and verify it is both unassigned in the registry and not listening. Then use MIPC's existing private key in a second one-shot SSH connection to request that unauthorized reverse port. Expected result: authentication may succeed, but `ExitOnForwardFailure=yes` must return remote port forwarding failure while MIPC's normal assigned tunnel remains unaffected.
 
 ## Context rule
 
