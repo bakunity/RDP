@@ -100,13 +100,13 @@ Read-only live server inventory proved the admin and Hermes SSH boundaries are s
 
 No restart was required. Do not repeat SEC-007 without an sshd/service-boundary regression reason.
 
-### SEC-008 no Windows security weakening — ENVIRONMENT POLICY BLOCKER CONFIRMED / PRODUCT NOT FAIL
+### SEC-008 no Windows security weakening — UNMANAGED FIXTURE / LOCAL POLICY BLOCKER CONFIRMED
 
 Repository search found no Hermes code using `Set-MpPreference`, `Add-MpPreference`, Defender exclusion calls or `DisableRealtimeMonitoring`. The installer uses normal Microsoft OpenSSH/RDP/firewall/service/task configuration and does not intentionally request Defender exclusions or disable protection.
 
 The first live Windows security-state check on `SEC005 TEST` showed Hermes healthy with no Hermes path/process/broad extension exclusions, but Defender real-time and behavior monitoring were off, so the acceptance harness returned FAIL.
 
-A second bounded read-only diagnosis established the cause as pre-existing Windows Defender policy/preference state rather than Hermes runtime behavior:
+A bounded Defender diagnosis established:
 
 - `AMRunningMode = Normal`;
 - `WinDefend` and `SecurityHealthService` are Running;
@@ -116,13 +116,21 @@ A second bounded read-only diagnosis established the cause as pre-existing Windo
 - policy `HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection\\DisableRealtimeMonitoring = 1`;
 - no matching policy was found for `DisableBehaviorMonitoring` or `DisableAntiSpyware`.
 
-Microsoft documents that the `DisableRealtimeMonitoring` policy value corresponds to the Group Policy setting **Turn off real-time protection**; when enabled, Defender real-time protection is disabled. The current machine therefore fails SEC-008 because its environment explicitly disables real-time protection, not because Hermes requires a Defender exception.
+Further source-of-policy checks now establish this SEC005 TEST machine is an unmanaged Hyper-V VM created by the user on MUPC:
 
-Do not blindly remove or override the policy until its management source is established. If this is an unmanaged test PC with a local/manual policy, back it up and restore Defender to its normal enabled state, then re-run the bounded Hermes/Defender acceptance. If the policy is domain/MDM-managed, use a different unmanaged acceptance fixture rather than fighting organizational policy.
+- not domain joined;
+- `AzureAdJoined = NO`;
+- `DomainJoined = NO`;
+- `WorkplaceJoined = NO`;
+- no `EnterpriseMgmt` scheduled tasks;
+- no active MDM enrollment candidate folders/tasks;
+- `SEC008_MDM_STATE=NO_ACTIVE_MDM_EVIDENCE`.
+
+Therefore the Defender real-time disable state is classified as a **local/manual or leftover local policy on the VM**, not an organizational MDM/domain policy and not a Hermes requirement. SEC-008 remains pending only because the final acceptance must prove Hermes stays healthy with Defender real-time protection enabled and without exclusions.
 
 ## Exact next action
 
-Run one bounded **read-only policy-source check** on `SEC005 TEST`: determine whether the machine is domain joined or Azure AD/MDM managed and capture the computer RSoP summary for Microsoft Defender without changing policy. If the machine is unmanaged and the disabling policy is local/manual, proceed with a separately reversible cleanup of only the `DisableRealtimeMonitoring` policy value and verify Defender becomes active while Hermes remains healthy. If centrally managed, do not modify the policy; switch SEC-008 to a clean unmanaged Windows fixture.
+On `SEC005 TEST`, perform one separately reversible change: export/back up the exact Defender `Real-Time Protection` policy key, remove only the `DisableRealtimeMonitoring` value, explicitly request normal real-time protection state, then verify Defender becomes active while the existing Hermes task and single SSH tunnel remain healthy. Keep the rollback command separate and do not add any Defender exclusions. If that passes, run the final SEC-008 acceptance and close Stage 3.
 
 ## Context rule
 
