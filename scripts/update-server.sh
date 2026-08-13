@@ -3,13 +3,19 @@ set -Eeuo pipefail
 
 REPO="bakunity/RDP"
 REF="${HERMES_RDP_REF:-main}"
+CONFIG=/etc/hermes-rdp/config.json
+DB=/var/lib/hermes-rdp/state.sqlite3
 
 if [[ ${EUID} -ne 0 ]]; then
   echo "Run through sudo." >&2
   exit 1
 fi
-if [[ ! -s /etc/hermes-rdp/config.json ]]; then
+if [[ ! -s "$CONFIG" ]]; then
   echo "Hermes RDP is not installed." >&2
+  exit 1
+fi
+if [[ ! -s "$DB" ]]; then
+  echo "Hermes RDP database is missing or empty." >&2
   exit 1
 fi
 if ! python3 - <<'PY'
@@ -27,7 +33,113 @@ fi
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 BACKUP="/var/backups/hermes-rdp/update-$STAMP"
 WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
+ROLLBACK_ARMED=0
+RESOLVED_SHA=""
+
+cleanup() {
+  rm -rf "$WORK"
+}
+trap cleanup EXIT
+
+wait_health() {
+  local api_port code
+  api_port="$(python3 - <<'PY'
+import json
+with open("/etc/hermes-rdp/config.json", encoding="utf-8") as handle:
+    print(int(json.load(handle).get("api_port", 7443)))
+PY
+)"
+  for _ in $(seq 1 30); do
+    code="$(curl -sk --max-time 2 -o /dev/null -w '%{http_code}' \
+      "https://127.0.0.1:${api_port}/healthz" 2>/dev/null || true)"
+    if [[ "$code" == "200" ]]; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+rollback_update() {
+  local status="$1" line="$2" rollback_ok=1
+  trap - ERR
+  set +e
+
+  if ((ROLLBACK_ARMED == 0)); then
+    echo "Update failed before deployment at line $line; no rollback required." >&2
+    exit "$status"
+  fi
+
+  echo "Update failed at line $line; restoring $BACKUP" >&2
+  systemctl stop hermes-rdp.service hermes-rdp-sshd.service >/dev/null 2>&1 || true
+
+  rm -rf /opt/hermes-rdp
+  cp -a "$BACKUP/opt/hermes-rdp" /opt/ || rollback_ok=0
+  cp -a "$BACKUP/etc/hermes-rdp/config.json" /etc/hermes-rdp/config.json || rollback_ok=0
+  cp -a "$BACKUP/etc/hermes-rdp/sshd_config" /etc/hermes-rdp/sshd_config || rollback_ok=0
+  cp -a "$BACKUP/etc/systemd/system/hermes-rdp.service" \
+    /etc/systemd/system/hermes-rdp.service || rollback_ok=0
+  cp -a "$BACKUP/etc/systemd/system/hermes-rdp-sshd.service" \
+    /etc/systemd/system/hermes-rdp-sshd.service || rollback_ok=0
+
+  if [[ -s "$BACKUP/var/lib/hermes-rdp/state.sqlite3" ]]; then
+    rm -f "$DB" "$DB-wal" "$DB-shm"
+    cp -a "$BACKUP/var/lib/hermes-rdp/state.sqlite3" "$DB" || rollback_ok=0
+  else
+    rollback_ok=0
+  fi
+
+  systemctl daemon-reload || rollback_ok=0
+  /usr/sbin/sshd -t -f /etc/hermes-rdp/sshd_config || rollback_ok=0
+  systemctl restart hermes-rdp-sshd.service hermes-rdp.service || rollback_ok=0
+  systemctl is-active --quiet hermes-rdp-sshd.service || rollback_ok=0
+  systemctl is-active --quiet hermes-rdp.service || rollback_ok=0
+  wait_health || rollback_ok=0
+
+  if ((rollback_ok == 1)); then
+    echo "ROLLBACK=PASS backup=$BACKUP" >&2
+  else
+    echo "ROLLBACK=FAIL manual recovery required from $BACKUP" >&2
+  fi
+  exit "$status"
+}
+trap 'rollback_update "$?" "$LINENO"' ERR
+
+if [[ "$REF" =~ ^[0-9a-fA-F]{40}$ ]]; then
+  RESOLVED_SHA="${REF,,}"
+else
+  REF_ENCODED="$(python3 - "$REF" <<'PY'
+import sys
+from urllib.parse import quote
+print(quote(sys.argv[1], safe=""))
+PY
+)"
+  RESOLVED_SHA="$(
+    curl -fsSL \
+      -H 'Accept: application/vnd.github+json' \
+      "https://api.github.com/repos/$REPO/commits/$REF_ENCODED" |
+    python3 -c 'import json,sys; print(json.load(sys.stdin)["sha"])'
+  )"
+fi
+if ! [[ "$RESOLVED_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "Unable to resolve repository ref to an immutable commit SHA." >&2
+  exit 1
+fi
+
+curl -fsSL "https://codeload.github.com/$REPO/tar.gz/$RESOLVED_SHA" -o "$WORK/source.tar.gz"
+tar -xzf "$WORK/source.tar.gz" -C "$WORK"
+ROOT="$(find "$WORK" -maxdepth 1 -mindepth 1 -type d -name 'RDP-*' | head -n1)"
+test -f "$ROOT/server/pyproject.toml"
+test -f "$ROOT/server/systemd/hermes-rdp.service"
+test -f "$ROOT/server/systemd/hermes-rdp-sshd.service"
+PYTHONPATH="$ROOT/server" python3 -m compileall -q "$ROOT/server/hermes_rdp"
+
+PREVIOUS_REF="$(python3 - <<'PY'
+import json
+with open("/etc/hermes-rdp/config.json", encoding="utf-8") as handle:
+    print(str(json.load(handle).get("repository_ref", "")))
+PY
+)"
 
 install -d -m 0700 "$BACKUP"
 for path in \
@@ -39,10 +151,50 @@ for path in \
   [[ -e "$path" ]] && cp -a --parents "$path" "$BACKUP/"
 done
 
-curl -fsSL "https://codeload.github.com/$REPO/tar.gz/$REF" -o "$WORK/source.tar.gz"
-tar -xzf "$WORK/source.tar.gz" -C "$WORK"
-ROOT="$(find "$WORK" -maxdepth 1 -mindepth 1 -type d -name 'RDP-*' | head -n1)"
-test -f "$ROOT/server/pyproject.toml"
+install -d -m 0700 "$BACKUP/var/lib/hermes-rdp"
+python3 - "$DB" "$BACKUP/var/lib/hermes-rdp/state.sqlite3" <<'PY'
+import sqlite3
+import sys
+from pathlib import Path
+
+source_path = Path(sys.argv[1])
+destination_path = Path(sys.argv[2])
+source = sqlite3.connect(f"file:{source_path}?mode=ro", uri=True)
+destination = sqlite3.connect(destination_path)
+try:
+    source.backup(destination)
+    row = destination.execute("PRAGMA quick_check").fetchone()
+    if not row or row[0] != "ok":
+        raise RuntimeError(f"backup quick_check failed: {row!r}")
+finally:
+    destination.close()
+    source.close()
+PY
+chmod 0600 "$BACKUP/var/lib/hermes-rdp/state.sqlite3"
+
+python3 - "$BACKUP/update-metadata.json" "$REF" "$RESOLVED_SHA" "$PREVIOUS_REF" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+path, requested_ref, resolved_sha, previous_ref = sys.argv[1:]
+Path(path).write_text(
+    json.dumps(
+        {
+            "requested_ref": requested_ref,
+            "resolved_sha": resolved_sha,
+            "previous_repository_ref": previous_ref,
+        },
+        ensure_ascii=False,
+        indent=2,
+    ) + "\n",
+    encoding="utf-8",
+)
+PY
+chmod 0600 "$BACKUP/update-metadata.json"
+ln -sfn "$BACKUP" /var/backups/hermes-rdp/latest-update
+
+ROLLBACK_ARMED=1
 
 rm -rf /opt/hermes-rdp/app/hermes_rdp
 cp -a "$ROOT/server/hermes_rdp" /opt/hermes-rdp/app/hermes_rdp
@@ -55,19 +207,20 @@ install -m 0644 \
   "$ROOT/server/systemd/hermes-rdp-sshd.service" \
   /etc/systemd/system/hermes-rdp-sshd.service
 
-python3 - "$REF" <<'PY'
+python3 - "$REF" "$RESOLVED_SHA" <<'PY'
 import json
 import sys
 from pathlib import Path
 
-ref = sys.argv[1]
+requested_ref, resolved_sha = sys.argv[1:]
 path = Path("/etc/hermes-rdp/config.json")
 data = json.loads(path.read_text(encoding="utf-8"))
 data["client_installer_url"] = (
     "https://raw.githubusercontent.com/bakunity/RDP/"
-    f"{ref}/scripts/install-client.ps1"
+    f"{resolved_sha}/scripts/install-client.ps1"
 )
-data["repository_ref"] = ref
+data["repository_ref"] = resolved_sha
+data["repository_requested_ref"] = requested_ref
 path.write_text(
     json.dumps(data, ensure_ascii=False, indent=2) + "\n",
     encoding="utf-8",
@@ -82,7 +235,23 @@ PYTHONPATH=/opt/hermes-rdp/app \
 
 systemctl daemon-reload
 systemctl restart hermes-rdp-sshd.service hermes-rdp.service
-sleep 2
-systemctl is-active hermes-rdp-sshd.service hermes-rdp.service
+systemctl is-active --quiet hermes-rdp-sshd.service
+systemctl is-active --quiet hermes-rdp.service
+wait_health
+PYTHONPATH=/opt/hermes-rdp/app python3 -m hermes_rdp.cli doctor >/dev/null
+python3 - "$DB" <<'PY'
+import sqlite3
+import sys
 
-echo "Updated. Backup: $BACKUP"
+connection = sqlite3.connect(f"file:{sys.argv[1]}?mode=ro", uri=True)
+try:
+    row = connection.execute("PRAGMA quick_check").fetchone()
+finally:
+    connection.close()
+if not row or row[0] != "ok":
+    raise SystemExit(f"database quick_check failed: {row!r}")
+PY
+
+ROLLBACK_ARMED=0
+echo "Updated to $RESOLVED_SHA. Backup: $BACKUP"
+echo "UPDATE=PASS"
