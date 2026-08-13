@@ -5,7 +5,7 @@ import signal
 import threading
 
 from .api import create_api_server
-from .bot import TelegramBot
+from .bot_ux import TelegramUxBot
 from .config import load_config
 from .db import Registry
 
@@ -26,7 +26,7 @@ def main() -> None:
         config.command_timeout_seconds,
     )
     api_server = create_api_server(config, registry)
-    bot = TelegramBot(config, registry)
+    bot = TelegramUxBot(config, registry)
 
     api_thread = threading.Thread(target=api_server.serve_forever, daemon=True)
     bot_thread = threading.Thread(target=bot.run, daemon=True)
