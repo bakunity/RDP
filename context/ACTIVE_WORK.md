@@ -47,9 +47,17 @@ The expected retired archive was absent, then a read-only search across `C:\Prog
 
 Retain SEC-004 as not live-exercised because the old client fixture no longer exists. Server-side hard-revoke evidence remains COMPLETE PASS from SEC-003.
 
+### SEC-005 deterministic released-port reuse — FAIL / CONFIRMED STARTUP RACE
+
+A genuinely clean Windows PC passed the precheck with no Hermes config, key, task or process. Fresh pairing using the normal Telegram installer then failed after pairing with `SSH-туннель не запустился`; `agent.log` contained only the startup line.
+
+Source-level contradiction confirms an installer/agent startup race: the installer starts the Scheduled Task, sleeps only 8 seconds, then requires an `ssh.exe` process or aborts. The accepted PR #20 control-first agent performs telemetry/API control work before transport reconciliation, and its pinned HTTP client may wait up to 20 seconds. Therefore a healthy fresh agent is allowed to still be inside its initial control cycle when the installer declares tunnel startup failure. The installer catch then unregisters the task, kills Hermes processes and attempts `revoke-self` for the newly paired identity. Local config/key files are not removed by that catch, so failed-pair cleanup/retry behavior also needs verification before rerunning Add.
+
+This is a real v1.2.0 stabilization bug, not a security isolation failure and not evidence that port reuse itself is unsafe.
+
 ## Exact next action
 
-Proceed to **SEC-005 deterministic released-port reuse with a fresh identity**. Use the now-clean Windows machine as the fresh client if desired. Create a one-time pairing code explicitly pinned to the released port `53391`, without pasting the code into chat. Pair a fresh Ed25519 identity, then verify the new device gets `53391`, has a different device ID/key from the deleted registration, opens only its assigned endpoint, and does not disturb MIPC.
+Do not rerun the Telegram installer yet. First perform a read-only post-failure cleanup check on the fresh Windows PC and server: determine whether the failed task/processes were removed, whether local `device.json`/Ed25519 files remain, whether the newly paired server registration was successfully revoked, whether `53391` is again unassigned/closed, and whether an existing healthy control device remains unaffected. Then fix installer startup acceptance so it waits for a bounded healthy outcome rather than assuming SSH must exist after exactly 8 seconds; add regression coverage before retrying SEC-005.
 
 Remaining Stage 3 gates after SEC-005: owner-limited Telegram authorization, admin SSH :22 independence from tunnel sshd :7000, and confirmation that no Defender exclusions/security weakening are required.
 
