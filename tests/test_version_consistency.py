@@ -49,6 +49,13 @@ class VersionConsistencyTests(unittest.TestCase):
         self.assertIn("from . import __version__", api_text)
         self.assertIn('"version": __version__', api_text)
 
+    def test_release_workflow_tags_validated_head(self) -> None:
+        workflow = (ROOT / ".github/workflows/release.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('RELEASE_SHA="$(git rev-parse HEAD)"', workflow)
+        self.assertNotIn("git log -1 --format=%H -- VERSION", workflow)
+
 
 if __name__ == "__main__":
     unittest.main()

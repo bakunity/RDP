@@ -1,6 +1,6 @@
 name: Publish release
 
-# Release tags always point to the commit that last changed VERSION.
+# Release tags point to the exact validated main commit that triggered this workflow.
 on:
   push:
     branches: [main]
@@ -49,7 +49,7 @@ jobs:
           VERSION="$(tr -d '\r\n' < VERSION)"
           TAG="v$VERSION"
           NOTES="docs/releases/$TAG.md"
-          RELEASE_SHA="$(git log -1 --format=%H -- VERSION)"
+          RELEASE_SHA="$(git rev-parse HEAD)"
           test -s "$NOTES"
           test -n "$RELEASE_SHA"
           git cat-file -e "$RELEASE_SHA^{commit}"
