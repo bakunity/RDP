@@ -12,6 +12,7 @@ For immediate operational truth read `ACTIVE_WORK.md`; for scenario-level proof/
 - PR #19 merged and accepted.
 - PR #20 merged; merge commit `dcda9d3890be390a90e9a967905f2cab3c6c7194`.
 - PR #21 merged; merge commit `12ba13080e25e935fb7cc17ece7852005c964c29`.
+- PR #22 `fix: make server updater transactional` is open, mergeable, current head `bc9ee48da570e4d85e1a50cd3b41a631f064609e`; CI #249 passed Linux and Windows PowerShell 5.1 validation.
 
 ## Architecture — current
 
@@ -33,10 +34,10 @@ Durable boundaries remain: all Windows machines are equal clients; Linux is infr
 
 ## Deployment truth
 
-- Live controller/app remains deployed from immutable PR #20 head `77240e2d758f0ed4598553d4d903331229653f06`.
-- Dedicated Hermes sshd is separate from system/admin sshd.
+- Live controller/app is deployed from immutable PR #22 head `bc9ee48da570e4d85e1a50cd3b41a631f064609e` after successful transactional-updater live acceptance.
+- Previous live repository ref was `77240e2d758f0ed4598553d4d903331229653f06`.
+- Dedicated Hermes sshd remains separate from system/admin sshd.
 - MIPC accepted Windows agent remains the PR #20 control-first agent.
-- PR #21 changed Windows fresh-install readiness/rollback behavior and required no Linux service deploy.
 
 ## Stable accepted baseline
 
@@ -50,38 +51,28 @@ Do not re-run wholesale without a concrete regression reason:
 - RL-001..RL-005, RL-007, RL-008;
 - CP-001, CL-001, CU-001;
 - Telegram dashboard auto-refresh/mobile layout;
-- SEC-001 unique per-device identity;
-- SEC-002 cross-device SSH/forward isolation;
-- SEC-003 hard DELETE/revoke lifecycle;
-- SEC-005 deterministic safe released-port reuse + installer retry fix;
-- SEC-006 owner-limited Telegram authorization;
-- SEC-007 admin SSH / Hermes sshd independence;
-- SEC-008 Hermes operation with normal Defender real-time/behavior protection and no exclusions.
+- SEC-001, SEC-002, SEC-003, SEC-005, SEC-006, SEC-007, SEC-008;
+- PR #21 fresh-install readiness/rollback correction;
+- UPD-003 transactional server updater success path on PR #22 head.
 
 ## Stage 3 device/security evidence
 
-**SEC-001 — COMPLETE PASS.** Unique IDs, token hashes, Ed25519 keys and RDP ports.
-
-**SEC-002 — COMPLETE PASS.** Valid keys are restricted to their own endpoint; unregistered/unauthorized forwarding is denied.
-
-**SEC-003 — COMPLETE PASS.** Hard DELETE removes API/SSH authorization and releases the endpoint/port without harming the healthy control device.
-
-**SEC-004 — NOT LIVE-EXERCISED / FIXTURE UNAVAILABLE.** The deleted old-client fixture no longer exists. Do not reconstruct credentials just to manufacture the test.
-
-**SEC-005 — RESOLVED / LIVE-ACCEPTED.** PR #21 fixed fresh-install readiness and failed-install rollback/retry behavior; released port reuse passed with a genuinely new identity/key and real RDP.
-
-**SEC-006 — COMPLETE PASS.** Only configured owner + configured private chat is authorized.
-
-**SEC-007 — COMPLETE PASS.** Admin SSH `:22` and Hermes sshd `:7000` are distinct healthy service/process/config boundaries.
-
-**SEC-008 — COMPLETE PASS.** Initial Defender failure was a pre-existing local policy on the unmanaged Hyper-V test VM. After restoring normal Defender state, final acceptance showed real-time and behavior protection enabled, no Hermes/broad exclusions, Hermes task Running, exactly one Hermes SSH process, same endpoint, and the user remained connected through Hermes RDP throughout the protection-enable/final-check sequence.
-
-Stage 3 is therefore **COMPLETE**, with SEC-004 intentionally retained as fixture-unavailable rather than falsely marked live-tested.
+Stage 3 is COMPLETE. SEC-004 remains intentionally `NOT LIVE-EXERCISED / FIXTURE UNAVAILABLE` because the deleted old-client fixture no longer exists; do not reconstruct credentials merely to manufacture the test.
 
 ## Stage 2 deferred item
 
 **RL-006 — PARTIAL PASS.** Five repeated dedicated-sshd reconnect cycles were clean server-side. The final one-process check on the exact original Windows device remains optional/deferred; do not repeat the stress sequence.
 
+## Stage 4 updater evidence
+
+**UPD-001 — COMPLETE PASS.** Read-only runtime/source inventory proved healthy immutable deployment baseline.
+
+**UPD-002 — CONFIRMED BUG.** Legacy `update-server.sh` backups did not include the live SQLite DB, so rollback state was incomplete.
+
+**UPD-003 — COMPLETE PASS.** PR #22 transactional updater successfully updated production from `77240e2d...` to exact head `bc9ee48d...`; services and health stayed good after restart, device state and DB metadata were preserved, rollback backup now includes a valid SQLite snapshot plus old config and provenance metadata, and all four active endpoint listeners recovered.
+
 ## Current release gate
 
-Proceed to **safe migration / updater / rollback hardening**. First inspect current server updater and Windows update/repair behavior read-only: immutable-source provenance, deployed SHA recording, backup scope, post-update health gates, identity/config preservation and rollback semantics. Only after the boundaries are documented should live update/rollback acceptance be designed.
+Run **UPD-004 bounded automatic rollback acceptance** before merging PR #22. Use a temporary local copy of the exact updater with a deliberate test-only failure inserted after deployment mutation. Acceptance requires automatic rollback to restore current ref/config, app/unit hashes, DB/device state and permissions, both Hermes services/health, and endpoint listeners.
+
+After UPD-004 passes, continue with Windows updater/repair hardening and live acceptance, then command/pairing/repair UX, release docs and the v1.2.0 immutable tag.
