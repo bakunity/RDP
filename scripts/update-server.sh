@@ -30,6 +30,10 @@ then
   exit 2
 fi
 
+DB_UID="$(stat -c '%u' "$DB")"
+DB_GID="$(stat -c '%g' "$DB")"
+DB_MODE="$(stat -c '%a' "$DB")"
+
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 BACKUP="/var/backups/hermes-rdp/update-$STAMP"
 WORK="$(mktemp -d)"
@@ -84,7 +88,12 @@ rollback_update() {
 
   if [[ -s "$BACKUP/var/lib/hermes-rdp/state.sqlite3" ]]; then
     rm -f "$DB" "$DB-wal" "$DB-shm"
-    cp -a "$BACKUP/var/lib/hermes-rdp/state.sqlite3" "$DB" || rollback_ok=0
+    install \
+      -o "$DB_UID" \
+      -g "$DB_GID" \
+      -m "$DB_MODE" \
+      "$BACKUP/var/lib/hermes-rdp/state.sqlite3" \
+      "$DB" || rollback_ok=0
   else
     rollback_ok=0
   fi
@@ -172,18 +181,36 @@ finally:
 PY
 chmod 0600 "$BACKUP/var/lib/hermes-rdp/state.sqlite3"
 
-python3 - "$BACKUP/update-metadata.json" "$REF" "$RESOLVED_SHA" "$PREVIOUS_REF" <<'PY'
+python3 - \
+  "$BACKUP/update-metadata.json" \
+  "$REF" \
+  "$RESOLVED_SHA" \
+  "$PREVIOUS_REF" \
+  "$DB_UID" \
+  "$DB_GID" \
+  "$DB_MODE" <<'PY'
 import json
 import sys
 from pathlib import Path
 
-path, requested_ref, resolved_sha, previous_ref = sys.argv[1:]
+(
+    path,
+    requested_ref,
+    resolved_sha,
+    previous_ref,
+    db_uid,
+    db_gid,
+    db_mode,
+) = sys.argv[1:]
 Path(path).write_text(
     json.dumps(
         {
             "requested_ref": requested_ref,
             "resolved_sha": resolved_sha,
             "previous_repository_ref": previous_ref,
+            "database_uid": int(db_uid),
+            "database_gid": int(db_gid),
+            "database_mode": db_mode,
         },
         ensure_ascii=False,
         indent=2,
