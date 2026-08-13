@@ -6,12 +6,13 @@ For immediate operational truth read `ACTIVE_WORK.md`; for detailed historical p
 
 ## Repository / release
 
-- Published release: `v1.1.0`.
-- Target: **v1.2.0 — Stabilization**.
-- PR #19–#25: merged and accepted.
-- PR #26 documentation reconciliation: merged, merge commit `b3e49e9caff0229ce9f626094393fbf1692878de`.
-- PR #27 final release PR: draft, not merged.
-- PR #27 CI #279: Linux PASS, Windows PowerShell 5.1 PASS.
+- Stable published release: **v1.2.1**.
+- PR #19–#25: merged and live-accepted stabilization work.
+- PR #26: documentation reconciliation merged.
+- PR #27: `v1.2.0` release PR merged, but automated tag selected an intermediate VERSION-changing commit rather than the complete release tree.
+- Published `v1.2.0` tag is not rewritten; it remains historical evidence of the packaging error.
+- PR #28: `v1.2.1` packaging hotfix merged after Linux + Windows PowerShell 5.1 CI PASS.
+- `v1.2.1` tag points to exact commit `fd3c323da49f8994215d973e580d3949638b0f61` and contains consistent `VERSION`, package version, `pyproject.toml`, release notes and rich product README.
 
 ## Runtime architecture
 
@@ -20,22 +21,22 @@ Telegram control
       |
 Hermes API/controller + SQLite
       |
-dedicated Hermes sshd
+dedicated Hermes sshd :7000
       |
 reverse Microsoft OpenSSH
       |
-Windows RDP
+Windows RDP :3389
       |
 persistent endpoint per device
 ```
 
-Admin SSH remains independent from Hermes tunnel SSH. FRP is not active runtime. Per-device local identity remains separate per Windows client.
+Admin SSH remains independent from Hermes tunnel SSH. FRP is not active runtime. Each Windows client keeps its own local Ed25519 identity.
 
 ## Live deployment truth
 
-- Production controller is still deployed from accepted PR #25 head `0e2e7aef77ab1df804b70d9fd29d4b5736fbac60`.
-- PR #26 changed documentation only.
-- PR #27 is unmerged release metadata/documentation and has not changed production.
+- Production controller remains deployed from accepted PR #25 head `0e2e7aef77ab1df804b70d9fd29d4b5736fbac60`.
+- Release/documentation merges did not redeploy or mutate production runtime.
+- SEC005 acceptance fixture remains healthy after updater/repair/RDP acceptance.
 
 ## Accepted stabilization baseline
 
@@ -51,15 +52,15 @@ Do not repeat without a concrete regression reason:
 - transactional server updater success/rollback;
 - transactional Windows updater success/rollback;
 - existing-device Repair success/rollback;
-- Telegram Repair screen and deterministic new-code retry UX.
+- Telegram Repair screen and deterministic new-code retry UX;
+- Microsoft Defender real-time protection coexistence.
 
-SEC-004 remains intentionally fixture-unavailable. RL-006 remains only PARTIAL PASS for its deferred final exact-Windows one-process observation; do not repeat its five-cycle stress test.
+SEC-004 remains intentionally fixture-unavailable. RL-006 remains PARTIAL PASS only for its deferred exact-Windows one-process observation; do not repeat the five-cycle stress test.
 
-## Current release gate
+## Release automation follow-up
 
-The v1.2 runtime acceptance is complete. Remaining action is publication control:
+The release workflow root cause is confirmed: selecting `git log -1 -- VERSION` can tag an incomplete release tree. Branch `fix/release-tag-head-v2` contains a prepared correction to tag the validated `HEAD` plus a regression test. It is not merged yet.
 
-1. keep PR #27 draft until explicit final release approval;
-2. after approval, mark ready and merge the exact CI-passing head;
-3. verify `v1.2.0` tag/GitHub Release and release links;
-4. then begin the separate RDP trusted-certificate track.
+## Next product track
+
+Begin the separate **RDP trusted-certificate / domain track**. HTTPS API TLS does not replace the certificate presented by the Windows RDP listener; the listener requires a hostname-matching trusted certificate to remove the standard Microsoft Remote Desktop trust warning.
