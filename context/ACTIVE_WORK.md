@@ -9,67 +9,45 @@ Purpose: first operational file after `context/README.md`.
 - Repository: `bakunity/RDP`.
 - Published release: `v1.1.0`.
 - Target release: **v1.2.0 — Stabilization**.
-- PR #19, #20, #21, #22, #23 and #24 are merged and accepted.
-- PR #22 accepted head: `bc9ee48da570e4d85e1a50cd3b41a631f064609e`; merge commit `ba21a9f969c3ad8ad6760ac423056afb6bb7bd00`.
-- PR #23 accepted head: `dd02b63f0b31bc8a64f883c1ab0579ae4e8c96ab`; merge commit `689f80699534d86b98817a17e1c280c26c70e474`.
+- PR #19 through PR #25 are merged and accepted.
 - PR #24 accepted head: `a5c02747bdfef15128d3e4d31c4c268cb74760f8`; merge commit `f7e3c9e271a75cb2fdc52b564b22f76af47e70d8`.
-- CI #266 on PR #24 head: Windows PowerShell 5.1 PASS and Linux full release checks PASS.
+- PR #25 accepted head: `0e2e7aef77ab1df804b70d9fd29d4b5736fbac60`; merge commit `0077efd59394a815385ecbf3940b851039e40f1d`.
+- CI #272 on PR #25 head: Windows PowerShell 5.1 PASS and Linux full release checks PASS.
 
 ## Deployment truth
 
-- Live Linux controller/app remains on accepted PR #22 head `bc9ee48da570e4d85e1a50cd3b41a631f064609e`.
+- Live Linux controller/app is deployed from exact accepted PR #25 head `0e2e7aef77ab1df804b70d9fd29d4b5736fbac60` via the transactional server updater; deployment returned `UPDATE=PASS` and created a rollback backup.
 - Dedicated Hermes tunnel sshd remains separate from admin SSH.
-- `SEC005 TEST` remains the non-critical Windows acceptance fixture and is healthy after updater and repair acceptance.
+- `SEC005 TEST` remains healthy after updater, repair success/rollback acceptance and final Microsoft RDP smoke.
 
-## Stage 4 — Safe migration / updater / rollback
+## Stage 4 — Safe migration / updater / rollback — COMPLETE
 
-### Server updater — COMPLETE / LIVE-ACCEPTED
-
-- UPD-001: COMPLETE PASS.
-- UPD-002 legacy missing-DB backup bug: RESOLVED BY PR #22.
-- UPD-003 transactional server updater success path: COMPLETE PASS.
-- UPD-004 automatic server rollback: COMPLETE PASS.
-
-### Windows updater — COMPLETE / LIVE-ACCEPTED
-
-- UPD-005 Windows transactional success path: COMPLETE PASS.
-- UPD-006 Windows automatic rollback: COMPLETE PASS.
-
-Do not repeat UPD-001..UPD-006 without a concrete updater regression reason.
+- UPD-001..UPD-006: COMPLETE / LIVE-ACCEPTED.
+- Do not repeat without a concrete updater regression reason.
 
 ## Explicit repair engine — COMPLETE / LIVE-ACCEPTED
 
-PR #24 adds bounded local Windows repair for an already-registered device. It deliberately does not perform fresh pairing or automatic rekey.
+PR #24 provides bounded local Windows repair for an already-registered device. It preserves existing config, device identity, Ed25519 keypair, known-hosts and RDP port; can rebuild the canonical SYSTEM Scheduled Task/agent runtime; and rolls back the previous local runtime snapshot on failure.
 
-Accepted behavior:
+- REP-001 missing agent/task recovery: COMPLETE PASS.
+- REP-002 forced post-mutation failure rollback: COMPLETE PASS.
+- Final ordinary Microsoft RDP connection after both tests: PASS.
 
-- existing local identity/config/trust material is required and preserved;
-- optional `ExpectedDeviceId` guard prevents repairing the wrong PC;
-- existing Ed25519 keypair is validated;
-- Win10 x64 + x86 PowerShell/Sysnative native OpenSSH handling is preserved;
-- existing pinned API identity and device authentication are checked before mutation;
-- immutable candidate is staged/parsed before runtime mutation;
-- missing/broken canonical SYSTEM Scheduled Task and agent runtime can be rebuilt;
-- RDP service/firewall prerequisites are restored without Defender weakening;
-- readiness follows server `desired_enabled`;
-- config/key/known-hosts hashes, device ID and RDP port are invariant;
-- repair failure restores the previous agent/task snapshot.
+Deliberate limitation remains: missing local identity/config/private-key/known-hosts material is not silently regenerated; that requires a separate owner-authorized recovery/rekey design.
 
-### REP-001 — COMPLETE PASS
+## Telegram repair / pairing UX — COMPLETE / LIVE-ACCEPTED
 
-On `SEC005 TEST`, the harness deliberately removed the local agent file, unregistered the Scheduled Task and stopped Hermes runtime. Exact PR #24 repair returned `REPAIR=PASS`; identity/key/trust hashes and port stayed unchanged, task/runtime were rebuilt, one agent + one matching SSH process recovered, and endpoint reopened.
+PR #25 keeps fresh pairing and existing-device repair explicitly separate.
 
-### REP-002 — COMPLETE PASS
-
-A deliberately different immutable agent candidate was used and a controlled failure was injected immediately after candidate mutation. Product repair emitted `ROLLBACK=PASS`; original agent hash and exact prior Scheduled Task definition were restored; identity/config/key/known-hosts/port stayed unchanged; backup metadata was valid; one agent + one matching SSH process and endpoint recovered. Harness fallback was not needed.
-
-Deliberate current limitation: missing identity/config/private-key/known-hosts material is not silently regenerated. Those cases require a later owner-authorized recovery/rekey endpoint.
+- UX-001 existing-device repair screen: COMPLETE PASS. Telegram renders the selected device, endpoint, immutable repair command, device-ID guard and complete parameter invocation without embedding device token/private key.
+- UX-002 pairing retry/new-code behavior: COMPLETE PASS. `НОВЫЙ КОД` creates a different one-time code and the rendered installer command updates to the same new value.
+- No pairing code or other secret material is stored in durable context.
 
 ## Exact next action
 
-Proceed to **Telegram Repair UX + deterministic pairing retry UX**. Keep `➕ ДОБАВИТЬ ПК` strictly fresh pairing. Add a separate repair action for an existing device that renders a safe local repair command bound to that device ID and immutable repository ref, without embedding device token/private key. Add an explicit expired-pair retry action that generates a new one-time code rather than asking the user to re-run a stale command.
+Proceed to the **v1.2.0 release-prep pass**: review Russian recovery/edge-state terminology, reconcile user-facing docs with the accepted OpenSSH/updater/repair/Telegram UX model, and prepare release notes/tagging without reopening completed live tests.
 
-Do not deploy the new server UI until regression tests and CI pass. Do not repeat REP-001/REP-002 without a concrete repair regression reason.
+RDP trusted-certificate work is a separate planned track after the release-prep pass: bind a hostname-matching certificate to the Windows RDP listener; HTTPS certificate configuration alone does not replace the RDP listener certificate.
 
 ## Context rule
 
