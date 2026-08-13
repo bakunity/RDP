@@ -88,15 +88,27 @@ Bounded live-config synthetic authorization check passed without Telegram API ca
 
 No source change is required. Do not repeat SEC-006 without an authorization-model regression reason.
 
-### SEC-007 admin SSH independence from Hermes tunnel sshd — ACTIVE
+### SEC-007 admin SSH independence from Hermes tunnel sshd — COMPLETE PASS
 
-Source boundary confirms Hermes uses a dedicated OpenSSH daemon with its own `/etc/hermes-rdp/sshd_config`, dedicated host key, PID file and systemd service. The tunnel daemon listens on configured `ssh_bind_port` (default `7000`) and is started as `sshd -D -e -f /etc/hermes-rdp/sshd_config`; it does not modify or replace the system/admin sshd configuration. The installer separately opens the configured Hermes tunnel port in UFW.
+Read-only live server inventory proved the admin and Hermes SSH boundaries are separate and healthy simultaneously:
 
-The remaining acceptance is a read-only live server check proving system/admin SSH `:22` and Hermes tunnel SSH `:7000` are owned by distinct listeners/process/service boundaries and both remain healthy simultaneously. Do not restart either sshd during this check.
+- Hermes tunnel sshd listens on `7000`, is active under `hermes-rdp-sshd.service`, runs with `/etc/hermes-rdp/sshd_config`, and owns the tunnel listener;
+- Hermes sshd does not own admin port `22`;
+- system `ssh.service` is separately active with its own control group/unit;
+- listeners are present on both `22` and `7000` and both accept local TCP;
+- process/config/service boundaries are distinct.
+
+No restart was required. Do not repeat SEC-007 without an sshd/service-boundary regression reason.
+
+### SEC-008 no Windows security weakening — ACTIVE
+
+Repository search found no Hermes code using `Set-MpPreference`, `Add-MpPreference`, `MpPreference`, `ExclusionPath`, `DisableRealtimeMonitoring` or Defender-specific modification calls. The installer uses normal Microsoft OpenSSH/RDP/firewall/service/task configuration and does not intentionally request Defender exclusions or disable protection.
+
+Remaining acceptance is a bounded read-only check on the freshly live-accepted `SEC005 TEST` Windows PC proving Hermes is healthy while Windows Defender real-time protection is enabled and no Hermes path/process is present in Defender exclusions. Do not change Defender settings during this test.
 
 ## Exact next action
 
-Run the read-only **SEC-007 SSH independence inventory** on Linux: inspect listeners/PIDs for ports `22` and configured Hermes `ssh_bind_port`, resolve each process command line and cgroup/systemd unit, verify Hermes uses `/etc/hermes-rdp/sshd_config`, verify admin listener is not the Hermes service, and confirm both ports accept TCP locally. If PASS, proceed to the final Stage 3 gate: confirmation that Hermes requires no Defender exclusions or other security weakening.
+Run the read-only **SEC-008 Windows security-state check** on the live `SEC005 TEST` PC. Confirm Defender antivirus/real-time protection is enabled, inspect configured exclusion paths/processes without printing unrelated sensitive values, prove no exclusion targets `C:\ProgramData\HermesRDP`, `ssh.exe`, `powershell.exe` or the Hermes agent, and simultaneously confirm the Hermes task is Running with exactly one matching SSH process. If PASS, Stage 3 device/security lifecycle is complete except SEC-004 remains honestly marked fixture-unavailable rather than live-exercised.
 
 ## Context rule
 
