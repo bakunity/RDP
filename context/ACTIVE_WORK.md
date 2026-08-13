@@ -9,7 +9,8 @@ Purpose: first operational file after `context/README.md`. Contains current work
 - Repository: `bakunity/RDP`.
 - Published release: `v1.1.0`.
 - Target release: **v1.2.0 — Stabilization**.
-- PR #19 and PR #20 are merged and accepted.
+- PR #19, PR #20 and PR #21 are merged and accepted.
+- PR #21 merge commit: `12ba13080e25e935fb7cc17ece7852005c964c29`.
 
 ## Deployment truth
 
@@ -17,6 +18,7 @@ Purpose: first operational file after `context/README.md`. Contains current work
 - Final controller-only deploy passed: controller active, `/healthz` OK, configured repository ref exact.
 - Dedicated `hermes-rdp-sshd.service` was not restarted by that deploy.
 - MIPC accepted Windows agent is the PR #20 control-first agent; later PR #20 changes did not touch the Windows agent.
+- PR #21 changes Windows installer behavior and tests; no production Linux service deploy was required for SEC-005 acceptance.
 
 ## Stage 2 lifecycle
 
@@ -29,60 +31,54 @@ Purpose: first operational file after `context/README.md`. Contains current work
 
 ### SEC-001 device identity uniqueness — COMPLETE PASS
 
-Live inventory of five active devices showed unique Ed25519 SSH public keys, RDP ports, device IDs and API token hashes. No duplicates were present.
+Live inventory showed unique Ed25519 SSH public keys, RDP ports, device IDs and API token hashes. No duplicates were present.
 
 ### SEC-002 cross-device SSH isolation — COMPLETE PASS
 
-Effective sshd policy and actual `AuthorizedKeysCommand` mapped every active key only to its own device and own `permitlisten` port. An unregistered Ed25519 key was denied. Live negative-forward acceptance on MIPC also passed: the registered MIPC key authenticated, but a second one-shot SSH connection requesting free unauthorized reverse port `53420` was rejected while the normal assigned tunnel stayed separate.
+Effective sshd policy and actual `AuthorizedKeysCommand` mapped each active key only to its own device and own `permitlisten` port. An unregistered Ed25519 key was denied. Live negative-forward acceptance on MIPC also passed: the registered MIPC key authenticated, but an unauthorized reverse port was rejected while the normal assigned tunnel stayed up.
 
 ### SEC-003 hard revoke / DELETE lifecycle — COMPLETE PASS
 
-The intentionally retired `ai` device was used as the destructive test object after a protected SQLite backup was created. Telegram DELETE hard-removed the registration. Post-delete live acceptance proved the old device record, token hash and SSH public key are absent from the current registry; the old SSH key is denied by both registry authorization and the real AuthorizedKeysCommand; the old endpoint remained closed across the observation window; the old RDP port is unassigned and allocator-selected as the next reusable port; MIPC remained healthy throughout.
+The intentionally retired `ai` device was used as the destructive test object after a protected SQLite backup was created. Telegram DELETE hard-removed the registration. Post-delete live acceptance proved the old device record, token hash and SSH public key are absent from the current registry; the old SSH key is denied; the old endpoint remained closed; the old RDP port became unassigned/reusable; MIPC remained healthy throughout.
 
-Do not restore the deleted `ai` registration from backup during normal continuation. The backup exists only as rollback evidence for this bounded test.
+Do not restore the deleted `ai` registration from backup during normal continuation. The backup exists only as rollback/evidence for the bounded test.
 
 ### SEC-004 stale deleted-client reclaim — NOT LIVE-EXERCISED / FIXTURE UNAVAILABLE
 
-The expected retired archive was absent, then a read-only search across `C:\ProgramData\HermesRDP*` returned `SEC004_SEARCH=NO_AI`. No local `device.json` matching the deleted `ai` identity remains on that Windows machine. This is not a product FAIL and does not invalidate SEC-003. Do not reconstruct or expose old token/private-key material merely to manufacture this test.
+The expected retired client archive was absent, and the bounded read-only search returned no matching deleted `ai` local identity. This is not a product FAIL and does not invalidate SEC-003. Do not reconstruct or expose old token/private-key material merely to manufacture the test.
 
-Retain SEC-004 as not live-exercised because the old client fixture no longer exists. Server-side hard-revoke evidence remains COMPLETE PASS from SEC-003.
+### SEC-005 deterministic released-port reuse — RESOLVED / LIVE-ACCEPTED
 
-### SEC-005 deterministic released-port reuse — FIX LIVE RETRY + LOCAL POST-CHECK PASS / SERVER POST-CHECK PENDING
+Initial fresh install on a genuinely clean Windows PC exposed two real installer bugs:
 
-A genuinely clean Windows PC passed the precheck with no Hermes config, key, task or process. The original main installer then failed after pairing with `SSH-туннель не запустился`; `agent.log` contained only the startup line.
+- fixed 8-second post-task startup assumption raced the control-first agent before SSH transport reconciliation;
+- after successful server `revoke-self`, local `device.json` and Ed25519 keypair residue remained and blocked a clean Add retry.
 
-Confirmed bug 1: the installer used a fixed 8-second post-task sleep before requiring `ssh.exe`, while the accepted control-first agent is allowed to spend up to its initial API/control timeout before transport reconciliation. This created a legitimate startup race.
+Server rollback after the failed attempt passed: failed registration removed, released port `53391` closed/unassigned and allocator-selected again, MIPC unaffected.
 
-Confirmed bug 2: after the failure, the installer successfully removed the Scheduled Task and processes and `revoke-self` successfully hard-removed the server registration, but local `device.json` and the Ed25519 keypair remained. The stale local identity then blocked normal Add even though the server registration was gone.
+PR #21 `fix: harden Windows installer startup readiness` implemented bounded readiness polling, stable matching SSH-PID acceptance, richer startup diagnostics, explicit pairing-start state, safe snapshot restoration after known successful `revoke-self`, and credential preservation when pairing/revoke outcome is uncertain. Regression tests were added.
 
-Server post-failure cleanup passed: failed registration count 0, `53391` unassigned and closed, allocator next port `53391`, and MIPC remained registered/listening with fresh telemetry.
+Exact live-tested code boundary before merge: `bc286d7abaf3cd8a712f92ec7f633dba8cd4547d`. Current PR head before merge was `d1f901a070aa8db006059378d263d7b72214fbb4`; CI #234 was COMPLETE PASS.
 
-The failed local residue was archived to a timestamped `C:\ProgramData\HermesRDP.sec005-failed-*` path after confirming the canonical path could be made clean with no Scheduled Task and no Hermes process. This preserved rollback evidence.
+Live retry acceptance on Windows passed:
 
-PR #21: `fix: harden Windows installer startup readiness` on branch `fix/installer-startup-readiness`.
+- installer reached `=== ГОТОВО ===`;
+- a fresh device identity and fresh Ed25519 key were created;
+- released port `53391` was reused;
+- Scheduled Task stayed Running with exactly one matching Hermes SSH process;
+- current identity/key differed from the archived failed attempt;
+- final Linux post-check showed one active owner of `53391`, fresh telemetry, listener open, TCP-through-tunnel working, failed identity absent, deleted prior device identity/key not reused, and MIPC healthy;
+- user successfully connected through Microsoft RDP to the reused endpoint.
 
-Implemented:
-- fixed 8-second startup assumption replaced with bounded readiness polling;
-- installer requires one matching SSH PID to remain stable long enough to outlive the SSH connect timeout before success;
-- timeout diagnostics include agent/SSH logs;
-- pairing-start state is tracked explicitly;
-- after a known successful `revoke-self`, the pre-attempt local snapshot is restored so failed fresh installs are retryable;
-- uncertain pairing outcome or failed server revoke preserves local recovery credentials;
-- regression tests cover readiness and rollback semantics.
+PR #21 was merged using expected head `d1f901a070aa8db006059378d263d7b72214fbb4`; merge commit `12ba13080e25e935fb7cc17ece7852005c964c29`.
 
-PR #21 exact accepted CI head before live retry: `bc286d7abaf3cd8a712f92ec7f633dba8cd4547d`. CI #232 is COMPLETE PASS: Linux full release checks PASS; Windows PowerShell 5.1 parse and certificate-pinning validation PASS. PR is mergeable.
-
-Bounded live retry from exact commit `bc286d7...` succeeded on the Windows test PC: installer reached `=== ГОТОВО ===`, registered `SEC005 TEST`, received released RDP port `53391`, selected OpenSSH transport and created the `Hermes RDP Agent` task. A first harness attempt was blocked before installer execution by Windows script execution policy; the retry used the same downloaded content as an in-memory scriptblock without changing machine ExecutionPolicy.
-
-Local post-check is COMPLETE PASS: canonical config exists, archived failed-attempt evidence remains preserved, current device ID differs from the failed-attempt ID, current Ed25519 public key differs from the failed-attempt key, current port is `53391`, display name is `SEC005 TEST`, Scheduled Task is Running and exactly one matching Hermes `ssh.exe` exists.
-
-SEC-005 is not final until one bounded Linux server post-check proves the fresh registration is the sole active owner of `53391`, its listener and TCP-through-tunnel path are live, the deleted original `ai` identity/key are not reused, the failed SEC-005 identity remains absent, telemetry is fresh, and MIPC remains healthy.
+Do not repeat SEC-005 without a concrete installer/allocator regression reason.
 
 ## Exact next action
 
-Run the final read-only SEC-005 server post-check. If it passes, mark SEC-005 **RESOLVED / LIVE-ACCEPTED**, checkpoint the evidence ledger, then merge PR #21 using its exact current head after rechecking CI/mergeability.
+Proceed to **SEC-006 — owner-limited Telegram authorization**. First perform a read-only source/config inspection to establish the exact Telegram authorization boundary and expected behavior for a non-owner chat/user. Only then design one bounded negative live test that cannot mutate devices or expose secrets.
 
-Remaining Stage 3 gates after SEC-005: owner-limited Telegram authorization, admin SSH :22 independence from tunnel sshd :7000, and confirmation that no Defender exclusions/security weakening are required.
+Remaining Stage 3 gates after SEC-006: admin SSH `:22` independence from tunnel sshd `:7000`, and confirmation that Hermes requires no Defender exclusions or other security weakening.
 
 ## Context rule
 
