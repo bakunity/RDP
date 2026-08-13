@@ -4,6 +4,24 @@
 
 ## [Unreleased]
 
+## [1.2.1] — 2026-08-13
+
+Релиз: https://github.com/bakunity/RDP/releases/tag/v1.2.1
+
+Hotfix release packaging после некорректной точки тега `v1.2.0`.
+
+### Исправлено
+
+- `v1.2.1` публикует полный согласованный release tree вместо первого commit, где менялся только `VERSION`;
+- в release tag входят согласованные package version metadata, release notes и полный product README;
+- README снова оформлен как полноценная страница Hermes RDP с badges, архитектурой, quick start, update/repair и security sections.
+
+### Совместимость
+
+- runtime-функциональность соответствует уже live-accepted stabilization baseline;
+- breaking changes относительно `v1.1.0` не вводятся;
+- для новых install/update рекомендуется `v1.2.1`, а не неполный `v1.2.0` tag.
+
 ## [1.2.0] — 2026-08-13
 
 Релиз: https://github.com/bakunity/RDP/releases/tag/v1.2.0
