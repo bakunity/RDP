@@ -47,7 +47,7 @@ The expected retired archive was absent, then a read-only search across `C:\Prog
 
 Retain SEC-004 as not live-exercised because the old client fixture no longer exists. Server-side hard-revoke evidence remains COMPLETE PASS from SEC-003.
 
-### SEC-005 deterministic released-port reuse — FIX LIVE RETRY STARTUP PASS / FINAL POST-CHECK PENDING
+### SEC-005 deterministic released-port reuse — FIX LIVE RETRY + LOCAL POST-CHECK PASS / SERVER POST-CHECK PENDING
 
 A genuinely clean Windows PC passed the precheck with no Hermes config, key, task or process. The original main installer then failed after pairing with `SSH-туннель не запустился`; `agent.log` contained only the startup line.
 
@@ -57,7 +57,7 @@ Confirmed bug 2: after the failure, the installer successfully removed the Sched
 
 Server post-failure cleanup passed: failed registration count 0, `53391` unassigned and closed, allocator next port `53391`, and MIPC remained registered/listening with fresh telemetry.
 
-The failed local residue was archived read-only to a timestamped `C:\ProgramData\HermesRDP.sec005-failed-*` path after confirming canonical Hermes config absent, no Scheduled Task and no Hermes process remained. This preserved rollback evidence while making the canonical path clean.
+The failed local residue was archived to a timestamped `C:\ProgramData\HermesRDP.sec005-failed-*` path after confirming the canonical path could be made clean with no Scheduled Task and no Hermes process. This preserved rollback evidence.
 
 PR #21: `fix: harden Windows installer startup readiness` on branch `fix/installer-startup-readiness`.
 
@@ -74,11 +74,13 @@ PR #21 exact accepted CI head before live retry: `bc286d7abaf3cd8a712f92ec7f633d
 
 Bounded live retry from exact commit `bc286d7...` succeeded on the Windows test PC: installer reached `=== ГОТОВО ===`, registered `SEC005 TEST`, received released RDP port `53391`, selected OpenSSH transport and created the `Hermes RDP Agent` task. A first harness attempt was blocked before installer execution by Windows script execution policy; the retry used the same downloaded content as an in-memory scriptblock without changing machine ExecutionPolicy.
 
-This proves the startup-race fix can complete a real fresh install, but SEC-005 is not final until post-check verifies new identity/key separation from the archived failed attempt, one healthy SSH/task locally, server listener/registration truth on `53391`, and MIPC isolation.
+Local post-check is COMPLETE PASS: canonical config exists, archived failed-attempt evidence remains preserved, current device ID differs from the failed-attempt ID, current Ed25519 public key differs from the failed-attempt key, current port is `53391`, display name is `SEC005 TEST`, Scheduled Task is Running and exactly one matching Hermes `ssh.exe` exists.
+
+SEC-005 is not final until one bounded Linux server post-check proves the fresh registration is the sole active owner of `53391`, its listener and TCP-through-tunnel path are live, the deleted original `ai` identity/key are not reused, the failed SEC-005 identity remains absent, telemetry is fresh, and MIPC remains healthy.
 
 ## Exact next action
 
-Run a bounded local SEC-005 post-check on the test Windows PC: compare current and archived failed-attempt device IDs and Ed25519 public keys without printing key material, confirm current port `53391`, Scheduled Task Running and exactly one Hermes SSH process. If that passes, run one server-side post-check proving `SEC005 TEST` is the sole registration on `53391`, listener is open, telemetry fresh, old failed identity remains absent and MIPC remains healthy. Only then mark SEC-005 RESOLVED / LIVE-ACCEPTED and merge PR #21.
+Run the final read-only SEC-005 server post-check. If it passes, mark SEC-005 **RESOLVED / LIVE-ACCEPTED**, checkpoint the evidence ledger, then merge PR #21 using its exact current head after rechecking CI/mergeability.
 
 Remaining Stage 3 gates after SEC-005: owner-limited Telegram authorization, admin SSH :22 independence from tunnel sshd :7000, and confirmation that no Defender exclusions/security weakening are required.
 
