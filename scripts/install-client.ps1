@@ -22,6 +22,8 @@ $Repo = 'bakunity/RDP'
 $BaseDir = 'C:\ProgramData\HermesRDP'
 $TaskName = 'Hermes RDP Agent'
 $ApiBase = "https://${Server}:${ApiPort}"
+$StartupTimeoutSeconds = 75
+$StartupStableSeconds = 20
 $ExpectedFingerprint = (
     $Fingerprint -replace '[^0-9A-Fa-f]', ''
 ).ToUpperInvariant()
@@ -177,6 +179,142 @@ function Stop-HermesProcesses {
         }
 }
 
+function Get-HermesSshProcess {
+    param([string]$KeyPath)
+
+    return Get-CimInstance `
+        Win32_Process `
+        -Filter "Name='ssh.exe'" `
+        -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.CommandLine -and
+            $_.CommandLine.Contains($KeyPath)
+        } |
+        Select-Object -First 1
+}
+
+function Get-StartupDetail {
+    $Sections = @()
+    foreach ($Item in @(
+        @{ Name = 'agent.log'; Path = (Join-Path $BaseDir 'agent.log') },
+        @{ Name = 'ssh-error.log'; Path = (Join-Path $BaseDir 'ssh-error.log') }
+    )) {
+        if (Test-Path -LiteralPath $Item.Path) {
+            $Tail = (
+                Get-Content -LiteralPath $Item.Path -Tail 20 |
+                    Out-String
+            ).Trim()
+            if ($Tail) {
+                $Sections += "$($Item.Name):`n$Tail"
+            }
+        }
+    }
+    if ($Sections.Count -eq 0) {
+        return 'agent.log/ssh-error.log ещё не созданы'
+    }
+    return ($Sections -join "`n")
+}
+
+function Wait-HermesTunnelReady {
+    param(
+        [string]$KeyPath,
+        [int]$TimeoutSeconds,
+        [int]$StableSeconds
+    )
+
+    $Deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+    $StableSince = $null
+    $StablePid = 0
+
+    while ([DateTime]::UtcNow -lt $Deadline) {
+        $Process = Get-HermesSshProcess -KeyPath $KeyPath
+        if ($Process) {
+            $PidValue = [int]$Process.ProcessId
+            if ($StablePid -ne $PidValue) {
+                $StablePid = $PidValue
+                $StableSince = [DateTime]::UtcNow
+            }
+            elseif (
+                $StableSince -and
+                (([DateTime]::UtcNow - $StableSince).TotalSeconds -ge $StableSeconds)
+            ) {
+                return $Process
+            }
+        }
+        else {
+            $StablePid = 0
+            $StableSince = $null
+        }
+        Start-Sleep -Seconds 1
+    }
+
+    $Detail = Get-StartupDetail
+    throw (
+        "SSH-туннель не вышел в стабильное состояние за " +
+        "$TimeoutSeconds сек. $Detail"
+    )
+}
+
+function Restore-InstallSnapshot {
+    param(
+        [string]$BasePath,
+        [string]$SnapshotPath,
+        [bool]$BaseExistedBefore,
+        [bool]$BackupRootExistedBefore
+    )
+
+    if (-not $BaseExistedBefore) {
+        Remove-Item `
+            -LiteralPath $BasePath `
+            -Recurse `
+            -Force `
+            -ErrorAction SilentlyContinue
+        return
+    }
+
+    Get-ChildItem `
+        -LiteralPath $BasePath `
+        -Force `
+        -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -ne 'backups' } |
+        Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+
+    if (Test-Path -LiteralPath $SnapshotPath) {
+        Get-ChildItem `
+            -LiteralPath $SnapshotPath `
+            -Force `
+            -ErrorAction SilentlyContinue |
+            Copy-Item `
+                -Destination $BasePath `
+                -Recurse `
+                -Force
+        Remove-Item `
+            -LiteralPath $SnapshotPath `
+            -Recurse `
+            -Force `
+            -ErrorAction SilentlyContinue
+    }
+
+    $BackupRoot = Join-Path $BasePath 'backups'
+    if (
+        -not $BackupRootExistedBefore -and
+        (Test-Path -LiteralPath $BackupRoot)
+    ) {
+        $Remaining = @(
+            Get-ChildItem `
+                -LiteralPath $BackupRoot `
+                -Force `
+                -ErrorAction SilentlyContinue
+        )
+        if ($Remaining.Count -eq 0) {
+            Remove-Item `
+                -LiteralPath $BackupRoot `
+                -Force `
+                -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 function Ensure-OpenSshClient {
     $CanonicalSystem32 = Join-Path $env:WINDIR 'System32'
     $NativeSystem32 = $CanonicalSystem32
@@ -329,10 +467,11 @@ foreach ($LegacyTask in $LegacyTasks) {
 }
 Stop-HermesProcesses
 
-$BackupDir = Join-Path $BaseDir (
-    'backups\' + (Get-Date -Format 'yyyyMMdd-HHmmss')
-)
-if (Test-Path -LiteralPath $BaseDir) {
+$BaseDirExistedBefore = Test-Path -LiteralPath $BaseDir
+$BackupRoot = Join-Path $BaseDir 'backups'
+$BackupRootExistedBefore = Test-Path -LiteralPath $BackupRoot
+$BackupDir = Join-Path $BackupRoot (Get-Date -Format 'yyyyMMdd-HHmmss')
+if ($BaseDirExistedBefore) {
     New-Item `
         -ItemType Directory `
         -Path $BackupDir `
@@ -420,6 +559,7 @@ $Http = [HermesRdp.PinnedHttpClientFactory]::Create(
     $ExpectedFingerprint
 )
 $Pair = $null
+$PairRequestStarted = $false
 try {
     $Health = $Http.GetStringAsync(
         "$ApiBase/healthz"
@@ -436,6 +576,7 @@ try {
         throw 'Сервер ещё не переведён на Hermes RDP OpenSSH.'
     }
 
+    $PairRequestStarted = $true
     $Pair = Invoke-PinnedPost `
         -Client $Http `
         -Url "$ApiBase/v1/pair" `
@@ -538,31 +679,10 @@ try {
         -ErrorAction SilentlyContinue
 
     Start-ScheduledTask -TaskName $TaskName
-    Start-Sleep -Seconds 8
-
-    $TunnelProcess = Get-CimInstance `
-        Win32_Process `
-        -Filter "Name='ssh.exe'" `
-        -ErrorAction SilentlyContinue |
-        Where-Object {
-            $_.CommandLine -and
-            $_.CommandLine.Contains($SshKeyPath)
-        } |
-        Select-Object -First 1
-
-    if (-not $TunnelProcess) {
-        $Log = Join-Path $BaseDir 'agent.log'
-        $Detail = if (Test-Path -LiteralPath $Log) {
-            (
-                Get-Content -LiteralPath $Log -Tail 20 |
-                    Out-String
-            ).Trim()
-        }
-        else {
-            'agent.log ещё не создан'
-        }
-        throw "SSH-туннель не запустился. $Detail"
-    }
+    $TunnelProcess = Wait-HermesTunnelReady `
+        -KeyPath $SshKeyPath `
+        -TimeoutSeconds $StartupTimeoutSeconds `
+        -StableSeconds $StartupStableSeconds
 
     Write-Host
     Write-Host '=== ГОТОВО ===' -ForegroundColor Green
@@ -573,12 +693,15 @@ try {
     Write-Host "Лог: $BaseDir\agent.log"
 }
 catch {
+    $InstallFailure = $_
     Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
     Unregister-ScheduledTask `
         -TaskName $TaskName `
         -Confirm:$false `
         -ErrorAction SilentlyContinue
     Stop-HermesProcesses
+
+    $ServerRegistrationCleared = -not $PairRequestStarted
     if ($Pair -and $Pair.device.id -and $Pair.device.token) {
         try {
             [void](Invoke-PinnedPost `
@@ -589,11 +712,31 @@ catch {
                 ) `
                 -Token ([string]$Pair.device.token) `
                 -Body @{ reason = 'client-install-failed' })
+            $ServerRegistrationCleared = $true
         }
         catch {
+            Write-Warning (
+                'Не удалось автоматически отозвать неудачную регистрацию. ' +
+                'Локальная identity сохранена для безопасного ручного удаления.'
+            )
         }
     }
-    throw
+
+    if ($ServerRegistrationCleared) {
+        Restore-InstallSnapshot `
+            -BasePath $BaseDir `
+            -SnapshotPath $BackupDir `
+            -BaseExistedBefore $BaseDirExistedBefore `
+            -BackupRootExistedBefore $BackupRootExistedBefore
+    }
+    elseif ($PairRequestStarted -and -not $Pair) {
+        Write-Warning (
+            'Pairing-запрос был отправлен, но итог сервера неизвестен. ' +
+            'Локальные credentials сохранены; проверь устройство в Telegram.'
+        )
+    }
+
+    throw $InstallFailure
 }
 finally {
     $Http.Dispose()
