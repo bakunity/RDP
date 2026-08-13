@@ -1,6 +1,6 @@
 # Hermes RDP — Current State Snapshot
 
-Updated: 2026-08-12
+Updated: 2026-08-13
 
 For immediate operational truth read `ACTIVE_WORK.md`; for scenario-level proof/revalidation read `EVIDENCE_LEDGER.md`.
 
@@ -53,6 +53,7 @@ Do not re-run wholesale without a concrete regression reason:
 - RL-004 controller restart isolation;
 - RL-005 dedicated sshd restart recovery;
 - RL-007 simultaneous multi-device user smoke;
+- RL-008 one-device failure isolation;
 - CP-001 slow/malformed TLS isolation;
 - CL-001 desired-state reconciliation independent of SSH transport;
 - CU-001 command timeout semantics;
@@ -74,13 +75,10 @@ Do not re-run wholesale without a concrete regression reason:
 
 **RL-007 — COMPLETE PASS.** Four independent endpoints were previously healthy server-side and passed TCP-through-tunnel checks. Final user-facing acceptance also passed: two simultaneous Microsoft RDP sessions to different Hermes devices were open and usable concurrently without mutual disruption.
 
-**RL-008 — PENDING.** Verify failure of one device does not affect another healthy device/session/endpoint.
+**RL-008 — COMPLETE PASS.** Live isolation test forced only MIPC (`:53389`) to durable desired OFF for 12 seconds without changing command sequence. Its listener closed and agent converged to applied OFF / SSH stopped / process count 0. Other healthy Hermes devices retained fresh telemetry and open listeners; controller and dedicated sshd PIDs stayed unchanged. Restoring MIPC desired ON returned one SSH process and open endpoint automatically. User observed the MIPC RDP session drop while the second active RDP session stayed stable and usable throughout.
 
 ## Current release gate
 
-The soak blockers are closed and RL-007 is complete. Remaining Stage 2 work is intentionally small:
+Core Stage 2 lifecycle acceptance is now complete except the deferred RL-006 single Windows process-count closure. If the exact original RL-006 test machine is available, only one lightweight `HermesSshCount == 1` check is needed; otherwise move on to device/security lifecycle acceptance.
 
-1. run RL-008 one-device-failure isolation with a reversible fault scoped to only one client;
-2. optionally close RL-006 with one lightweight Windows `HermesSshCount == 1` check if the original tested machine is available.
-
-Do not repeat CP-001, CL-001, CU-001, RL-007 or the five-cycle RL-006 stress without a concrete regression reason.
+Do not repeat CP-001, CL-001, CU-001, RL-007, RL-008 or the five-cycle RL-006 stress without a concrete regression reason.
