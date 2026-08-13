@@ -9,9 +9,10 @@ For immediate operational truth read `ACTIVE_WORK.md`; for scenario-level proof/
 - Repository: `bakunity/RDP`.
 - Published release: `v1.1.0` — OpenSSH transition release.
 - Target release: **v1.2.0 — Stabilization**.
-- PR #19 is merged and accepted.
-- PR #20 is merged to `main`; merge commit `dcda9d3890be390a90e9a967905f2cab3c6c7194`.
-- Final PR #20 CI #210: Windows PowerShell 5.1 PASS and Linux full release checks PASS.
+- PR #19 merged and accepted.
+- PR #20 merged; merge commit `dcda9d3890be390a90e9a967905f2cab3c6c7194`.
+- PR #21 merged; merge commit `12ba13080e25e935fb7cc17ece7852005c964c29`.
+- PR #21 current head before merge `d1f901a070aa8db006059378d263d7b72214fbb4`; CI #234 COMPLETE PASS.
 
 ## Architecture — current
 
@@ -33,10 +34,10 @@ Durable boundaries remain: all Windows machines are equal clients; Linux is infr
 
 ## Deployment truth
 
-- Live controller/app is deployed from immutable PR #20 head `77240e2d758f0ed4598553d4d903331229653f06`.
-- Final controller-only deploy returned controller active and `/healthz` OK; rollback anchor `/var/backups/hermes-rdp/controller-20260812T095505Z`.
-- Dedicated Hermes sshd PID stayed unchanged during that deploy, so OpenSSH transport was not restarted.
-- MIPC accepted Windows agent is `2a170b0f4961299227120afa2eb7c0fffb0f0d13`; later PR #20 commits changed only server bot/registry/tests.
+- Live controller/app remains deployed from immutable PR #20 head `77240e2d758f0ed4598553d4d903331229653f06`.
+- Final controller-only deploy returned controller active and `/healthz` OK; dedicated Hermes sshd was not restarted.
+- MIPC accepted Windows agent remains the PR #20 control-first agent.
+- PR #21 changed Windows fresh-install readiness/rollback behavior and tests; SEC-005 required no production Linux service deploy.
 
 ## Stable accepted baseline
 
@@ -57,28 +58,30 @@ Do not re-run wholesale without a concrete regression reason:
 - CP-001 slow/malformed TLS isolation;
 - CL-001 desired-state reconciliation independent of SSH transport;
 - CU-001 command timeout semantics;
-- Telegram dashboard auto-refresh and mobile control-button layout.
+- Telegram dashboard auto-refresh/mobile layout;
+- SEC-001 unique per-device identity;
+- SEC-002 cross-device SSH/forward isolation;
+- SEC-003 hard DELETE/revoke lifecycle;
+- SEC-005 deterministic safe released-port reuse and Windows installer retry fix.
 
-## Stabilization acceptance
+## Stage 3 device/security evidence
 
-**CP-001 — COMPLETE PASS.** A silent raw TCP client held the API port while five parallel HTTPS `/healthz` requests all succeeded in 16–20 ms; controller and dedicated sshd remained stable. TLS handshake is now per-connection and bounded.
+**SEC-001 — COMPLETE PASS.** Active device inventory showed unique device IDs, API token hashes, Ed25519 keys and RDP ports.
 
-**CL-001 — COMPLETE PASS.** On MIPC, server desired OFF was forced without a new command (`command_seq` remained 27). Agent heartbeat/control stayed alive, converged applied state to OFF, stopped SSH and closed endpoint within 5 seconds. Restoring durable desired ON recovered one SSH process and the endpoint within 8 seconds, still without changing seq.
+**SEC-002 — COMPLETE PASS.** Each active SSH key maps only to its own `permitlisten` endpoint; an unregistered key was denied and a registered key could not request an unauthorized reverse port.
 
-**CU-001 — COMPLETE PASS.** Existing OSIO OFF seq 14 timed out deterministically after 60 seconds: pending cleared, desired OFF remained durable, timeout result retained seq/action, endpoint stayed closed. Late same-seq result after timeout is rejected by current registry semantics and covered by CI.
+**SEC-003 — COMPLETE PASS.** Telegram DELETE hard-removed the retired test device; its token hash/key disappeared, old SSH authorization failed, endpoint stayed closed and the port became reusable while MIPC remained healthy.
 
-**UI-001/UI-002 — COMPLETE PASS.** User confirmed device dashboard updates automatically after command completion without manual Refresh and OFF/RESTART render as separate full-width rows on mobile Telegram.
+**SEC-004 — NOT LIVE-EXERCISED / FIXTURE UNAVAILABLE.** No stale deleted-client local identity remained to perform the intended raw old-client replay. Do not reconstruct secrets to manufacture the fixture.
 
-## Stage 2 current evidence
+**SEC-005 — RESOLVED / LIVE-ACCEPTED.** Initial clean Windows fresh install exposed a fixed-8-second startup race and stale-local-residue retry bug. PR #21 replaced this with bounded stable-SSH readiness and safe snapshot restoration after confirmed server revoke. CI passed. Live retry created a new identity/key on released port `53391`; task Running; exactly one Hermes SSH; final server post-check showed a sole owner, fresh telemetry, listener/TCP path live, failed/deleted identities not reused and MIPC unaffected. User also connected successfully through Microsoft RDP.
 
-**RL-006 — PARTIAL PASS.** Five repeated dedicated-sshd reconnect cycles were clean server-side. Final Windows process count on the original test machine remains deferred; do not repeat the stress sequence.
+## Stage 2 deferred item
 
-**RL-007 — COMPLETE PASS.** Four independent endpoints were previously healthy server-side and passed TCP-through-tunnel checks. Final user-facing acceptance also passed: two simultaneous Microsoft RDP sessions to different Hermes devices were open and usable concurrently without mutual disruption.
-
-**RL-008 — COMPLETE PASS.** Live isolation test forced only MIPC (`:53389`) to durable desired OFF for 12 seconds without changing command sequence. Its listener closed and agent converged to applied OFF / SSH stopped / process count 0. Other healthy Hermes devices retained fresh telemetry and open listeners; controller and dedicated sshd PIDs stayed unchanged. Restoring MIPC desired ON returned one SSH process and open endpoint automatically. User observed the MIPC RDP session drop while the second active RDP session stayed stable and usable throughout.
+**RL-006 — PARTIAL PASS.** Five repeated dedicated-sshd reconnect cycles were clean server-side. Final Windows process count on the original test machine remains optional/deferred; do not repeat the stress sequence.
 
 ## Current release gate
 
-Core Stage 2 lifecycle acceptance is now complete except the deferred RL-006 single Windows process-count closure. If the exact original RL-006 test machine is available, only one lightweight `HermesSshCount == 1` check is needed; otherwise move on to device/security lifecycle acceptance.
+Stage 3 remains active. Next gate is **SEC-006 owner-limited Telegram authorization**. Source inspection shows authorization requires both Telegram chat ID and actor ID to equal configured `telegram_chat_id`; unauthorized messages are ignored and unauthorized callbacks receive `Нет доступа`. Run one bounded read-only live-config negative authorization check before marking SEC-006 complete.
 
-Do not repeat CP-001, CL-001, CU-001, RL-007, RL-008 or the five-cycle RL-006 stress without a concrete regression reason.
+After SEC-006, remaining planned security gates are admin SSH `:22` independence from Hermes sshd `:7000` and confirmation that Hermes requires no Defender exclusions/security weakening.
