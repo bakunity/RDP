@@ -100,25 +100,29 @@ Read-only live server inventory proved the admin and Hermes SSH boundaries are s
 
 No restart was required. Do not repeat SEC-007 without an sshd/service-boundary regression reason.
 
-### SEC-008 no Windows security weakening — ENVIRONMENT GATE FAIL / PRODUCT NOT YET FAIL
+### SEC-008 no Windows security weakening — ENVIRONMENT POLICY BLOCKER CONFIRMED / PRODUCT NOT FAIL
 
-Repository search found no Hermes code using `Set-MpPreference`, `Add-MpPreference`, `MpPreference`, `ExclusionPath`, `DisableRealtimeMonitoring` or Defender-specific modification calls. The installer uses normal Microsoft OpenSSH/RDP/firewall/service/task configuration and does not intentionally request Defender exclusions or disable protection.
+Repository search found no Hermes code using `Set-MpPreference`, `Add-MpPreference`, Defender exclusion calls or `DisableRealtimeMonitoring`. The installer uses normal Microsoft OpenSSH/RDP/firewall/service/task configuration and does not intentionally request Defender exclusions or disable protection.
 
-The first live Windows security-state check on `SEC005 TEST` showed:
+The first live Windows security-state check on `SEC005 TEST` showed Hermes healthy with no Hermes path/process/broad extension exclusions, but Defender real-time and behavior monitoring were off, so the acceptance harness returned FAIL.
 
-- Microsoft Defender AM service enabled and Antivirus enabled;
-- RealTimeProtectionEnabled = False;
-- BehaviorMonitorEnabled = False;
-- no Hermes path exclusion;
-- no Hermes-related process exclusion;
-- no broad `.ps1`/`.exe` extension exclusion detected;
-- Hermes task remained Running with exactly one matching SSH process on the accepted device.
+A second bounded read-only diagnosis established the cause as pre-existing Windows Defender policy/preference state rather than Hermes runtime behavior:
 
-Therefore the acceptance harness returned `SEC008=FAIL`, but this is currently an **environment/security-state blocker**, not a confirmed Hermes product failure. The test machine did not satisfy the prerequisite "Defender real-time protection enabled", so it cannot yet prove whether Hermes works under that protection state. Do not weaken Defender or add exclusions to make Hermes pass.
+- `AMRunningMode = Normal`;
+- `WinDefend` and `SecurityHealthService` are Running;
+- no third-party antivirus is registered;
+- Tamper Protection is off;
+- `Get-MpPreference.DisableRealtimeMonitoring = True`;
+- policy `HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection\\DisableRealtimeMonitoring = 1`;
+- no matching policy was found for `DisableBehaviorMonitoring` or `DisableAntiSpyware`.
+
+Microsoft documents that the `DisableRealtimeMonitoring` policy value corresponds to the Group Policy setting **Turn off real-time protection**; when enabled, Defender real-time protection is disabled. The current machine therefore fails SEC-008 because its environment explicitly disables real-time protection, not because Hermes requires a Defender exception.
+
+Do not blindly remove or override the policy until its management source is established. If this is an unmanaged test PC with a local/manual policy, back it up and restore Defender to its normal enabled state, then re-run the bounded Hermes/Defender acceptance. If the policy is domain/MDM-managed, use a different unmanaged acceptance fixture rather than fighting organizational policy.
 
 ## Exact next action
 
-Run one bounded **read-only Defender-state diagnosis** on `SEC005 TEST`. Determine why real-time and behavior monitoring are off: inspect Defender status/preferences, policy values, service state, tamper-protection state and any registered third-party antivirus product, while printing no unrelated exclusion lists or secrets. Do not change Defender settings yet. If the cause is an existing local/policy/third-party security configuration independent of Hermes, classify SEC-008 as environment-blocked and then choose a safe acceptance fixture with Defender real-time protection enabled; if evidence points to Hermes changing the state, treat it as a product blocker and investigate source/runtime provenance before any further security test.
+Run one bounded **read-only policy-source check** on `SEC005 TEST`: determine whether the machine is domain joined or Azure AD/MDM managed and capture the computer RSoP summary for Microsoft Defender without changing policy. If the machine is unmanaged and the disabling policy is local/manual, proceed with a separately reversible cleanup of only the `DisableRealtimeMonitoring` policy value and verify Defender becomes active while Hermes remains healthy. If centrally managed, do not modify the policy; switch SEC-008 to a clean unmanaged Windows fixture.
 
 ## Context rule
 
