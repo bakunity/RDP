@@ -33,7 +33,7 @@ class WebsiteOpenSshContentTests(unittest.TestCase):
         security = (ROOT / "docs/SECURITY.md").read_text(encoding="utf-8")
 
         self.assertIn("внешнего RDP", testing)
-        self.assertIn("второй Windows-ПК", validated)
+        self.assertIn("несколько Windows-ПК", validated)
         self.assertIn("перезагрузки Windows", testing)
         self.assertIn("RDP boundary", security)
 
