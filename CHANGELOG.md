@@ -4,14 +4,41 @@
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-08-13
+
+Релиз: https://github.com/bakunity/RDP/releases/tag/v1.2.0
+
+Стабилизационный релиз после перехода на OpenSSH.
+
+### Добавлено
+
+- отдельный Repair существующего Windows-клиента;
+- Telegram-действия `ВОССТАНОВИТЬ КЛИЕНТ` и `НОВЫЙ КОД`;
+- transactional update/rollback для server и Windows client;
+- Windows Server support и x86 PowerShell compatibility.
+
+### Исправлено
+
+- soak-time control-plane deadlocks и stale command state;
+- dashboard state refresh и mobile control layout;
+- Windows installer startup readiness;
+- server updater backup/rollback consistency;
+- Windows updater rollback/recovery;
+- performance regression в ordinary telemetry path.
+
+### Проверено
+
+- несколько Windows-устройств одновременно;
+- Windows и Linux reboot recovery;
+- device failure isolation;
+- device delete и безопасное повторное использование endpoint;
+- Repair success/rollback paths;
+- pairing retry UX.
+
 ### Документация и сайт
 
-- публичная страница полностью переведена с устаревшего описания FRP на текущую OpenSSH-архитектуру;
-- добавлен блок реально подтверждённых сценариев: чистая установка, Windows pairing и внешний RDP через мобильную сеть;
-- README, quickstart, установка, архитектура, эксплуатация, диагностика, безопасность и миграция переписаны по результатам живого теста;
-- acceptance checklist теперь отдельно показывает уже пройденные и ещё не закрытые проверки;
-- добавлены regression tests, запрещающие возврат `v1.0.7`, `FRPC` и `FRPS` на публичную страницу;
-- release-check стал совместим с системным Python 3.10 без внешнего `tomllib`.
+- public docs синхронизированы с live-accepted `v1.2.0` behavior;
+- validated scenarios и release draft обновлены по фактической evidence.
 
 ## [1.1.0] — 2026-08-06
 
