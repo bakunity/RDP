@@ -115,14 +115,14 @@ Fresh pairing и Repair намеренно разделены. Repair не со�
 
 Windows Home не является штатным RDP host и не поддерживается.
 
-## Быстрый старт v1.2.0
+## Быстрый старт v1.2.1
 
 ### 1. Установить сервер
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.2.0/scripts/install-server.sh -o /tmp/install-hermes-rdp.sh
+curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.2.1/scripts/install-server.sh -o /tmp/install-hermes-rdp.sh
 read -rsp 'Telegram bot token: ' TG_TOKEN; echo
-sudo env HERMES_RDP_REF=v1.2.0 bash /tmp/install-hermes-rdp.sh \
+sudo env HERMES_RDP_REF=v1.2.1 bash /tmp/install-hermes-rdp.sh \
   --host SERVER_IP_OR_DOMAIN \
   --telegram-token "$TG_TOKEN" \
   --telegram-chat-id TELEGRAM_USER_ID
@@ -159,17 +159,17 @@ mstsc.exe /v:SERVER_IP_OR_DOMAIN:53389
 Server:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.2.0/scripts/update-server.sh -o /tmp/update-hermes-rdp.sh
-sudo env HERMES_RDP_REF=v1.2.0 bash /tmp/update-hermes-rdp.sh
+curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.2.1/scripts/update-server.sh -o /tmp/update-hermes-rdp.sh
+sudo env HERMES_RDP_REF=v1.2.1 bash /tmp/update-hermes-rdp.sh
 rm -f /tmp/update-hermes-rdp.sh
 ```
 
 Windows:
 
 ```powershell
-$u='https://raw.githubusercontent.com/bakunity/RDP/v1.2.0/scripts/update-client.ps1'
+$u='https://raw.githubusercontent.com/bakunity/RDP/v1.2.1/scripts/update-client.ps1'
 $s=(irm $u).TrimStart([char]0xFEFF)
-& ([scriptblock]::Create($s)) -RepositoryRef 'v1.2.0'
+& ([scriptblock]::Create($s)) -RepositoryRef 'v1.2.1'
 ```
 
 Оба updater-а сохраняют рабочее состояние до runtime mutation и имеют автоматический rollback при ошибке после изменения.
@@ -249,8 +249,9 @@ Get-Process ssh -ErrorAction SilentlyContinue
 ## Релизы
 
 - [Последний релиз](https://github.com/bakunity/RDP/releases/latest)
-- [Hermes RDP v1.2.0](https://github.com/bakunity/RDP/releases/tag/v1.2.0)
-- [Release notes v1.2.0](docs/releases/v1.2.0.md)
+- [Hermes RDP v1.2.1](https://github.com/bakunity/RDP/releases/tag/v1.2.1)
+- [Release notes v1.2.1](docs/releases/v1.2.1.md)
+- [Предыдущий v1.2.0](https://github.com/bakunity/RDP/releases/tag/v1.2.0)
 - [История изменений](CHANGELOG.md)
 
 Для production используйте конкретный release tag или другой заранее проверенный immutable ref. `main` предназначен для дальнейшей разработки.
