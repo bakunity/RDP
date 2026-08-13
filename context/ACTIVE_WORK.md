@@ -100,37 +100,28 @@ Read-only live server inventory proved the admin and Hermes SSH boundaries are s
 
 No restart was required. Do not repeat SEC-007 without an sshd/service-boundary regression reason.
 
-### SEC-008 no Windows security weakening — UNMANAGED FIXTURE / LOCAL POLICY BLOCKER CONFIRMED
+### SEC-008 no Windows security weakening — DEFENDER ENABLE STEP PASS / FINAL ACCEPTANCE PENDING
 
 Repository search found no Hermes code using `Set-MpPreference`, `Add-MpPreference`, Defender exclusion calls or `DisableRealtimeMonitoring`. The installer uses normal Microsoft OpenSSH/RDP/firewall/service/task configuration and does not intentionally request Defender exclusions or disable protection.
 
-The first live Windows security-state check on `SEC005 TEST` showed Hermes healthy with no Hermes path/process/broad extension exclusions, but Defender real-time and behavior monitoring were off, so the acceptance harness returned FAIL.
+Initial live security-state checks found Hermes healthy with no Hermes path/process/broad extension exclusions, but Defender real-time protection was disabled by a local policy value `DisableRealtimeMonitoring=1` on the SEC005 TEST VM. The VM is not domain/Entra/Workplace joined and has no active EnterpriseMgmt/MDM evidence, so this was classified as a local/manual or leftover policy rather than a Hermes requirement.
 
-A bounded Defender diagnosis established:
+The bounded reversible enable step now passed:
 
-- `AMRunningMode = Normal`;
-- `WinDefend` and `SecurityHealthService` are Running;
-- no third-party antivirus is registered;
-- Tamper Protection is off;
-- `Get-MpPreference.DisableRealtimeMonitoring = True`;
-- policy `HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection\\DisableRealtimeMonitoring = 1`;
-- no matching policy was found for `DisableBehaviorMonitoring` or `DisableAntiSpyware`.
+- `DisableRealtimeMonitoring` policy value removed (`NOT_SET`);
+- Defender preference `DisableRealtimeMonitoring=False`;
+- `RealTimeProtectionEnabled=True`;
+- `BehaviorMonitorEnabled=True`;
+- `AMRunningMode=Normal`;
+- Hermes Scheduled Task remained Running;
+- exactly one matching Hermes `ssh.exe` remained alive;
+- device stayed on port `53391`.
 
-Further source-of-policy checks now establish this SEC005 TEST machine is an unmanaged Hyper-V VM created by the user on MUPC:
-
-- not domain joined;
-- `AzureAdJoined = NO`;
-- `DomainJoined = NO`;
-- `WorkplaceJoined = NO`;
-- no `EnterpriseMgmt` scheduled tasks;
-- no active MDM enrollment candidate folders/tasks;
-- `SEC008_MDM_STATE=NO_ACTIVE_MDM_EVIDENCE`.
-
-Therefore the Defender real-time disable state is classified as a **local/manual or leftover local policy on the VM**, not an organizational MDM/domain policy and not a Hermes requirement. SEC-008 remains pending only because the final acceptance must prove Hermes stays healthy with Defender real-time protection enabled and without exclusions.
+This proves enabling normal Defender protection did not immediately break the Hermes tunnel. SEC-008 is not final until one read-only final acceptance re-checks Defender protection + no Hermes exclusions + healthy Hermes task/SSH and the user confirms a real Microsoft RDP connection still succeeds while protection remains enabled.
 
 ## Exact next action
 
-On `SEC005 TEST`, perform one separately reversible change: export/back up the exact Defender `Real-Time Protection` policy key, remove only the `DisableRealtimeMonitoring` value, explicitly request normal real-time protection state, then verify Defender becomes active while the existing Hermes task and single SSH tunnel remain healthy. Keep the rollback command separate and do not add any Defender exclusions. If that passes, run the final SEC-008 acceptance and close Stage 3.
+Run the final read-only SEC-008 acceptance on `SEC005 TEST`: confirm Defender real-time/behavior protection are still enabled, no Hermes path/process or broad `.ps1`/`.exe` exclusions exist, the Hermes task is Running with exactly one matching SSH process, then perform one real RDP connection to the existing `53391` endpoint. If both pass, mark SEC-008 COMPLETE PASS and Stage 3 device/security lifecycle complete, with SEC-004 remaining honestly fixture-unavailable.
 
 ## Context rule
 
