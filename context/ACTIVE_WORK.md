@@ -47,7 +47,7 @@ The expected retired archive was absent, then a read-only search across `C:\Prog
 
 Retain SEC-004 as not live-exercised because the old client fixture no longer exists. Server-side hard-revoke evidence remains COMPLETE PASS from SEC-003.
 
-### SEC-005 deterministic released-port reuse — FIX IN VALIDATION
+### SEC-005 deterministic released-port reuse — FIX CI PASS / LIVE RETRY PENDING
 
 A genuinely clean Windows PC passed the precheck with no Hermes config, key, task or process. Fresh pairing using the normal Telegram installer then failed after pairing with `SSH-туннель не запустился`; `agent.log` contained only the startup line.
 
@@ -57,20 +57,22 @@ Confirmed bug 2: after the failure, the installer successfully removed the Sched
 
 Server post-failure cleanup passed: failed registration count 0, `53391` unassigned and closed, allocator next port `53391`, and MIPC remained registered/listening with fresh telemetry.
 
-Fix branch: `fix/installer-startup-readiness`.
+PR #21: `fix: harden Windows installer startup readiness` on branch `fix/installer-startup-readiness`.
 
-Implementation under validation:
-- replace fixed 8-second startup assumption with bounded readiness polling;
-- require one matching SSH PID to remain stable long enough to outlive the SSH connect timeout before installer success;
-- preserve useful agent/SSH diagnostics on timeout;
-- track whether pairing was actually started;
-- after a known successful `revoke-self`, restore the pre-attempt local snapshot so a failed fresh install is retryable;
-- if the pairing outcome is uncertain or server revoke fails, preserve local credentials rather than destroying the only recovery material;
-- add regression tests for readiness and rollback semantics.
+Implemented:
+- fixed 8-second startup assumption replaced with bounded readiness polling;
+- installer requires one matching SSH PID to remain stable long enough to outlive the SSH connect timeout before success;
+- timeout diagnostics include agent/SSH logs;
+- pairing-start state is tracked explicitly;
+- after a known successful `revoke-self`, the pre-attempt local snapshot is restored so failed fresh installs are retryable;
+- uncertain pairing outcome or failed server revoke preserves local recovery credentials;
+- regression tests cover readiness and rollback semantics.
+
+PR #21 CI #231 is COMPLETE PASS: Linux full release checks PASS; Windows PowerShell 5.1 parse and certificate-pinning validation PASS. PR is mergeable. Do not merge before bounded live SEC-005 acceptance.
 
 ## Exact next action
 
-Run branch CI on `fix/installer-startup-readiness`. Fix any PowerShell parse/test failures before live reuse testing. Only after Windows PowerShell 5.1 and Linux full release checks PASS should the failed test PC be cleaned/retried using the fixed installer and SEC-005 be repeated on released port `53391`.
+On the failed SEC-005 Windows test PC, archive the residual `C:\ProgramData\HermesRDP` directory after confirming no Hermes task/process remains, leaving the canonical path clean while preserving rollback evidence. Then create a new one-time pairing code and run the installer from PR #21 branch/ref, not `main`. Verify fresh identity receives released port `53391`, task and one SSH process remain healthy, endpoint opens, old failed identity stays revoked, and MIPC remains unaffected. Only then mark SEC-005 resolved/live-accepted and merge PR #21.
 
 Remaining Stage 3 gates after SEC-005: owner-limited Telegram authorization, admin SSH :22 independence from tunnel sshd :7000, and confirmation that no Defender exclusions/security weakening are required.
 
