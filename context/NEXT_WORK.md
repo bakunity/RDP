@@ -12,33 +12,35 @@ Ship a stable self-hosted product where a user can install Hermes on Debian/Ubun
 
 **Hermes RDP v1.2.0 — Stabilization**
 
-PR #19, PR #20 and PR #21 are merged and accepted. Lifecycle recovery/isolation and the full device/security stage are complete. SEC-004 remains honestly marked fixture-unavailable because the deleted old-client credentials no longer exist; do not manufacture them.
+PR #19, PR #20, PR #21 and PR #22 are merged and accepted. Lifecycle recovery/isolation and the full device/security stage are complete. SEC-004 remains honestly marked fixture-unavailable because the deleted old-client credentials no longer exist; do not manufacture them.
 
 ## Immediate work
 
-### 1. Safe migration / updater / rollback hardening
+### 1. Windows updater / repair hardening
 
-This is the current full product stage.
+Server updater hardening is complete: PR #22 passed CI, live success-path acceptance and deliberate post-mutation automatic rollback acceptance.
 
-First perform read-only source/runtime inventory before any live mutation:
+Current Windows updater gaps to close:
 
-- identify the current server update entry point and source-ref/provenance behavior;
-- determine whether exact deployed commit/SHA is recorded and surfaced;
-- verify backup scope and permissions;
-- map pre-update and post-update health gates;
-- determine whether failure after partial deployment causes automatic rollback;
-- verify dedicated sshd/controller restart boundaries;
-- inspect Windows update/repair path and whether it preserves device ID, API token, Ed25519 private key, RDP port and Scheduled Task state;
-- verify rollback cannot silently leave mixed old/new files or broken permissions.
+- stage/download and parse the candidate before stopping a healthy running agent whenever possible;
+- preserve device ID, API token/config, Ed25519 private/public key, known-hosts and assigned RDP port;
+- preserve the existing Scheduled Task definition/state;
+- take a bounded rollback snapshot of the current agent and relevant non-secret metadata;
+- activate the candidate and require bounded readiness rather than merely `Start-ScheduledTask`;
+- require exactly one matching Hermes `ssh.exe` in normal ON state;
+- automatically restore the previous agent/task state if activation fails;
+- surface useful diagnostics without exposing tokens/private keys;
+- remain compatible with Windows PowerShell 5.1 and Win10 x64 under x86 PowerShell/Sysnative;
+- keep explicit update/repair behavior distinct from fresh `Добавить ПК` pairing.
 
-Then design bounded live acceptance with a known-good rollback anchor. Do not start with destructive update tests.
+Add regression coverage and CI before any live destructive test. Then run a success-path update and a forced-failure rollback test on a non-critical Windows fixture.
 
 ### 2. Command / pairing / repair UX
 
-After updater/rollback hardening:
+After updater/repair transaction semantics are accepted:
 
 - add expired-pair retry UX;
-- implement explicit repair/update flow distinct from `Добавить ПК`;
+- expose explicit repair/update flow distinct from `Добавить ПК`;
 - finish Russian dashboard terminology/edge-state text where needed;
 - make recovery actions clear without exposing secret material.
 
@@ -49,8 +51,8 @@ Before the `v1.2.0` tag:
 - reconcile release notes with accepted evidence;
 - archive release evidence and compact active context;
 - ensure docs match current runtime and security model;
+- document updater rollback/recovery paths;
 - publish immutable tag/release;
-- document rollback/recovery paths;
 - then continue website v2 after runtime stabilization.
 
 ## Optional deferred item
