@@ -2,66 +2,47 @@
 
 Updated: 2026-08-13
 
-Purpose: first operational file after `context/README.md`. Contains current work only; completed/superseded detail belongs in the evidence/history files.
+Purpose: first operational file after `context/README.md`.
 
 ## Repository / release
 
 - Repository: `bakunity/RDP`.
 - Published release: `v1.1.0`.
 - Target release: **v1.2.0 — Stabilization**.
-- PR #19, PR #20, PR #21 and PR #22 are merged and accepted.
-- PR #22 title: `fix: make server updater transactional`.
-- PR #22 accepted head: `bc9ee48da570e4d85e1a50cd3b41a631f064609e`.
-- PR #22 merge commit: `ba21a9f969c3ad8ad6760ac423056afb6bb7bd00`.
-- CI #249 on the accepted PR #22 head: Linux PASS and Windows PowerShell 5.1 PASS.
+- PR #19, #20, #21 and #22 are merged and accepted.
+- PR #22 accepted head: `bc9ee48da570e4d85e1a50cd3b41a631f064609e`; merge commit `ba21a9f969c3ad8ad6760ac423056afb6bb7bd00`.
+- PR #23 `fix: make Windows updater transactional` is open and mergeable at head `dd02b63f0b31bc8a64f883c1ab0579ae4e8c96ab`.
+- CI #256 on PR #23 head: Windows PowerShell 5.1 PASS and Linux full release checks PASS.
 
 ## Deployment truth
 
-- Live controller/app remains deployed from immutable PR #22 head `bc9ee48da570e4d85e1a50cd3b41a631f064609e`.
-- The bounded UPD-004 forced-failure test rolled back to that same accepted live state.
-- Dedicated `hermes-rdp-sshd.service` remains separate from admin SSH.
-- MIPC accepted Windows agent remains the PR #20 control-first agent.
-
-## Completed stabilization evidence retained
-
-- Stage 2 lifecycle: RL-001..RL-005, RL-007 and RL-008 COMPLETE PASS; RL-006 remains PARTIAL only for the optional exact-machine final one-process count.
-- Stage 3 device/security: COMPLETE; SEC-004 remains fixture-unavailable rather than falsely live-tested.
-- PR #21 fresh-install readiness/retry rollback: RESOLVED / LIVE-ACCEPTED.
+- Live Linux controller/app remains on accepted PR #22 head `bc9ee48da570e4d85e1a50cd3b41a631f064609e`.
+- Dedicated Hermes tunnel sshd remains separate from admin SSH.
+- `SEC005 TEST` is the current non-critical Windows updater acceptance fixture.
 
 ## Stage 4 — Safe migration / updater / rollback — ACTIVE
 
 ### Server updater — COMPLETE / LIVE-ACCEPTED
 
-**UPD-001 — COMPLETE PASS.** Read-only production inventory proved healthy immutable baseline and exposed the legacy backup boundary.
+- UPD-001: COMPLETE PASS.
+- UPD-002 legacy missing-DB backup bug: RESOLVED BY PR #22.
+- UPD-003 transactional server updater success path: COMPLETE PASS.
+- UPD-004 automatic server rollback: COMPLETE PASS.
 
-**UPD-002 — CONFIRMED BUG / RESOLVED BY PR #22.** Legacy `update-server.sh` backups did not include `/var/lib/hermes-rdp/state.sqlite3`.
+### Windows updater
 
-**UPD-003 — COMPLETE PASS.** Exact PR #22 head updated production successfully. Both Hermes services and `/healthz` were healthy, device state and DB metadata stayed unchanged, consistent SQLite/config/provenance backup was created, and all four active endpoint listeners recovered.
+PR #23 stages/parses the candidate before stopping a healthy runtime, resolves to immutable SHA, preserves existing device state and task definition, creates rollback backup metadata, waits for bounded stable runtime readiness, and restores the previous agent on activation failure.
 
-**UPD-004 — COMPLETE PASS.** A temporary local updater copy injected a deliberate post-mutation failure while targeting an older immutable ref. Automatic rollback reported `ROLLBACK=PASS` and restored repository ref, config/app/unit hashes, DB ownership/mode, device-state signature, database integrity, service health, `hermes-rdpctl doctor`, and all prior endpoint listeners.
+**UPD-005 — COMPLETE PASS.** On `SEC005 TEST`, exact PR #23 updater returned `UPDATE=PASS`; identity/config/key material, known-hosts and assigned port stayed unchanged; task definition stayed unchanged and Running; backup metadata was valid; exactly one agent and one matching SSH process were healthy; endpoint was open.
 
-PR #22 was merged only after CI plus UPD-003 and UPD-004 passed.
-
-### Windows updater / repair — CURRENT GATE
-
-The existing `scripts/update-client.ps1` still has weaker recovery semantics than the now-accepted server updater. Source inventory established that it:
-
-- backs up only `HermesRdpAgent.ps1`;
-- stops the Scheduled Task and Hermes processes before downloading the replacement agent;
-- restores the old agent only for PowerShell parse errors;
-- does not restart the old task on that parse-error rollback path;
-- has no bounded runtime-readiness gate after `Start-ScheduledTask`;
-- has no automatic rollback if the new agent parses but fails to establish a healthy Hermes tunnel;
-- has no explicit repair entry point distinct from update/install.
+The first UPD-005 attempt was a harness-only failure: the in-memory ScriptBlock retained the UTF-8 BOM before `param`, so product code never executed or mutated runtime. Retry removed the BOM only from the in-memory harness copy and passed. Classification: HARNESS FAIL / NOT PRODUCT FAIL.
 
 ## Exact next action
 
-Proceed with **Windows updater/repair hardening** before any destructive Windows live test.
+Run **UPD-006 bounded Windows automatic rollback acceptance** on `SEC005 TEST` using an in-memory temporary copy of exact PR #23 updater with one deliberate failure immediately after candidate activation. The test must prove `ROLLBACK=PASS`, previous agent hash restored, identity/config/key/known-hosts/task definition unchanged, task Running, exactly one agent and one Hermes SSH process, same port and endpoint recovered.
 
-First design a transactional `update-client.ps1` boundary that preserves device identity/config/private key/known-hosts/port and existing task definition, downloads and validates the candidate before stopping the working agent where possible, uses bounded readiness after activation, and automatically restores the previous agent/task state if activation fails.
-
-Then add regression coverage and CI. Only after that should a bounded live Windows success-path and forced-failure rollback test run on a non-critical test device.
+Do not merge PR #23 until UPD-006 passes. Then continue to explicit repair flow / command-pairing-repair UX.
 
 ## Context rule
 
-Checkpoint meaningful PASS/FAIL/root-cause/deployment transitions continuously. Record outcomes, not raw terminal transcripts. Never store pairing codes, API tokens, private keys or ready-to-use secret material in context.
+Checkpoint meaningful outcomes, not raw transcripts. Never store pairing codes, API tokens, private keys or ready-to-use secret material in context.
