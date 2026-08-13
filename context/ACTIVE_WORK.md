@@ -74,11 +74,17 @@ PR #21 was merged using expected head `d1f901a070aa8db006059378d263d7b72214fbb4`
 
 Do not repeat SEC-005 without a concrete installer/allocator regression reason.
 
+### SEC-006 owner-limited Telegram authorization — SOURCE BOUNDARY CONFIRMED / LIVE NEGATIVE PENDING
+
+Read-only source inspection confirms the controller has one configured `telegram_chat_id`. `TelegramBot._authorized()` extracts both the update chat ID and the acting user ID and returns true only when **both** equal that configured owner ID. Therefore an owner acting in a different/group chat is denied, and a different actor in the owner's chat is also denied. Unauthorized ordinary messages are ignored; unauthorized callbacks receive `Нет доступа` and return before callback/device mutation logic.
+
+No source change is required at this point. The remaining acceptance is one bounded live-config authorization check that calls only `_authorized()` with synthetic updates and never invokes Telegram API, registry writes, device commands or secrets output.
+
 ## Exact next action
 
-Proceed to **SEC-006 — owner-limited Telegram authorization**. First perform a read-only source/config inspection to establish the exact Telegram authorization boundary and expected behavior for a non-owner chat/user. Only then design one bounded negative live test that cannot mutate devices or expose secrets.
+Run the read-only **SEC-006 live-config negative authorization check** on the Linux server. It should prove owner/private-chat = allowed, wrong actor in owner chat = denied, owner in wrong chat = denied, and wrong actor/wrong chat = denied without printing the real owner ID. If PASS, mark SEC-006 COMPLETE and proceed to admin SSH `:22` independence from Hermes sshd `:7000`.
 
-Remaining Stage 3 gates after SEC-006: admin SSH `:22` independence from tunnel sshd `:7000`, and confirmation that Hermes requires no Defender exclusions or other security weakening.
+Remaining Stage 3 gate after that: confirmation that Hermes requires no Defender exclusions or other security weakening.
 
 ## Context rule
 
