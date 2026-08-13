@@ -36,15 +36,15 @@ CP-001, CL-001 and CU-001 are COMPLETE PASS and must not be repeated without a c
 
 Live inventory of five active devices showed every device has an Ed25519 SSH key, unique SSH public key, unique RDP port, unique device ID and unique API token hash. No duplicates were present.
 
-### SEC-002 cross-device SSH isolation — POLICY PASS
+### SEC-002 cross-device SSH isolation — COMPLETE PASS
 
-Live effective `sshd -T` policy verified public-key-only auth, remote forwarding only, `PermitOpen none`, no TTY/agent/X11/session channels, and the Hermes `AuthorizedKeysCommand`. For every active device, registry and actual AuthorizedKeysCommand mapped its key back to itself and emitted only its own `permitlisten="0.0.0.0:<rdp_port>"`. A syntactically valid unregistered Ed25519 public key was denied. No device exposed any other registered RDP port through its authorization line.
+Policy acceptance passed: live effective `sshd -T` verified public-key-only authentication, remote forwarding only, `PermitOpen none`, no TTY/agent/X11/session channels, and Hermes `AuthorizedKeysCommand`. Every active key mapped only to its own device and emitted only its own `permitlisten="0.0.0.0:<rdp_port>"`; an unregistered Ed25519 key was denied.
 
-Remaining SEC-002 gate: one bounded live OpenSSH negative-forward test with a real registered client key requesting a free but unauthorized reverse port. Existing primary tunnel must remain running; failure must be due the server permitlisten restriction, not port collision.
+Live negative-forward acceptance also passed on MIPC: its real registered key authenticated successfully, then a second one-shot SSH connection requesting free but unauthorized reverse port `53420` was rejected by the server. The process exited, the log contained both successful public-key authentication and remote-forward denial, and the normal assigned MIPC tunnel remained separate. The PowerShell result did not retain a numeric exit code because `if/else` was pasted interactively as separate statements, but that does not invalidate the observed authenticated-then-denied server behavior.
 
 ## Exact next action
 
-Select one currently unused RDP-range port on the server and verify it is both unassigned in the registry and not listening. Then use MIPC's existing private key in a second one-shot SSH connection to request that unauthorized reverse port. Expected result: authentication may succeed, but `ExitOnForwardFailure=yes` must return remote port forwarding failure while MIPC's normal assigned tunnel remains unaffected.
+Proceed to **SEC-003 hard revoke / DELETE lifecycle**. Use a disposable or intentionally retired device if available; do not delete MIPC or another required production device. Acceptance must prove that after hard revoke the old API token no longer authenticates, the old SSH key no longer authorizes, the old endpoint cannot return, and the released RDP port becomes safely reusable. Preserve one healthy control device throughout.
 
 ## Context rule
 
