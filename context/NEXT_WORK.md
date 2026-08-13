@@ -12,56 +12,51 @@ Ship a stable self-hosted product where a user can install Hermes on Debian/Ubun
 
 **Hermes RDP v1.2.0 — Stabilization**
 
-PR #19 is merged and accepted. PR #20 is merged and live-accepted; CP-001, CL-001 and CU-001 are closed. RL-007 simultaneous multi-device use and RL-008 one-device failure isolation are COMPLETE PASS.
+PR #19, PR #20 and PR #21 are merged and accepted. Lifecycle recovery/isolation and the full device/security stage are complete. SEC-004 remains honestly marked fixture-unavailable because the deleted old-client credentials no longer exist; do not manufacture them.
 
 ## Immediate work
 
-### 1. RL-006 — optional final lightweight Windows count
+### 1. Safe migration / updater / rollback hardening
 
-Server-side repeated reconnect stress is already PASS after five clean dedicated-sshd cycles. Final Windows process count on the original tested machine was not collected. If that exact machine is available, perform only one check that normal ON state has exactly one Hermes `ssh.exe`. Do not repeat the five-cycle test.
+This is the current full product stage.
 
-If the exact original RL-006 device cannot be identified or is unavailable, do not manufacture another stress run; retain RL-006 as partial historical evidence and proceed.
+First perform read-only source/runtime inventory before any live mutation:
 
-### 2. Device/security lifecycle
+- identify the current server update entry point and source-ref/provenance behavior;
+- determine whether exact deployed commit/SHA is recorded and surfaced;
+- verify backup scope and permissions;
+- map pre-update and post-update health gates;
+- determine whether failure after partial deployment causes automatic rollback;
+- verify dedicated sshd/controller restart boundaries;
+- inspect Windows update/repair path and whether it preserves device ID, API token, Ed25519 private key, RDP port and Scheduled Task state;
+- verify rollback cannot silently leave mixed old/new files or broken permissions.
 
-This is the next full product stage after lifecycle recovery:
+Then design bounded live acceptance with a known-good rollback anchor. Do not start with destructive update tests.
 
-- verify per-device Ed25519 identity uniqueness;
-- verify one device cannot authenticate as another;
-- verify hard revoke/DELETE removes API and SSH access;
-- verify revoked device endpoint cannot return;
-- verify released RDP port reuse is safe and deterministic;
-- verify Telegram control remains owner-limited;
-- verify admin SSH remains independent from Hermes tunnel SSH;
-- verify no Defender exclusions or weakened security are required.
+### 2. Command / pairing / repair UX
 
-Use bounded, reversible tests where possible and preserve one healthy control device while testing another.
+After updater/rollback hardening:
 
-## Completed Stage 2 evidence retained
+- add expired-pair retry UX;
+- implement explicit repair/update flow distinct from `Добавить ПК`;
+- finish Russian dashboard terminology/edge-state text where needed;
+- make recovery actions clear without exposing secret material.
 
-- RL-001..RL-005: COMPLETE PASS.
-- RL-007: four simultaneous server-side endpoints/TCP checks PASS plus two simultaneous user-facing Microsoft RDP sessions to different Hermes devices PASS.
-- RL-008: MIPC alone was held OFF for 12 seconds; its endpoint/session dropped while other devices stayed healthy, shared service PIDs were unchanged, and MIPC restored automatically; the second active RDP session remained stable throughout.
-- CP-001: per-connection TLS handshake + bounded timeout; live slow-client acceptance COMPLETE PASS.
-- CL-001: heartbeat/control independent of SSH transport; direct desired OFF/local ON reconciliation COMPLETE PASS.
-- CU-001: 60-second transient command timeout with durable desired state and late-result rejection; COMPLETE PASS.
-- Telegram UI: automatic post-command dashboard refresh and full-width OFF/RESTART mobile layout; COMPLETE PASS.
-- CI #210 on final PR #20 head: Windows PowerShell 5.1 PASS, Linux full release checks PASS.
+### 3. Documentation / website / release
 
-## Later stages
+Before the `v1.2.0` tag:
 
-### Safe migration / updater / rollback
+- reconcile release notes with accepted evidence;
+- archive release evidence and compact active context;
+- ensure docs match current runtime and security model;
+- publish immutable tag/release;
+- document rollback/recovery paths;
+- then continue website v2 after runtime stabilization.
 
-Harden legacy Windows archival, server updater provenance/rollback and Windows updater health/rollback. Server updater still needs stronger immutable-source/deployed-SHA recording and explicit health-based rollback behavior.
+## Optional deferred item
 
-### Command / pairing / repair UX
-
-Add expired-pair retry UX, explicit repair/update flow, and finish Russian dashboard terminology where needed.
-
-### Documentation / website / release
-
-Before v1.2.0 tag: reconcile release notes with evidence, archive release evidence, compact active context, ensure docs match runtime, publish immutable tag, and document rollback/recovery. Website v2 follows runtime stabilization rather than preceding it.
+RL-006 remains PARTIAL PASS only because the exact original Windows machine did not receive the final lightweight `HermesSshCount == 1` check after five already-clean server-side reconnect cycles. If that exact machine is later identified, collect only that one count. Do not repeat the five-cycle stress test.
 
 ## Context-system follow-up
 
-Optional after lifecycle work: lightweight context-hygiene/lint checks for required files, freshness, size and contradictory status patterns.
+Optional after release work: lightweight context-hygiene/lint checks for required files, freshness, size and contradictory status patterns.
