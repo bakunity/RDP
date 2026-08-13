@@ -1,6 +1,6 @@
 # Hermes RDP — Evidence Ledger
 
-Updated: 2026-08-12
+Updated: 2026-08-13
 
 Purpose: durable project evidence that survives chat compression. This file records demonstrated facts, confirmed failures/root causes, and explicit revalidation obligations. It is not a transcript.
 
@@ -146,11 +146,11 @@ PR #20 scope is **COMPLETE**. CP-001/CL-001/CU-001 are release-blocker closures,
 | RL-003 | Linux server reboot recovers services and clients | PASS | Real reboot; server returned, Telegram/dashboard worked, already-open Hermes RDP session restored and was usable. |
 | RL-004 | Controller restart isolated from RDP transport | PASS | Controller PID changed; dedicated sshd and endpoint session/listeners stayed; user observed no RDP interruption. |
 | RL-005 | Dedicated Hermes sshd restart recovery | PASS | Controller unchanged; sshd/session replaced; listeners returned; RDP recovered automatically and dashboard stayed healthy. |
-| RL-006 | Repeated reconnects produce no duplicate/orphan Hermes SSH | PARTIAL PASS | Five dedicated-sshd cycles were clean server-side: old session gone, new session appeared, exactly one endpoint listener and one `:7000`, controller unchanged. Final Windows process count on original machine not collected. Do not repeat five-cycle stress; one later process-count check is enough if machine is available. |
-| RL-007 | Two+ devices simultaneously healthy | PARTIAL PASS | Four independent endpoints were simultaneously listening and all four TCP-through-tunnel checks passed. Remaining acceptance is user-facing simultaneous dual-RDP smoke on two devices. |
-| RL-008 | One device failure isolated from another | PENDING | Not yet run. Soak blockers no longer pause it; run after RL-007 with smallest reversible one-device fault. |
+| RL-006 | Repeated reconnects produce no duplicate/orphan Hermes SSH | PARTIAL PASS | Five dedicated-sshd cycles were clean server-side: old session gone, new session appeared, exactly one endpoint listener and one `:7000`, controller unchanged. Final Windows process count on original machine not collected. Do not repeat five-cycle stress; one later process-count check is enough if that exact machine is available. |
+| RL-007 | Two+ devices simultaneously healthy | PASS | Four independent endpoints were simultaneously listening and all four TCP-through-tunnel checks passed. Final user-facing smoke opened two Microsoft RDP sessions to different Hermes devices simultaneously; user confirmed both worked concurrently without mutual disruption. |
+| RL-008 | One device failure isolated from another | PASS | Bounded live test held only MIPC `:53389` desired OFF for 12 seconds without queueing a command. MIPC listener closed and telemetry converged to applied OFF, SSH false, count 0; other healthy devices kept fresh telemetry and open listeners. Controller and dedicated sshd PIDs stayed unchanged, MIPC command seq stayed unchanged, and restoring desired ON recovered MIPC automatically with one SSH/open endpoint. User confirmed the MIPC RDP session dropped while the second active RDP session remained stable and usable throughout. |
 
-Windows reboot recovery remains historical PASS (`TR-003`) and is not duplicated as a new Stage 2 obligation.
+Windows reboot recovery remains historical PASS (`TR-003`) and is not duplicated as a new Stage 2 obligation. Core lifecycle recovery/isolation acceptance is complete; only the optional deferred RL-006 one-process Windows closure remains.
 
 ## Soak-test blockers — historical failures, now resolved
 
