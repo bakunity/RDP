@@ -9,42 +9,43 @@ Purpose: first operational file after `context/README.md`. Contains current work
 - Repository: `bakunity/RDP`.
 - Published release: `v1.1.0`.
 - Target release: **v1.2.0 — Stabilization**.
-- PR #19 is merged and accepted.
-- PR #20 (`fix: prevent soak-time control plane deadlocks`) is merged into `main` as `dcda9d3890be390a90e9a967905f2cab3c6c7194`.
+- PR #19 and PR #20 are merged and accepted.
 
 ## Deployment truth
 
 - Live controller/app is deployed from immutable PR #20 head `77240e2d758f0ed4598553d4d903331229653f06`.
-- Final controller-only deploy passed: controller active, `/healthz` OK, configured repository ref exact, rollback backup `/var/backups/hermes-rdp/controller-20260812T095505Z`.
-- Dedicated `hermes-rdp-sshd.service` was not restarted by the final deploy; PID remained unchanged, preserving active OpenSSH transport.
-- MIPC agent live acceptance used immutable head `2a170b0f4961299227120afa2eb7c0fffb0f0d13`; subsequent PR #20 changes touched only server bot/registry/tests, not the Windows agent.
-
-## Stabilization blockers — CLOSED
-
-CP-001, CL-001 and CU-001 are COMPLETE PASS and must not be repeated without a concrete regression reason. Telegram dashboard auto-refresh and mobile control-button layout are also live-accepted.
+- Final controller-only deploy passed: controller active, `/healthz` OK, configured repository ref exact.
+- Dedicated `hermes-rdp-sshd.service` was not restarted by that deploy.
+- MIPC accepted Windows agent is the PR #20 control-first agent; later PR #20 changes did not touch the Windows agent.
 
 ## Stage 2 lifecycle
 
 - RL-001..RL-005: COMPLETE PASS.
-- RL-006: PARTIAL PASS; server-side five-cycle reconnect stress passed, only one deferred Windows process-count closure remains. Do not repeat the stress.
-- RL-007: COMPLETE PASS; two simultaneous Microsoft RDP sessions to different Hermes devices worked concurrently.
-- RL-008: COMPLETE PASS; holding only MIPC OFF dropped only MIPC while other device/session remained stable, shared service PIDs stayed unchanged, and MIPC restored automatically.
+- RL-006: PARTIAL PASS; five-cycle server-side reconnect stress passed, only one optional deferred Windows process-count check remains on the exact original device.
+- RL-007: COMPLETE PASS.
+- RL-008: COMPLETE PASS.
 
 ## Stage 3 — Device / Security lifecycle — ACTIVE
 
 ### SEC-001 device identity uniqueness — COMPLETE PASS
 
-Live inventory of five active devices showed every device has an Ed25519 SSH key, unique SSH public key, unique RDP port, unique device ID and unique API token hash. No duplicates were present.
+Live inventory of five active devices showed unique Ed25519 SSH public keys, RDP ports, device IDs and API token hashes. No duplicates were present.
 
 ### SEC-002 cross-device SSH isolation — COMPLETE PASS
 
-Policy acceptance passed: live effective `sshd -T` verified public-key-only authentication, remote forwarding only, `PermitOpen none`, no TTY/agent/X11/session channels, and Hermes `AuthorizedKeysCommand`. Every active key mapped only to its own device and emitted only its own `permitlisten="0.0.0.0:<rdp_port>"`; an unregistered Ed25519 key was denied.
+Effective sshd policy and actual `AuthorizedKeysCommand` mapped every active key only to its own device and own `permitlisten` port. An unregistered Ed25519 key was denied. Live negative-forward acceptance on MIPC also passed: the registered MIPC key authenticated, but a second one-shot SSH connection requesting free unauthorized reverse port `53420` was rejected while the normal assigned tunnel stayed separate.
 
-Live negative-forward acceptance also passed on MIPC: its real registered key authenticated successfully, then a second one-shot SSH connection requesting free but unauthorized reverse port `53420` was rejected by the server. The process exited, the log contained both successful public-key authentication and remote-forward denial, and the normal assigned MIPC tunnel remained separate. The PowerShell result did not retain a numeric exit code because `if/else` was pasted interactively as separate statements, but that does not invalidate the observed authenticated-then-denied server behavior.
+### SEC-003 hard revoke / DELETE lifecycle — COMPLETE PASS
+
+The intentionally retired `ai` device was used as the destructive test object after a protected SQLite backup was created. Telegram DELETE hard-removed the registration. Post-delete live acceptance proved the old device record, token hash and SSH public key are absent from the current registry; the old SSH key is denied by both registry authorization and the real AuthorizedKeysCommand; the old endpoint remained closed across the observation window; the old RDP port is unassigned and allocator-selected as the next reusable port; MIPC remained healthy throughout.
+
+Do not restore the deleted `ai` registration from backup during normal continuation. The backup exists only as rollback evidence for this bounded test.
 
 ## Exact next action
 
-Proceed to **SEC-003 hard revoke / DELETE lifecycle**. Use a disposable or intentionally retired device if available; do not delete MIPC or another required production device. Acceptance must prove that after hard revoke the old API token no longer authenticates, the old SSH key no longer authorizes, the old endpoint cannot return, and the released RDP port becomes safely reusable. Preserve one healthy control device throughout.
+Proceed to the remaining device/security lifecycle gates. First design **SEC-004 stale deleted-client rejection / endpoint reclaim protection** from the actual API and Windows client behavior. Prefer a bounded test using the retired `ai` client only if its old local installation/archive is available; do not expose or copy its API token/private key. If that Windows client is unavailable, preserve SEC-003 as server-side hard-revoke proof and move to deterministic live port-reuse acceptance with a fresh identity rather than manufacturing old-client credentials.
+
+Remaining Stage 3 gates after that: safe deterministic port reuse with a new identity, owner-limited Telegram authorization, admin SSH :22 independence from tunnel sshd :7000, and confirmation that no Defender exclusions/security weakening are required.
 
 ## Context rule
 
