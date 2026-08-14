@@ -1,0 +1,13 @@
+[Unit]
+Description=Hermes RDP trusted certificate renewal
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=/etc/hermes-rdp/trusted-rdp-cert.enabled
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/hermes-rdp-cert-renew
+TimeoutStartSec=20min
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=hermes-rdp-cert-renew
