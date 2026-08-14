@@ -56,5 +56,6 @@ releases/vX.Y.Z-evidence.md
 ## Current known snapshots
 
 - `2026-08-07-full-product-audit.md` — historical full product audit from the initial long stabilization analysis. Some TODOs in it were later resolved; do not treat its status matrix as current.
+- `releases/v1.3.0-evidence.md` — frozen trusted-certificate/CERT-013/release-publication evidence for the v1.3.0 boundary. Current guarantees are compacted into `../EVIDENCE_LEDGER.md`.
 
 Update this short index when a deliberately retained archive snapshot is added. Do not turn the index into another history log.

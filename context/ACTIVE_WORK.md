@@ -5,15 +5,12 @@ Updated: 2026-08-14
 ## Repository / release
 
 - Repository: `bakunity/RDP`.
-- Stable published release: **v1.2.1**.
-- PR #32 CERT-013 Windows lifecycle integration: merged as `c23c168a7719a31b4958a4eee555828858d0507c` after complete bounded live acceptance.
-- PR #33 core trusted-certificate documentation reconciliation: merged as `636cea40342760d3dd1b9127f41c9e7d07e7b211`; CI #418 PASS.
-- PR #34 README/public-site reconciliation: merged as `57004e2d7e047655fd7ab5f4edb931a32cd1dba3`; CI #420 PASS.
-- Next release boundary is **v1.3.0**: a backward-compatible MINOR capability release, not a v1.2.x patch.
-- Draft PR #35 `release: Hermes RDP v1.3.0` is open.
-- Atomic release tree head `13e2716276177849cb02a42864f824747537d88f`: CI #422 PASS.
-- After reconciling the first release-candidate context checkpoint, PR #35 head `8555aa3977f0f954f11fdf944a5ebedeeb3d815c`: CI #424 Linux full release checks + Windows PowerShell 5.1 PASS.
-- **Do not merge PR #35 without explicit publication approval.** Merge changes `VERSION` in `main` and triggers automatic immutable tag/GitHub Release publication.
+- Stable published release: **v1.3.0**.
+- PR #35 merged as `a51e942afbd17997a8100d554f8a0b2e50d4baa7` after final exact-head CI #426 PASS.
+- Annotated tag `v1.3.0` points to that exact merge commit.
+- Release workflow run #30 completed successfully and published `Hermes RDP v1.3.0`.
+- GitHub `releases/latest` resolves to `v1.3.0`.
+- No active product PR is currently required for the release.
 
 ## Stable architecture
 
@@ -56,41 +53,24 @@ Certificate work remains outside the performance-sensitive 3-second main Agent l
 - Win10 x64 + x86 PowerShell / Sysnative OpenSSH compatibility;
 - Telegram OFF/ON/RESTART and status UX;
 - transactional Linux and Windows updater rollback;
-- bounded Windows Repair success/rollback;
-- Defender coexistence;
-- trusted public-IP certificate CERT-001 through CERT-012 bounded acceptance;
-- CERT-013 Update, Repair, clean Fresh Install, external trusted RDP and Uninstall lifecycle acceptance.
+- bounded existing-device Repair success/rollback;
+- Defender coexistence without exclusions/disablement;
+- trusted public-IP certificate lifecycle CERT-001 through CERT-013, including Fresh Install/Update/Repair/Uninstall integration and trusted external RDP.
 
-SEC-004 remains intentionally fixture-unavailable. RL-006 remains PARTIAL PASS only for its optional deferred exact-Windows one-process observation.
+Detailed v1.3.0 acceptance is frozen in `context/archive/releases/v1.3.0-evidence.md` and `docs/releases/history/v1.3.0-full.md`.
 
-## v1.3.0 release candidate
+## Current work
 
-The draft release tree contains:
+The v1.3.0 release cycle is closed. No release blocker remains.
 
-- synchronized version metadata `1.3.0`;
-- concise `docs/releases/v1.3.0.md` public notes;
-- detailed `docs/releases/history/v1.3.0-full.md` engineering history;
-- `CHANGELOG.md` v1.3.0 section;
-- `UNRELEASED.md` reset for the post-v1.3.0 cycle;
-- README/site/quickstart stable links updated to `v1.3.0`;
-- release protocol updated to exact validated-HEAD + release-body synchronization behavior.
-
-No new runtime live acceptance is required solely for this release metadata/presentation cut.
+Natural renewal-driven certificate rotation is a **deferred operational observation**, not a blocker. Do not force extra production issuance solely for evidence.
 
 ## Exact next step
 
-**Wait for explicit publication decision.**
+When the current short-lived production certificate renews naturally, capture only bounded non-secret evidence that server state updates, Windows rotates automatically and a fresh Microsoft RDP connection remains trusted.
 
-If publication is approved:
+If starting a new product feature before that natural event, select and scope the next workstream explicitly rather than reopening accepted v1.3.0 tests.
 
-1. reconcile the latest `main` context-only checkpoint into PR #35 one final time;
-2. rerun Linux + Windows PowerShell 5.1 CI on the resulting exact head;
-3. mark PR #35 ready only after PASS;
-4. merge with exact-head guard;
-5. verify immutable `v1.3.0` tag, GitHub Release body and `releases/latest`.
-
-If publication is not approved yet, leave PR #35 draft and do not modify the release branch unnecessarily.
-
-Natural renewal-driven thumbprint rotation remains a deferred operational observation and is not a v1.3.0 blocker. Do not force extra production issuance solely for evidence.
+SEC-004 remains fixture-unavailable. RL-006 remains PARTIAL only for its optional original-fixture one-process observation.
 
 Never put private keys, PFX passwords, API/device tokens, pairing codes or other secrets into context/chat.

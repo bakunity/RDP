@@ -162,3 +162,18 @@ The accepted certificate-rotation companion is now part of ordinary Windows life
 Live gates covered Update and Repair on the established fixture plus a clean Windows 10 Pro 19045 x64 / PowerShell 5.1 / Defender-enabled disposable fixture for Fresh Install, real external Microsoft RDP trust and normal Uninstall. Defender remained enabled and no Hermes exclusion was required.
 
 Accepted product/test code head was `e11cf89ed26d551ca92b4010034d6e6792a9266b` with CI #381 PASS; final evidence/privacy head `f868d8b554e4a6e1cb4a07d0625118696e946cda` passed CI #410 before merge.
+
+## 2026-08-14 — v1.3.0 published
+
+The trusted-RDP certificate cycle closed as the backward-compatible **v1.3.0** minor release.
+
+Before publication:
+
+- core docs were reconciled in PR #33 with CI #418 PASS;
+- README/public site were reconciled in PR #34 with CI #420 PASS;
+- release metadata, concise public notes, full engineering history and stable install/update links were prepared in PR #35;
+- final publication head `74834bd741b5b8794a4d0277976ea3650e35f6c2` passed exact-head CI #426 on Linux full release checks and Windows PowerShell 5.1.
+
+PR #35 merged as `a51e942afbd17997a8100d554f8a0b2e50d4baa7`. Release workflow run #30 validated the release tree, created annotated tag `v1.3.0` pointing exactly to that merge commit, published `Hermes RDP v1.3.0`, and `releases/latest` moved to v1.3.0.
+
+The next cycle starts with no open v1.3.0 release blocker. Natural certificate renewal remains a deferred operational observation rather than a release gate.

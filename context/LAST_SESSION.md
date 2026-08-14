@@ -7,36 +7,29 @@ Primary truth remains `ACTIVE_WORK.md` / `CURRENT_STATE.md` / `NEXT_WORK.md` / `
 
 ## Where this chat is now
 
-CERT-013 normal Windows lifecycle integration is complete and merged.
+Hermes RDP **v1.3.0 is published and is the current stable/latest release**.
 
-- accepted product/test code head: `e11cf89ed26d551ca92b4010034d6e6792a9266b`;
-- reconcile CI #381: Linux full release checks PASS + Windows PowerShell 5.1 PASS;
-- final evidence/privacy head: `f868d8b554e4a6e1cb4a07d0625118696e946cda`;
-- final CI #410: PASS;
-- PR #32 merged as `c23c168a7719a31b4958a4eee555828858d0507c`.
+- final release candidate head: `74834bd741b5b8794a4d0277976ea3650e35f6c2`;
+- exact-head CI #426: Linux full release checks PASS + Windows PowerShell 5.1 PASS;
+- PR #35 merged as `a51e942afbd17997a8100d554f8a0b2e50d4baa7`;
+- release workflow run #30: PASS;
+- annotated tag `v1.3.0` points exactly to the merge commit;
+- GitHub Release `Hermes RDP v1.3.0` is published and `releases/latest` resolves to it.
 
-## Live acceptance completed
+## Released product boundary
 
-### `SEC005 TEST`
+v1.3.0 includes the accepted trusted public-IP RDP certificate lifecycle and its integration into normal Windows Fresh Install, Update, Repair and Uninstall. Automatic local certificate drift recovery is accepted. Win10 x64/x86 PowerShell/Sysnative, Windows Server 2019 and Defender coexistence remain compatibility requirements.
 
-- Transactional Update: FULL PASS, final `CERT-013_UPDATE=PASS`.
-- Targeted Repair after removing only certificate-rotation task/worker: FULL PASS, final `CERT-013_REPAIR_LIVE=PASS`.
-- Identity/config/private+public SSH keys/known_hosts/Device ID/RDP port stayed unchanged.
-- Main Agent/tunnel and trusted CUSTOM RDP listener remained healthy.
-
-### Disposable fixture `DESKTOP-T9N368F`
-
-- clean Win10 Pro 19045 x64 / PowerShell 5.1 / Defender-enabled preflight: `CERT-013_CLEAN_FIXTURE=PASS`;
-- Fresh Install from accepted head: automatic certificate lifecycle, one Agent + one Hermes SSH, LocalSystem rotation task SID `S-1-5-18`, trusted CUSTOM listener, no Defender exclusion, final `CERT-013_FRESH_INSTALL=PASS`;
-- real external Microsoft RDP through `SERVER_IP_OR_DOMAIN:53394`: connection worked, trusted certificate/no self-signed warning;
-- normal Uninstall: both tasks absent, Agent/rotation/SSH counts zero, active client directory archived/removed, Defender remained enabled, final `CERT-013_UNINSTALL=PASS`.
+Detailed release evidence was frozen to `context/archive/releases/v1.3.0-evidence.md` and the default evidence ledger was compacted for the new cycle.
 
 ## Exact resume action
 
-1. Delete disposable `CERT013 FRESH` device in Telegram so its token/key are revoked and port `53394` is freed.
-2. Reconcile README/docs/website with the now-merged automatic trusted-certificate lifecycle.
-3. Decide the next patch/minor release boundary from `docs/releases/UNRELEASED.md`; do not publish automatically.
+No v1.3.0 release work remains.
 
-Natural renewal-driven certificate rotation remains deferred/non-blocking. Do not force production issuance solely for evidence.
+When the short-lived production certificate renews naturally, collect only bounded non-secret evidence that server state refreshes, Windows rotates automatically and fresh Microsoft RDP remains trusted. Do not force extra production issuance solely for evidence.
 
-Do not repeat CERT-013 live tests without a concrete regression reason. Never place private keys, PFX passwords, API/device tokens or pairing codes into context/chat.
+If development continues before that event, explicitly select the next product workstream and create a new branch from current `main`; do not reopen accepted v1.3.0 runtime tests without regression evidence.
+
+RL-006 remains optional/partial on the original exact fixture. SEC-004 remains fixture-unavailable.
+
+Never place private keys, PFX passwords, API/device tokens or pairing codes into context/chat.

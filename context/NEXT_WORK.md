@@ -10,53 +10,26 @@ Ship a stable self-hosted product where a user can install Hermes on Debian/Ubun
 
 ## Stable release
 
-**Hermes RDP v1.2.1** remains the published stable release until draft PR #35 is explicitly approved and merged. Historical tags are immutable.
+**Hermes RDP v1.3.0** is the current published stable release. Historical tags are immutable.
 
-## Immediate work
+## Remaining work
 
-### 1. v1.3.0 publication decision
-
-The next release is **v1.3.0**, not v1.2.2, because the cycle adds a new backward-compatible trusted RDP certificate capability across server, API and Windows lifecycle.
-
-Draft PR #35 contains:
-
-- synchronized `1.3.0` version metadata;
-- concise public release notes;
-- full engineering history;
-- changelog;
-- post-release `UNRELEASED` reset;
-- README/site/quickstart stable `v1.3.0` links;
-- corrected release-process documentation.
-
-CI evidence:
-
-- atomic release tree head `13e2716276177849cb02a42864f824747537d88f`: CI #422 PASS;
-- reconciled pre-approval head `8555aa3977f0f954f11fdf944a5ebedeeb3d815c`: CI #424 PASS.
-
-PR #35 remains draft intentionally.
-
-Do not merge automatically. Merge changes `VERSION` in `main` and triggers immutable tag + GitHub Release publication.
-
-On explicit approval:
-
-1. reconcile the latest context-only `main` checkpoint into PR #35 one final time;
-2. rerun exact-head Linux + Windows PowerShell 5.1 CI;
-3. mark ready only after PASS;
-4. merge with exact-head guard;
-5. verify `v1.3.0` tag, GitHub Release body and latest-release pointer.
-
-### 2. Natural renewal observation — deferred/non-blocking
+### 1. Natural certificate renewal observation — deferred/non-blocking
 
 When the current short-lived production certificate renews naturally:
 
-- capture old/new server thumbprints;
-- confirm server non-secret state refreshes;
-- confirm Windows worker detects the changed thumbprint and rotates automatically;
-- confirm fresh Microsoft RDP remains trusted.
+- confirm server non-secret state changes to the new certificate;
+- confirm the Windows rotation worker detects the changed desired thumbprint;
+- confirm automatic rotation succeeds without manual certificate setup;
+- confirm a fresh Microsoft RDP connection remains trusted.
 
-Do **not** force unnecessary production issuance solely for this observation.
+Do **not** force production issuance solely for this observation.
+
+### 2. Next product workstream
+
+No v1.3.0 release blocker or unfinished lifecycle stage remains. Select the next product feature/phase explicitly before creating a new branch. Do not repeat accepted v1.3.0 runtime tests unless a relevant change creates regression risk.
 
 ## Optional deferred items
 
-- RL-006 remains PARTIAL only for an optional final Windows one-process observation on the original exact fixture after already-clean reconnect cycles. Do not repeat the stress test.
+- RL-006 remains PARTIAL only for an optional final `HermesSshCount == 1` observation on the original exact Windows fixture after already-clean reconnect cycles. Do not repeat the stress test.
 - SEC-004 remains fixture-unavailable; do not reconstruct revoked credentials solely for artificial evidence.
