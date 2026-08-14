@@ -55,31 +55,36 @@ Read-only live inventory on the certificate host:
 - This proves the public path Internet -> TCP 80 -> host firewall -> local HTTP listener for HTTP-01 validation.
 - Do not repeat CERT-003 unless firewall/network state changes or ACME validation later contradicts it.
 
-### CERT-004 — Let’s Encrypt staging IP issuance — PASS
+### CERT-004 — staging public-IP issuance — PASS
 
-- Temporary CERT-003 listener was removed before issuance and TCP `80` was free for Certbot standalone.
-- Certbot standalone + HTTP-01 successfully obtained a Let’s Encrypt staging certificate for the public IPv4 identity using the `shortlived` profile.
-- Certificate lineage was created under `/etc/letsencrypt/live/<public-ip>/`.
-- Leaf certificate identity is carried in a critical Subject Alternative Name as an IP Address.
-- Key type: RSA 2048.
-- Extended Key Usage: TLS Web Server Authentication.
-- Validity matches the short-lived IP-certificate model (about 160 hours / just over six days).
-- Issuer is a Let’s Encrypt staging CA, so the current artifact is intentionally not publicly trusted and must not be deployed to Windows RDP.
-- TCP `80` was free again after Certbot completed.
-- Windows/RDP listener state remains unchanged.
+- Let’s Encrypt staging issuance succeeded with Certbot standalone HTTP-01 and `shortlived` profile.
+- Leaf SAN is critical and contains the public IPv4 identifier.
+- EKU is `TLS Web Server Authentication`.
+- RSA 2048 key requested; validity matches the short-lived IP-certificate profile.
+- TCP `80` was free again after Certbot exited.
+- Staging issuer is intentionally untrusted and is not for Windows deployment.
+
+### CERT-005 — staging chain/key/renewal mechanics — PASS
+
+- `cert.pem`, `chain.pem`, `fullchain.pem` and `privkey.pem` are present.
+- Certificate public key matches the private key (`PUBLIC_KEY_MATCH=PASS`).
+- Staging fullchain parsed successfully as three certificates.
+- Renewal config retains `rsa`, `2048`, `shortlived`, staging ACME server and `standalone` authenticator.
+- `certbot renew --cert-name <public-ip> --dry-run --non-interactive` succeeded.
+- TCP `80` was free both before and after the dry-run.
+- Evidence boundary: renewal **mechanics** are proven; automatic scheduling via systemd/cron has not yet been verified for this pip/venv install and remains required before Windows rollout.
 
 ## Exact resume action
 
-**CERT-005:** inspect the staging lineage/chain and renewal metadata without exposing private-key material, confirm certificate/private-key consistency by public-key comparison, and verify that standalone HTTP-01 + `shortlived` are preserved for future renewal. Do not mutate Windows/RDP yet.
+**CERT-006:** replace the staging lineage with a real Let’s Encrypt **production** public-IP certificate using the same proven standalone HTTP-01 + `shortlived` + RSA parameters. Before deleting the staging lineage, verify there are no external service references to it; use `certbot delete`, never manual deletion under `/etc/letsencrypt`.
 
-After CERT-005 passes:
+After production issuance succeeds:
 
-1. remove/replace the staging lineage cleanly and perform one bounded **production** issuance for the public IP;
-2. inspect the production SAN, issuer/chain, EKU and validity;
-3. design automated renewal because IP certificates are short-lived and standalone must be able to bind TCP `80`;
-4. design secure certificate/private-key delivery to the Windows RDP listener;
-5. validate first on the non-critical `SEC005 TEST` device while keeping the current self-signed RDP listener state as rollback;
-6. only after user-facing Microsoft RDP trust acceptance expand to other devices.
+1. inspect production SAN, issuer/chain, EKU and validity and verify the certificate/key match;
+2. verify/configure an actual automatic renewal scheduler and a safe deploy/rotation hook path;
+3. design secure certificate/private-key delivery to the Windows RDP listener without exposing secret material;
+4. validate first on the non-critical `SEC005 TEST` device while keeping the current self-signed RDP listener state as rollback;
+5. only after user-facing Microsoft RDP trust acceptance expand to other devices.
 
 Do not expose private keys, pairing codes, API tokens or secret-bearing certificate material in chat/context.
 
