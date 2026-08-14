@@ -9,9 +9,8 @@ For immediate operational truth read `ACTIVE_WORK.md`; for detailed historical p
 - Stable published release: **v1.2.1**.
 - PR #19–#25: merged and live-accepted stabilization work.
 - PR #26: documentation reconciliation merged.
-- PR #27: `v1.2.0` release PR merged, but automated tag selected an intermediate VERSION-changing commit rather than the complete release tree.
-- Published `v1.2.0` tag is not rewritten; it remains historical evidence of the packaging error.
-- PR #28: `v1.2.1` packaging hotfix merged after Linux + Windows PowerShell 5.1 CI PASS.
+- PR #27: `v1.2.0` release PR merged, but its tag captured an intermediate release tree; historical tag is not rewritten.
+- PR #28: `v1.2.1` packaging hotfix merged and is the stable release.
 
 ## Runtime architecture
 
@@ -48,43 +47,36 @@ Do not repeat without a concrete regression reason:
 - Win10 x64 + x86 PowerShell/Sysnative;
 - Telegram OFF/ON/RESTART and automatic dashboard refresh;
 - Stage 3 security/device lifecycle acceptance;
-- transactional server updater success/rollback;
-- transactional Windows updater success/rollback;
-- existing-device Repair success/rollback;
-- Telegram Repair screen and deterministic new-code retry UX;
+- transactional server/Windows updater rollback acceptance;
+- existing-device Repair acceptance;
 - Microsoft Defender real-time protection coexistence.
 
-SEC-004 remains intentionally fixture-unavailable. RL-006 remains PARTIAL PASS only for its deferred exact-Windows one-process observation; do not repeat the five-cycle stress test.
+SEC-004 remains intentionally fixture-unavailable. RL-006 remains PARTIAL PASS only for its deferred exact-Windows one-process observation.
 
 ## Release automation follow-up
 
-Prepared branch `fix/release-tag-head-v2` at `ef32b8dd95ffa1c274dc1749eae736867d2fb74b` changes release tagging to exact validated workflow `HEAD` and adds a regression assertion. No PR is open yet; certificate work remains higher priority.
+Prepared branch `fix/release-tag-head-v2` at `ef32b8dd95ffa1c274dc1749eae736867d2fb74b` remains secondary to certificate work; no PR is open yet.
 
 ## Current certificate state
 
-The trusted-certificate track targets the **public IP**, not a new domain.
+Trusted-certificate track targets the **public IP**, not a new domain.
 
-Server-side certificate evidence now accepted:
+Server-side evidence accepted:
 
-- Debian GNU/Linux 13 (trixie);
-- Certbot 5.7.0 installed under `/opt/certbot` with `/usr/local/bin/certbot` entry point;
-- CERT-003 public HTTP-01 reachability: PASS; UFW explicitly allows `80/tcp`;
+- Certbot 5.7.0 under `/opt/certbot` with `/usr/local/bin/certbot` entry point;
+- CERT-003 public HTTP-01 reachability: PASS; UFW allows `80/tcp`;
 - CERT-004 staging public-IP issuance: PASS;
-- CERT-005 certificate/key/fullchain inspection and renewal dry-run mechanics: PASS;
-- CERT-006 real Let’s Encrypt production public-IP issuance: PASS;
-- production SAN contains the public IPv4 identifier;
-- EKU is TLS Web Server Authentication;
-- issuer is production Let’s Encrypt `YR1`, not staging;
-- certificate/private-key public keys match;
-- local CA trust verification returns `OK`;
-- production renewal config uses standalone HTTP-01, RSA 2048 and the `shortlived` profile;
-- TCP `80` is free after issuance;
-- no Windows RDP certificate binding has been changed yet.
+- CERT-005 key/fullchain inspection and renewal dry-run mechanics: PASS;
+- CERT-006 real production Let’s Encrypt public-IP issuance: PASS;
+- production issuer is Let’s Encrypt `YR1`; IP SAN, TLS Server Authentication EKU, RSA 2048, key match and local trust validation all confirmed;
+- production renewal config uses standalone HTTP-01 and `shortlived`;
+- TCP `80` is free;
+- no Windows RDP certificate binding has been changed.
 
-The certificate is intentionally short-lived, so reliable automatic renewal and deploy/rotation are mandatory before user-facing rollout.
+CERT-007 scheduler inventory is also complete. It found **no systemd timer, no matching service/unit and no cron entry invoking `certbot renew`**. Therefore automatic renewal is currently absent even though manual/dry-run renewal mechanics work. The current production certificate expires on 2026-08-20 21:54:07 UTC, so scheduler installation is a blocker before Windows rollout.
 
 ## Exact next step
 
-Run **CERT-007**: inspect whether this pip/venv Certbot installation already has a real systemd/cron renewal scheduler. If not, install a Hermes-owned systemd service/timer, then verify its exact command, next-run state, logging and safe interaction with standalone TCP `80`.
+Run **CERT-008**: install and validate a Hermes-owned systemd service/timer that periodically invokes normal `certbot renew` (never forced renewal), with persistent scheduling, randomized delay, logging and failure visibility. Then prove a bounded manual invocation succeeds without renewing early or leaving TCP `80` occupied.
 
-After that, design the secure Windows certificate/key model and integrate the proven certificate lifecycle into Hermes RDP before first binding on `SEC005 TEST`.
+After scheduler acceptance, design the successful-renewal deploy/rotation hook and the secure Windows certificate/private-key model, then integrate the lifecycle into Hermes RDP before first listener binding on `SEC005 TEST`.
