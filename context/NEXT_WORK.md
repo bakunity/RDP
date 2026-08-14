@@ -18,46 +18,36 @@ Ship a stable self-hosted product where a user can install Hermes on Debian/Ubun
 
 Already complete:
 
-- CERT-001 server inventory: PASS.
-- CERT-002 Certbot 5.7.0 installation: PASS.
-- CERT-003 public HTTP-01 reachability: PASS.
-- CERT-004 Let’s Encrypt staging public-IP issuance: PASS.
-- CERT-005 key/fullchain/renewal dry-run: PASS.
-- CERT-006 production public-IP issuance: PASS.
-- CERT-007 scheduler inventory: PASS; missing scheduler gap confirmed.
-- CERT-008 Hermes-owned automatic renewal: live PASS.
-- CERT-009 productized server lifecycle: live PASS and PR #29 merged as `33c7b6ac6e5a6fb732963988c4734a8a7ef8ec5e`.
-- CERT-010 read-only `SEC005 TEST` Windows RDP certificate inventory: PASS.
+- CERT-001 through CERT-010: PASS.
+- PR #29 server certificate lifecycle: merged/live accepted.
+- CERT-011 core trusted binding: PASS on `SEC005 TEST`.
+- Fresh Microsoft Remote Desktop connection through Hermes accepted the production Let’s Encrypt public-IP certificate and reported the server certificate as verified.
 
-CERT-011 partial acceptance complete:
+PR #30 current state:
 
-- draft PR #30 `feat: add authenticated Windows RDP certificate rotation`;
-- tested/deployed head `af054274405c33849b8bbdee0a730320a8b5ab33`;
-- CI #324 PASS: Linux full release checks + Windows PowerShell 5.1;
-- transactional server updater deploy: PASS;
-- current trusted certificate serial unchanged during deploy;
-- package helper/sudoers and real `hermes-rdp -> sudo` helper execution: PASS;
-- controller, sshd and renewal timer active; TCP 80 free;
-- `SEC005 TEST` authenticated package retrieval: PASS;
-- PFX import into `LocalMachine\My`: PASS;
-- imported CNG private key verified non-exportable;
-- `NETWORK SERVICE` Read ACL: PASS;
-- RDP listener switched to CUSTOM trusted-certificate thumbprint;
-- TCP 3389 remained listening;
-- previous self-signed thumbprint and rollback data preserved.
+- draft `feat: add authenticated Windows RDP certificate rotation`;
+- current head `83e1b0b5d89b2728646a8eb518026ba9d1cf575a`;
+- CI #324 initial implementation: Linux PASS + Windows PowerShell 5.1 PASS;
+- live server deploy of initial head: PASS;
+- Windows authenticated package, non-exportable CNG key, NetworkService Read, CUSTOM binding and 3389 listener: PASS;
+- external trusted Microsoft RDP connection: PASS;
+- first rollback attempt exposed confirmed default-self-signed restoration bug;
+- live root cause: default self-signed is hash type `1` with no explicit `SSLCertificateSHA1Hash`, so it must be restored by removing the custom registry binding rather than setting its thumbprint as CUSTOM;
+- corrected manual rollback: PASS; exact original self-signed thumbprint/hash type restored and TCP 3389 remained listening;
+- PR fix uses type-aware rollback for explicit and automatic failure paths;
+- CI #333 on fixed head: Linux PASS + Windows PowerShell 5.1 PASS.
 
 Next:
 
-- open a **new** Microsoft Remote Desktop connection from a separate client through the normal Hermes public endpoint for `SEC005 TEST`;
-- verify connection succeeds and the old certificate trust/identity warning is absent;
-- if a warning remains, capture its exact text/screenshot rather than changing more state;
-- after external PASS, execute the explicit Hermes rollback once, confirm the old binding returns, then reapply the trusted binding and reconnect again;
-- after bounded bind/rollback acceptance, integrate periodic certificate sync into the normal Hermes Windows agent;
-- trigger sync only when the server certificate thumbprint changes or local binding drifts;
-- validate one actual renewal-driven rotation cycle before rollout to other devices;
-- then make trusted certificate delivery/rotation a polished normal Hermes installation/update feature and merge PR #30.
+1. While `SEC005 TEST` is currently on restored default self-signed state, open one fresh external RDP connection and confirm access still works; the original certificate warning is expected.
+2. Reapply trusted binding using fixed head `83e1b0b...`.
+3. Confirm local CUSTOM binding / TCP 3389 and one fresh external trusted reconnect.
+4. Mark PR #30 merge-ready and merge after those bounded checks.
+5. Integrate periodic certificate sync into the normal Hermes Windows agent, triggered only when the server certificate thumbprint changes or local binding drifts.
+6. Validate one real renewal-driven rotation cycle before expanding to other devices.
+7. Then make trusted certificate delivery/rotation a polished normal Hermes installation/update feature.
 
-Architecture constraint: one independent Let’s Encrypt public-IP certificate per Windows device is not the scalable default because all devices share the same exact public-IP identifier set and CA issuance limits apply. Use one short-lived lineage per Hermes server plus authenticated distribution/rotation.
+Architecture constraint: use one short-lived public-IP lineage per Hermes server plus authenticated distribution/rotation; independent duplicate public-IP certificates per Windows device are not the scalable default.
 
 ### 2. Release automation hardening
 
