@@ -1,0 +1,87 @@
+Да, но с важным разделением:
+
+**Полностью перенести Hermes RDP на инфраструктуру Vercel — нет.
+Построить Hermes так, чтобы Vercel был основной платформой, доменом и control plane, а один внешний сервис выполнял TCP/RDP-транспорт — да.** ([Vercel][1])
+
+Я посмотрел актуальные возможности Vercel. Проблема не в Python/Node, Docker или базе. Vercel сейчас даже поддерживает container-based functions, но они всё равно **stateless/request-driven**, масштабируются до нуля и не являются постоянно работающим сервером. Functions также имеют максимальную длительность выполнения — до 300 секунд на Hobby и до 800 секунд на Pro/Enterprise при Fluid Compute. ([Vercel][2])
+
+Для Hermes критичны другие вещи: постоянно работающий `sshd`, входящий raw TCP на `7000`, постоянно открываемые RDP listeners вроде `53389–53420`, долгоживущие reverse SSH-соединения и произвольный TCP forwarding. Модель Vercel ориентирована на web-request → function → response; даже WebSocket server Vercel Functions официально не поддерживают. Поэтому разместить наш `hermes-rdp-sshd` прямо как Vercel Function/Container не получится. ([Vercel][3])
+
+При этом **почти весь остальной Hermes вполне можно вынести в Vercel**:
+
+```text
+                 ┌────────────────────────────┐
+                 │          VERCEL            │
+                 │                            │
+Telegram ───────▶│ Hermes API / Controller    │
+Browser ────────▶│ Web dashboard              │
+                 │ Auth / UI / API            │
+                 │ DB / Queue / Marketplace   │
+                 └─────────────┬──────────────┘
+                               │
+                               │ control
+                               ▼
+                    ┌─────────────────────┐
+                    │ TCP Gateway         │
+                    │ маленький VPS/VM    │
+                    │                     │
+                    │ sshd :7000          │
+                    │ RDP :53389-53420    │
+                    └─────────┬───────────┘
+                              │
+                       reverse OpenSSH
+                              │
+             ┌────────────────┼────────────────┐
+             ▼                ▼                ▼
+          Windows 1        Windows 2        Windows 3
+```
+
+База, очередь, логирование, storage, realtime и часть security можно подключать через Marketplace. Но Marketplace в основном предоставляет внешние managed-сервисы через интеграции; он не превращает Vercel Functions в VPS с произвольными TCP listeners. ([Vercel][4])
+
+### А вот с доменом — да, вообще без проблем
+
+Если речь про **твой собственный домен, которым управляет Vercel**, можно сделать, например:
+
+```text
+hermes.example.com        → Vercel dashboard
+api.hermes.example.com    → Vercel API
+
+rdp.hermes.example.com    → внешний TCP gateway
+```
+
+Vercel DNS официально позволяет направить поддомен через `A`/`CNAME` на внешний сервис. То есть сам домен спокойно остаётся под управлением Vercel, хотя RDP-трафик физически идёт непосредственно на gateway. ([Vercel][5])
+
+И это очень хорошо ложится на нашу будущую сертификатную схему:
+
+```text
+rdp.hermes.example.com:53389 → PC 1
+rdp.hermes.example.com:53390 → PC 2
+rdp.hermes.example.com:53391 → PC 3
+```
+
+DNS `rdp.hermes.example.com` указывает на gateway, а **сам TLS сертификат RDP предъявляет Windows RDP Listener**, потому что SSH-туннель просто переносит TCP. То есть HTTPS-сертификат Vercel здесь отдельно от RDP-сертификата.
+
+Если же под «доменом Vercel» ты имеешь в виду именно:
+
+```text
+something.vercel.app
+```
+
+то **для самого RDP endpoint — нет**. Этот адрес принадлежит deployment routing Vercel, и мы не можем сделать из `something.vercel.app:53389` произвольный внешний TCP endpoint. Для сайта/API — да; для Hermes RDP transport — нет.
+
+И есть ещё интересный вариант: Vercel может проксировать **HTTP/HTTPS API** на внешний origin через rewrites, поэтому даже внешний backend можно спрятать под одним web-доменом. Но это именно HTTP reverse proxy, не замена нашего raw TCP/RDP gateway. ([Vercel][6])
+
+Так что итог для нашей архитектуры:
+
+**Vercel-only: ❌ нет.**
+
+**Vercel + Marketplace + маленький TCP gateway: ✅ да, причём архитектурно это может быть даже лучше нынешней схемы.**
+
+В таком варианте Linux-сервер превращается практически в **тонкий data-plane узел**, а Telegram, API, панель, registry, управление устройствами, пользователи, обновления и остальная логика могут жить в Vercel. Это уже намного ближе к нормальному масштабируемому SaaS Hermes RDP, чем текущий монолитный сервер.
+
+[1]: https://vercel.com/docs/functions/configuring-functions/duration?utm_source=chatgpt.com "Configuring Maximum Duration for Vercel Functions"
+[2]: https://vercel.com/kb/guide/does-vercel-support-docker-deployments?utm_source=chatgpt.com "Does Vercel support Docker deployments? | Vercel Knowledge Base"
+[3]: https://vercel.com/docs/functions/functions-api-reference?utm_source=chatgpt.com "Functions API Reference"
+[4]: https://vercel.com/marketplace/program?utm_source=chatgpt.com "Marketplace Program - Vercel"
+[5]: https://vercel.com/docs/domains/working-with-domains?utm_source=chatgpt.com "Working with domains"
+[6]: https://vercel.com/docs/routing/rewrites?utm_source=chatgpt.com "Rewrites on Vercel"
