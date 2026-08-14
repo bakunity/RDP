@@ -6,7 +6,13 @@ Status: rolling engineering release ledger. Update continuously; do not wait unt
 
 ## Merged / current main since v1.3.0
 
-No post-v1.3.0 product changes recorded yet.
+### Vercel deployment filtering
+
+- Fixed the public-site Git integration creating Vercel deployments for unrelated product/runtime/context commits.
+- Vercel Git deployments are now disabled for every branch except `main`.
+- `main` uses `VERCEL_GIT_PREVIOUS_SHA` and only continues the website build when `index.html`, `assets/**`, `robots.txt` or `site.webmanifest` changed.
+- Existing Vercel security headers and redirects remain intact.
+- A regression assertion in `tests/test_site_openssh_content.py` guards the branch and path filters.
 
 ## Deferred observation / not a blocker
 
