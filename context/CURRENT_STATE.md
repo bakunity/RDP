@@ -11,7 +11,8 @@ For immediate operational truth read `ACTIVE_WORK.md`; for detailed historical p
 - PR #26: documentation reconciliation merged.
 - PR #27: `v1.2.0` historical packaging-error release; tag is not rewritten.
 - PR #28: `v1.2.1` packaging hotfix merged and remains stable.
-- PR #29 trusted public-IP certificate lifecycle has completed CI and immutable live acceptance; it is ready for merge/reconciliation.
+- PR #29 trusted public-IP server certificate lifecycle is merged as `33c7b6ac6e5a6fb732963988c4734a8a7ef8ec5e`.
+- Draft PR #30 is the active Windows certificate delivery/binding work.
 
 ## Runtime architecture
 
@@ -33,9 +34,9 @@ Admin SSH remains independent from Hermes tunnel SSH. FRP is not active runtime.
 
 ## Live deployment truth
 
-- Production controller still runs accepted PR #25 head `0e2e7aef77ab1df804b70d9fd29d4b5736fbac60`.
-- Certificate lifecycle setup did not redeploy the controller or dedicated sshd product code.
-- `SEC005 TEST` remains the first non-critical Windows fixture for future certificate binding.
+- Existing production controller/runtime remains unchanged until PR #30 is explicitly deployed.
+- Server-side trusted public-IP issuance and renewal are live-proven.
+- `SEC005 TEST` is the first non-critical Windows fixture for listener binding.
 
 ## Accepted stabilization baseline
 
@@ -54,57 +55,58 @@ Do not repeat without a concrete regression reason:
 
 SEC-004 remains intentionally fixture-unavailable. RL-006 remains PARTIAL PASS only for its deferred exact-Windows one-process observation.
 
-## Current certificate state
+## Trusted certificate state
 
-Trusted-certificate track targets the existing public IPv4, not a cosmetic domain.
-
-Server-side issuance and renewal are accepted:
+Server-side certificate lifecycle is accepted:
 
 - Certbot 5.7.0 under `/opt/certbot`;
-- public HTTP-01 reachability through UFW/TCP 80: PASS;
-- staging public-IP issuance: PASS;
-- key/fullchain and renewal dry-run mechanics: PASS;
-- production Let’s Encrypt public-IP issuance: PASS;
-- production issuer, IP SAN, Server Authentication EKU, RSA 2048, certificate/key match and local trust verification confirmed;
+- public HTTP-01 reachability through UFW/TCP 80;
+- staging and production public-IP issuance;
+- production IP SAN, Server Authentication EKU, RSA 2048, certificate/key match and local trust verification;
 - Hermes-owned renewal service/timer enabled and active;
-- bounded renewal service execution returns success and does not renew early;
+- bounded renewal service execution succeeds without renewing early;
+- PR #29 productized setup reused the live production lineage without changing its serial;
 - TCP 80 is free after lifecycle operations.
 
-CERT-009 productization live acceptance is PASS on immutable PR #29 head `e914a0f45a6cc734d25b02340353fc06ace6c7c8`:
+## CERT-010 Windows baseline — PASS
 
-- existing production lineage was reused;
-- certificate serial before/after was identical;
-- no new certificate request occurred;
-- trusted-certificate config/marker was written correctly;
-- repository-owned renewal timer remained enabled/active;
-- renewal smoke returned `PASS_NOT_DUE`;
-- TCP 80 remained free;
-- rollback backup existed before adoption.
+Read-only live inventory on `SEC005 TEST`:
 
-No Windows RDP listener certificate binding has changed yet.
+- Windows 10 Pro 19045 x64;
+- Windows PowerShell 5.1 x64;
+- `TermService` Running / Automatic under NetworkService;
+- `RDP-Tcp` TerminalServices CIM provider available;
+- current RDP certificate is the default self-signed certificate (`hash type 1`), present in `LocalMachine\Remote Desktop` with private key and Server Authentication EKU;
+- no explicit registry certificate hash binding exists;
+- certificate import/CIM tools are present;
+- RDP listener 3389 is listening on IPv4 and IPv6.
 
-## Windows delivery security boundary
+This provides a clean rollback baseline. No mutation occurred.
 
-Current Hermes device authentication already provides useful primitives for CERT-010:
+## PR #30 / CERT-011 implementation state
 
-- per-device bearer token generated with high entropy at pairing;
-- only SHA-256 token hash stored server-side;
-- constant-time token-hash comparison during authentication;
-- Windows API client pins the server TLS certificate fingerprint;
-- Windows local `device.json`, SSH private key and `known_hosts` are ACL-restricted to SYSTEM and Administrators.
+Draft PR #30 branch `feat/windows-rdp-cert-rotation`, tested head `af054274405c33849b8bbdee0a730320a8b5ab33`.
 
-A Windows certificate package must therefore travel only through the existing pinned HTTPS + authenticated device channel, never through a static/public URL.
+Implemented security model:
 
-For the scalable model, one short-lived public-IP lineage is shared per Hermes server. Separate public certificates per Windows device do not scale because every device uses the same public-IP identifier set and CA duplicate/exact-set issuance limits apply.
+- existing per-device bearer token authenticates the certificate-package endpoint;
+- API TLS remains fingerprint-pinned on Windows;
+- privileged helper has no client-controlled path/command input and reads only the configured Hermes trusted lineage;
+- exact sudoers command boundary, not broad root/filesystem access;
+- PFX is generated ephemerally and not persisted server-side;
+- Windows temporary PFX is ACL-restricted and deleted after import;
+- LocalMachine import omits `-Exportable` and code verifies the resulting RSA key is non-exportable;
+- NetworkService SID receives private-key Read;
+- old listener thumbprint is captured before mutation;
+- custom RDP binding and TCP 3389 are checked;
+- local failure attempts immediate functional rollback to the old thumbprint.
+
+CI #324: Linux full release checks PASS and Windows PowerShell 5.1 PASS.
+
+No PR #30 server deploy has occurred yet and no Windows listener state has changed.
 
 ## Exact next step
 
-Merge/reconcile PR #29 after its PASS gate, then start **CERT-010** with a read-only inventory on `SEC005 TEST` before any listener mutation:
+Deploy immutable PR #30 head `af054274405c33849b8bbdee0a730320a8b5ab33` through `scripts/update-server.sh` on the current Linux certificate host. Verify transactional `UPDATE=PASS` before any Windows mutation.
 
-- current `Win32_TSGeneralSetting` RDP listener certificate hash/hash type;
-- current certificate object represented by that hash, if present;
-- TermService state;
-- availability of the TerminalServices CIM provider;
-- LocalMachine certificate-store behavior required for non-exportable PFX import and rollback.
-
-Only after that inventory implement authenticated certificate package delivery, non-exportable LocalMachine import, NETWORK SERVICE private-key read ACL, thumbprint binding and deterministic rollback.
+After server deploy, run the immutable CERT-011 sync only on `SEC005 TEST`, then perform a real new Microsoft Remote Desktop connection and verify the intended certificate warning/name behavior. Periodic agent rotation is deferred until this bounded binding is live-accepted.
