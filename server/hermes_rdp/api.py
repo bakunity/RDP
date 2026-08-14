@@ -7,6 +7,7 @@ import subprocess
 import time
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
@@ -22,6 +23,7 @@ TLS_HANDSHAKE_TIMEOUT_SECONDS = 5
 CLIENT_SOCKET_TIMEOUT_SECONDS = 30
 CERT_PACKAGE_HELPER = "/usr/local/sbin/hermes-rdp-cert-package"
 CERT_PACKAGE_TIMEOUT_SECONDS = 30
+CERT_STATE_FILE = Path("/etc/hermes-rdp/trusted-rdp-cert-state.json")
 
 
 class ApiServer(ThreadingHTTPServer):
@@ -149,6 +151,9 @@ class ApiHandler(BaseHTTPRequestHandler):
                     return
                 if action == "rdp-certificate":
                     self._rdp_certificate(device_id)
+                    return
+                if action == "rdp-certificate-status":
+                    self._rdp_certificate_status(device_id)
                     return
             self._json(HTTPStatus.NOT_FOUND, {"ok": False, "error": "not found"})
         except json.JSONDecodeError:
@@ -279,6 +284,48 @@ class ApiHandler(BaseHTTPRequestHandler):
         except Exception as exc:
             LOG.warning("self-revoke tunnel close failed: %s", exc)
         self._json(HTTPStatus.OK, {"ok": True})
+
+    def _rdp_certificate_status(self, device_id: str) -> None:
+        if not self._device_auth(device_id):
+            self._json(HTTPStatus.UNAUTHORIZED, {"ok": False, "error": "unauthorized"})
+            return
+        self._read_json()
+        if not CERT_STATE_FILE.is_file():
+            self._json(HTTPStatus.OK, {"ok": True, "enabled": False})
+            return
+        try:
+            payload = json.loads(CERT_STATE_FILE.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            LOG.warning("trusted RDP certificate state is unreadable")
+            self._json(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                {"ok": False, "error": "certificate state unavailable"},
+            )
+            return
+        if not isinstance(payload, dict) or payload.get("enabled") is not True:
+            self._json(HTTPStatus.OK, {"ok": True, "enabled": False})
+            return
+        thumbprint = str(payload.get("thumbprint", "")).strip().upper()
+        if len(thumbprint) != 40 or any(c not in "0123456789ABCDEF" for c in thumbprint):
+            LOG.warning("trusted RDP certificate state has invalid thumbprint")
+            self._json(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                {"ok": False, "error": "certificate state unavailable"},
+            )
+            return
+        self._json(
+            HTTPStatus.OK,
+            {
+                "ok": True,
+                "enabled": True,
+                "certificate": {
+                    "cert_name": str(payload.get("cert_name", "")),
+                    "thumbprint": thumbprint,
+                    "not_after": str(payload.get("not_after", "")),
+                    "generated_at": int(payload.get("generated_at", 0) or 0),
+                },
+            },
+        )
 
     def _rdp_certificate(self, device_id: str) -> None:
         if not self._device_auth(device_id):

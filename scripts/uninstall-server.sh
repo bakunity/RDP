@@ -22,6 +22,7 @@ for path in \
   /etc/systemd/system/hermes-rdp-cert-renew.service \
   /etc/systemd/system/hermes-rdp-cert-renew.timer \
   /usr/local/sbin/hermes-rdp-cert-renew \
+  /usr/local/sbin/hermes-rdp-cert-state-refresh \
   /usr/local/sbin/hermes-rdp-cert-package \
   /etc/sudoers.d/hermes-rdp \
   /etc/sudoers.d/hermes-rdp-cert-package; do
@@ -45,6 +46,7 @@ rm -f \
   /usr/local/bin/hermes-rdp-authorized-keys \
   /usr/local/sbin/hermes-rdp-close-tunnel \
   /usr/local/sbin/hermes-rdp-cert-renew \
+  /usr/local/sbin/hermes-rdp-cert-state-refresh \
   /usr/local/sbin/hermes-rdp-cert-package
 
 systemctl daemon-reload
