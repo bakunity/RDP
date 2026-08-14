@@ -6,98 +6,107 @@ Updated: 2026-08-14
 
 - Repository: `bakunity/RDP`.
 - Stable published release: **v1.2.1**.
-- PR #19–#25: merged / runtime accepted stabilization work.
-- PR #26 documentation reconciliation: merged.
-- PR #27 `v1.2.0`: historical packaging-error release; published tag is intentionally not rewritten.
-- PR #28 `v1.2.1`: merged packaging hotfix; Linux + Windows PowerShell 5.1 CI PASS.
-- PR #29 trusted public-IP certificate lifecycle: **merged** as `33c7b6ac6e5a6fb732963988c4734a8a7ef8ec5e` after immutable live acceptance.
-- Production controller/app is currently deployed on PR #30 initial accepted server head `af054274405c33849b8bbdee0a730320a8b5ab33`; the newer rollback fix changes only the Windows sync/test layer.
+- PR #19–#29: merged / accepted stabilization and server certificate lifecycle work.
+- PR #30 authenticated Windows trusted-certificate delivery/binding: **merged** as `a03e406aaafeb5833bc720d3eef62cca60818118` after full CERT-011 live acceptance.
+- Active draft PR #31: `feat: automate trusted RDP certificate rotation`.
+- PR #31 current immutable tested head: `79cab42d43e4d9cdca12b8a1380574f7d40460f6`.
+- PR #31 CI #344: Linux full release checks PASS + Windows PowerShell 5.1 PASS.
+- Linux production runtime is currently deployed on PR #31 head `79cab42d...` after CERT-012 server acceptance.
 
-## Secondary release follow-up
+## Stable architecture
 
-Prepared branch `fix/release-tag-head-v2` remains at `ef32b8dd95ffa1c274dc1749eae736867d2fb74b`; no PR is open. This remains secondary to the certificate track.
+```text
+Telegram control
+      |
+Hermes API/controller + SQLite
+      |
+dedicated Hermes sshd :7000
+      |
+reverse Microsoft OpenSSH
+      |
+Windows RDP :3389
+      |
+persistent endpoint per device
+```
 
-## Current product track — trusted RDP certificate on public IP
+Admin SSH remains independent. FRP is not active runtime. Each Windows device has its own local Ed25519 identity.
 
-User decision: do not add a domain only for appearance. The trusted identity is the existing public IPv4. The Microsoft Remote Desktop warning is controlled by the certificate presented by the **Windows RDP listener**, not Linux/API TLS.
+## Accepted baseline — do not repeat without regression evidence
 
-### CERT-001 through CERT-010 — PASS
+- external Microsoft RDP through Hermes;
+- multi-device simultaneous operation and failure isolation;
+- Windows/Linux reboot recovery;
+- Windows Server 2019;
+- Win10 x64 + x86 PowerShell / Sysnative OpenSSH compatibility;
+- Telegram OFF/ON/RESTART and status UX;
+- Stage 3 security/device lifecycle;
+- transactional Linux and Windows updater rollback;
+- bounded Windows Repair success/rollback;
+- Defender coexistence;
+- trusted public-IP certificate CERT-001 through CERT-011.
 
-Already accepted and must not be repeated without regression evidence:
+SEC-004 remains intentionally fixture-unavailable. RL-006 remains PARTIAL PASS only for its optional deferred exact-Windows one-process observation.
 
-- Debian 13 certificate-host inventory;
-- Certbot 5.7.0 under `/opt/certbot`;
-- public TCP 80 / HTTP-01 reachability;
-- staging and production Let’s Encrypt public-IP issuance with `shortlived` + RSA 2048;
-- key/fullchain/renewal validation;
-- production IP SAN, Server Authentication EKU, key match and local trust validation;
-- scheduler-gap inventory and Hermes-owned renewal timer/service acceptance;
-- PR #29 productized server lifecycle immutable live acceptance and merge;
-- CERT-010 Windows 10 Pro x64 / PowerShell 5.1 x64 RDP listener inventory on `SEC005 TEST`, including default self-signed baseline and rollback thumbprint.
+## Trusted public-IP RDP certificate — accepted behavior
 
-### CERT-011 — authenticated Windows certificate delivery/binding — CORE PASS, reapply gate active
+User decision: keep the current public-IP Let’s Encrypt certificate as-is; no domain or certificate cosmetic changes are needed.
 
-Draft PR **#30**: `feat: add authenticated Windows RDP certificate rotation`.
-Branch: `feat/windows-rdp-cert-rotation`.
-Current head: `83e1b0b5d89b2728646a8eb518026ba9d1cf575a`.
+CERT-011 is **fully live-accepted** on non-critical `SEC005 TEST`:
 
-Initial implementation CI #324 on `af054274...`: Linux PASS + Windows PowerShell 5.1 PASS.
-Rollback-fix CI #333 on `83e1b0b...`: Linux PASS + Windows PowerShell 5.1 PASS.
-
-Live server acceptance on the initial PR #30 head:
-
-- transactional updater `UPDATE=PASS`;
-- Let’s Encrypt certificate serial unchanged;
-- package helper files/sudoers present;
-- helper executed through the real `hermes-rdp -> sudo` path;
-- controller, dedicated sshd and renewal timer remained active;
-- TCP 80 remained free.
-
-Live Windows trusted binding on `SEC005 TEST`:
-
-- authenticated package retrieval PASS;
-- PFX import PASS;
-- CNG private key verified non-exportable;
+- authenticated PFX package delivery PASS;
+- CNG private key imported non-exportable;
 - `NETWORK SERVICE` Read ACL PASS;
-- listener changed from default self-signed to trusted CUSTOM thumbprint;
-- TCP 3389 remained listening;
-- rollback metadata preserved.
+- RDP listener changed to CUSTOM trusted thumbprint while TCP 3389 stayed listening;
+- fresh Microsoft Remote Desktop connection reported server authenticity verified and used production Let’s Encrypt;
+- explicit rollback restored the exact original Windows default self-signed state (`hash type 3 -> 1`) and the external warning returned;
+- rollback bug root cause was confirmed and fixed: previous type `1` is restored by removing explicit custom registry binding, while previous type `3` restores the prior custom thumbprint;
+- fixed reapply returned the trusted CUSTOM binding and a fresh external RDP connection was trusted again.
 
-External Microsoft Remote Desktop trusted acceptance:
+PR #30 merged after this bounded acceptance.
 
-- a fresh Hermes RDP connection succeeded;
-- the client reported that remote-computer authenticity was verified with the server certificate rather than showing the prior untrusted warning;
-- certificate UI showed production Let’s Encrypt issuer `YR1` and the expected short-lived validity window.
+## CERT-012 — automatic certificate rotation — ACTIVE
 
-Therefore the core trusted public-IP RDP objective is live PASS.
+Draft PR #31 deliberately keeps certificate work out of the performance-sensitive 3-second main agent loop.
 
-### CERT-011 rollback bug — RESOLVED / LIVE-ACCEPTED
+Design:
 
-The first explicit rollback attempt failed with `Set-CimInstance` / `HRESULT 0x80041008` because the original Windows default self-signed listener was hash type `1` with no explicit registry `SSLCertificateSHA1Hash`. Restoring that state as a CUSTOM binding is invalid.
+- server publishes a root-owned non-secret certificate state (thumbprint/fingerprint/serial/expiry only);
+- authenticated per-device `rdp-certificate-status` exposes only non-secret identity metadata;
+- full PFX endpoint from PR #30 is called only when thumbprint changes or local RDP binding drifts;
+- Windows uses a separate SYSTEM `Hermes RDP Certificate Rotation` worker with a default 15-minute cadence;
+- worker uses pinned HTTPS + existing device token;
+- unchanged trusted binding performs no PFX retrieval/import;
+- drift/renewal reuses the accepted transactional `sync-rdp-certificate.ps1` path;
+- global mutex prevents overlapping rotation workers.
 
-Correct rollback behavior was live-proven on Windows 10:
+### CERT-012 server live acceptance — PASS
 
-- remove the explicit custom registry binding;
-- hash type returns `3 -> 1`;
-- exact original self-signed thumbprint returns;
-- TCP 3389 remains listening;
-- a fresh external Microsoft Remote Desktop connection succeeds again and the expected self-signed/untrusted certificate warning returns.
+Immutable deployed head: `79cab42d43e4d9cdca12b8a1380574f7d40460f6`.
 
-PR #30 head `83e1b0b...` implements type-aware rollback in both explicit and automatic failure paths:
+Live evidence:
 
-- previous type `1`: remove explicit custom binding and verify Windows default self-signed state returns;
-- previous type `3`: restore the previous custom thumbprint through CIM;
-- other hash types are rejected rather than guessed.
-
-CI #333 validates the rollback fix on Linux and Windows PowerShell 5.1.
+- transactional server updater `UPDATE=PASS`;
+- production certificate serial unchanged;
+- state refresher + renewal helpers installed;
+- state file ownership/mode `root:hermes-rdp / 0640`;
+- published thumbprint exactly matched the current certificate;
+- state payload contained only expected non-secret fields;
+- authenticated status endpoint installed;
+- renewal service smoke PASS without forcing renewal;
+- controller, dedicated sshd and renewal timer active;
+- TCP 80 free after smoke.
 
 ## Exact resume action
 
-`SEC005 TEST` is intentionally in the restored Windows default self-signed state after the fully accepted rollback.
+Run the transactional PR #31 Windows rotation setup on `SEC005 TEST` using immutable head `79cab42d...`.
 
-1. Reapply trusted binding using PR #30 fixed head `83e1b0b5d89b2728646a8eb518026ba9d1cf575a`.
-2. Confirm local CUSTOM binding / TCP 3389 and one fresh external trusted RDP connection again.
-3. Then PR #30 can become merge-ready and merge.
-4. After merge, integrate periodic certificate sync into the normal Hermes Windows agent and live-test a real renewal-driven rotation cycle.
+Expected first run with the currently correct trusted binding:
+
+- `CERT_ROTATION=UNCHANGED`;
+- `ROTATION_CHECK=PASS`;
+- `ROTATION_TASK=RUNNING`;
+- `CERT-012_SETUP=PASS`.
+
+After that, create local RDP certificate drift using the already accepted default-self-signed rollback path, **do not manually reapply**, and require the rotation worker to restore the trusted CUSTOM binding automatically. Then confirm one fresh trusted external Microsoft RDP connection.
 
 Do not expose PFX content/passwords, private keys, pairing codes, API tokens or other secret-bearing material in chat/context.
