@@ -27,7 +27,7 @@ Hermes RDP публикует RDP нескольких Windows-компьюте�
 
 > **Главный принцип проекта:** все Windows-компьютеры равноправны. Для каждого используется один installer и один Hermes Agent. Специальным узлом является только Linux-сервер Hermes.
 
-> **Версии:** `v1.2.1` остаётся текущим stable release. В `main` уже находится принятый trusted public-IP RDP certificate lifecycle для следующего релиза. Production-установки используйте с конкретного release tag или заранее проверенного immutable commit.
+> **Stable release:** [Hermes RDP v1.3.0](https://github.com/bakunity/RDP/releases/tag/v1.3.0). Для production используйте release tag или другой заранее проверенный immutable ref, а не изменяемый `main`.
 
 ## Что умеет Hermes RDP
 
@@ -42,7 +42,7 @@ Hermes RDP публикует RDP нескольких Windows-компьюте�
 - transactional server/client update с backup и automatic rollback;
 - Repair существующего клиента без повторного pairing и смены identity/порта;
 - работа без Defender exclusions и без отключения Microsoft Defender;
-- в текущем `main`: автоматический trusted certificate lifecycle для Windows RDP listener — server renewal, Windows rotation, Update/Repair/Uninstall integration.
+- автоматический trusted certificate lifecycle для Windows RDP listener: server renewal, Windows rotation и lifecycle integration.
 
 ## Схема
 
@@ -60,7 +60,7 @@ Microsoft Remote Desktop
 
 Каждый device key ограничен сервером только своим endpoint через `permitlisten`. Административный SSH `:22` и Hermes tunnel sshd `:7000` независимы.
 
-## Trusted RDP certificate — current `main`
+## Trusted RDP certificate
 
 Опциональный `--trusted-rdp-cert` включает отдельный certificate lifecycle для **Windows RDP listener**:
 
@@ -80,7 +80,9 @@ Microsoft Remote Desktop без прежнего self-signed warning
 
 После включения server-side lifecycle normal Fresh Install, Update и Repair автоматически управляют rotation companion. Uninstall удаляет обе Hermes Scheduled Tasks и локальный runtime. Certificate work остаётся вне performance-sensitive 3-second Agent loop.
 
-Требования и детали: [INSTALL_SERVER](docs/INSTALL_SERVER.md), [INSTALL_WINDOWS](docs/INSTALL_WINDOWS.md), [SECURITY](docs/SECURITY.md).
+Требования: глобально маршрутизируемый public IPv4, доступный TCP `80` для ACME HTTP-01 и доступ к Let’s Encrypt.
+
+Подробнее: [INSTALL_SERVER](docs/INSTALL_SERVER.md), [INSTALL_WINDOWS](docs/INSTALL_WINDOWS.md), [SECURITY](docs/SECURITY.md).
 
 ## Telegram dashboard
 
@@ -117,16 +119,16 @@ Fresh pairing и Repair намеренно разделены. Repair не со�
 
 Windows Home не является штатным RDP host и не поддерживается.
 
-Для trusted public-IP RDP certificate нужен глобально маршрутизируемый публичный IPv4 и доступный TCP `80` для ACME HTTP-01.
-
-## Быстрый старт stable v1.2.1
+## Быстрый старт v1.3.0
 
 ### 1. Установить сервер
 
+Базовый OpenSSH gateway:
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.2.1/scripts/install-server.sh -o /tmp/install-hermes-rdp.sh
+curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.3.0/scripts/install-server.sh -o /tmp/install-hermes-rdp.sh
 read -rsp 'Telegram bot token: ' TG_TOKEN; echo
-sudo env HERMES_RDP_REF=v1.2.1 bash /tmp/install-hermes-rdp.sh \
+sudo env HERMES_RDP_REF=v1.3.0 bash /tmp/install-hermes-rdp.sh \
   --host SERVER_IP_OR_DOMAIN \
   --telegram-token "$TG_TOKEN" \
   --telegram-chat-id TELEGRAM_USER_ID
@@ -134,11 +136,27 @@ unset TG_TOKEN
 rm -f /tmp/install-hermes-rdp.sh
 ```
 
+С trusted public-IP RDP certificate lifecycle добавьте `--trusted-rdp-cert` и используйте public IPv4 в `--host`:
+
+```bash
+sudo env HERMES_RDP_REF=v1.3.0 bash /tmp/install-hermes-rdp.sh \
+  --host PUBLIC_IPV4 \
+  --telegram-token "$TG_TOKEN" \
+  --telegram-chat-id TELEGRAM_USER_ID \
+  --trusted-rdp-cert
+```
+
 Проверка:
 
 ```bash
 sudo hermes-rdpctl doctor
 sudo systemctl is-active hermes-rdp-sshd.service hermes-rdp.service
+```
+
+При trusted lifecycle дополнительно:
+
+```bash
+sudo systemctl is-active hermes-rdp-cert-renew.timer
 ```
 
 ### 2. Добавить Windows-ПК
@@ -150,6 +168,8 @@ sudo systemctl is-active hermes-rdp-sshd.service hermes-rdp.service
 5. Введите понятное название компьютера.
 6. Дождитесь `=== ГОТОВО ===`.
 
+Если trusted lifecycle включён на сервере, Fresh Install сам создаст certificate rotation companion и применит trusted CUSTOM listener certificate.
+
 ### 3. Подключиться
 
 ```powershell
@@ -158,33 +178,31 @@ mstsc.exe /v:SERVER_IP_OR_DOMAIN:53389
 
 Первый свободный endpoint обычно начинается с `53389`, следующий получает `53390` и так далее.
 
-> Trusted RDP certificate lifecycle из текущего `main` ещё не относится к immutable tag `v1.2.1`. До следующего release используйте его только с отдельно проверенным immutable commit.
-
 ## Обновление
 
-Stable server:
+Server:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.2.1/scripts/update-server.sh -o /tmp/update-hermes-rdp.sh
-sudo env HERMES_RDP_REF=v1.2.1 bash /tmp/update-hermes-rdp.sh
+curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.3.0/scripts/update-server.sh -o /tmp/update-hermes-rdp.sh
+sudo env HERMES_RDP_REF=v1.3.0 bash /tmp/update-hermes-rdp.sh
 rm -f /tmp/update-hermes-rdp.sh
 ```
 
-Stable Windows:
+Windows:
 
 ```powershell
-$u='https://raw.githubusercontent.com/bakunity/RDP/v1.2.1/scripts/update-client.ps1'
+$u='https://raw.githubusercontent.com/bakunity/RDP/v1.3.0/scripts/update-client.ps1'
 $s=(irm $u).TrimStart([char]0xFEFF)
-& ([scriptblock]::Create($s)) -RepositoryRef 'v1.2.1'
+& ([scriptblock]::Create($s)) -RepositoryRef 'v1.3.0'
 ```
 
-Текущий `main` расширяет Windows Update: основной Agent и certificate lifecycle setup разрешаются в один immutable SHA, а certificate sub-operation завершается до финального `UPDATE=PASS`.
+Windows Update разрешает основной Agent и certificate lifecycle setup в один immutable SHA. Certificate sub-operation завершается до финального `UPDATE=PASS`; failure участвует в transactional rollback boundary.
 
 ## Repair и Uninstall
 
-Для уже зарегистрированного компьютера используйте **🛠 ВОССТАНОВИТЬ КЛИЕНТ**. Repair сохраняет Device ID, API-token, Ed25519 keypair, `known_hosts` и назначенный RDP-порт.
+Для уже зарегистрированного компьютера используйте **🛠 ВОССТАНОВИТЬ КЛИЕНТ**. Repair сохраняет Device ID, API-token, Ed25519 keypair, `known_hosts` и назначенный RDP-порт, а при включённом trusted lifecycle также восстанавливает certificate rotation companion.
 
-В текущем `main` Repair также восстанавливает certificate rotation companion. Потеря обязательной local identity по-прежнему останавливает Repair вместо скрытого re-pair/rekey.
+Потеря обязательной local identity останавливает Repair вместо скрытого re-pair/rekey.
 
 Normal uninstall останавливает и unregister-ит основной Agent и certificate rotation task, завершает Hermes runtime и архивирует активный `C:\ProgramData\HermesRDP`. После локального uninstall удалите устройство в Telegram для server-side revoke и освобождения порта.
 
@@ -210,7 +228,7 @@ Normal uninstall останавливает и unregister-ит основной 
 
 В реальной эксплуатации подтверждены multi-device endpoints, внешний RDP, Windows/Linux reboot recovery, `OFF/ON/RESTART`, Win10 x64 из 32-bit PowerShell через Sysnative, Windows Server 2019, Defender coexistence, delete/revocation/port reuse, transactional update/rollback и Repair/rollback.
 
-Для текущего `main` также live-приняты: публично доверенный RDP certificate, rollback/reapply, automatic drift recovery, LocalSystem rotation worker, certificate lifecycle в Update/Repair, чистый Fresh Install, внешний trusted RDP и normal Uninstall.
+Для v1.3.0 также live-приняты: публично доверенный RDP certificate, rollback/reapply, automatic drift recovery, LocalSystem rotation worker, certificate lifecycle в Update/Repair, чистый Fresh Install, внешний trusted RDP и normal Uninstall.
 
 Отдельно отложено только наблюдение следующей **естественной** certificate renewal; форсировать production issuance ради него не требуется.
 
@@ -260,9 +278,10 @@ Get-Process ssh -ErrorAction SilentlyContinue
 ## Релизы
 
 - [Последний релиз](https://github.com/bakunity/RDP/releases/latest)
-- [Hermes RDP v1.2.1](https://github.com/bakunity/RDP/releases/tag/v1.2.1)
-- [Release notes v1.2.1](docs/releases/v1.2.1.md)
-- [Полная история v1.2.1](docs/releases/history/v1.2.1-full.md)
+- [Hermes RDP v1.3.0](https://github.com/bakunity/RDP/releases/tag/v1.3.0)
+- [Release notes v1.3.0](docs/releases/v1.3.0.md)
+- [Полная история v1.3.0](docs/releases/history/v1.3.0-full.md)
+- [Предыдущий v1.2.1](https://github.com/bakunity/RDP/releases/tag/v1.2.1)
 - [Следующий релиз — rolling ledger](docs/releases/UNRELEASED.md)
 - [История изменений](CHANGELOG.md)
 

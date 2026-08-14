@@ -4,6 +4,56 @@
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-08-14
+
+Релиз: https://github.com/bakunity/RDP/releases/tag/v1.3.0
+
+Функциональный релиз trusted public-IP certificate lifecycle для Windows RDP listener с автоматической ротацией и интеграцией в обычный Windows lifecycle.
+
+### Добавлено
+
+- опциональная server-side настройка Let’s Encrypt short-lived certificate для публичного IPv4;
+- Hermes-owned certificate renewal service/timer и non-secret state/status;
+- authenticated certificate package delivery зарегистрированному Windows device;
+- отдельный LocalSystem certificate-rotation worker вне основного Agent loop;
+- автоматическое управление trusted CUSTOM RDP listener certificate в Fresh Install, Update и Repair.
+
+### Исправлено
+
+- корректный rollback между Windows default self-signed listener и explicit CUSTOM binding;
+- LocalSystem task validation через SID вместо локализованного имени `SYSTEM`;
+- upgrade path global mutex ACL между SYSTEM worker и Administrator setup;
+- automatic recovery после controlled local listener drift.
+
+### Lifecycle
+
+- transactional Update включает certificate sub-operation до `UPDATE=PASS`;
+- Repair восстанавливает certificate rotation companion без re-pair/rekey и смены identity/порта;
+- normal Uninstall удаляет основной Agent и certificate-rotation runtime;
+- server install/update/uninstall управляют certificate helpers/state без удаления ACME lineage.
+
+### Проверено
+
+- production public-IP issuance, chain/key validation и renewal smoke;
+- внешний Microsoft Remote Desktop с trusted certificate без self-signed warning;
+- automatic drift recovery;
+- live Update/Repair с сохранением device identity/keys/known_hosts/RDP port;
+- чистый Windows 10 Pro / PowerShell 5.1 / Defender-enabled Fresh Install и normal Uninstall;
+- Linux full release checks и Windows PowerShell 5.1 validation на промежуточных accepted heads.
+
+### Документация и release process
+
+- core docs, README и public site синхронизированы с accepted certificate lifecycle;
+- public Release notes и full engineering history разделены;
+- release workflow tags exact validated HEAD и синхронизирует versioned Release bodies без переписывания tags;
+- public example privacy guard блокирует случайную публикацию production IP.
+
+### Совместимость
+
+- breaking changes относительно `v1.2.1` нет;
+- Windows PowerShell 5.1, Win10 x64/x86 Sysnative path, Windows Server и Defender coexistence сохраняются;
+- trusted RDP certificate lifecycle опционален и требует public IPv4 + TCP 80 для ACME HTTP-01.
+
 ## [1.2.1] — 2026-08-13
 
 Релиз: https://github.com/bakunity/RDP/releases/tag/v1.2.1
@@ -140,6 +190,7 @@ UX-патч компактной команды Telegram и исправлени
 ### Совместимость
 
 - pairing contract, API, SQLite, FRP-протокол и Windows agent не изменены;
+- обновление затрагивает только отображение Telegram-панели;
 - стандартные порты не изменены.
 
 ## [1.0.4] — 2026-08-06
