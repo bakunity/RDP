@@ -25,28 +25,30 @@ Already complete:
 - CERT-005 staging key/fullchain/renewal mechanics and dry-run: PASS.
 - CERT-006 production Let’s Encrypt public-IP issuance: PASS.
 - CERT-007 scheduler inventory: PASS; missing scheduler gap confirmed.
-- CERT-008 Hermes-owned systemd renewal service/timer: live PASS, including unit verification, active/enabled timer, bounded service run and TCP 80 cleanup.
+- CERT-008 Hermes-owned systemd renewal service/timer: live PASS.
+- CERT-009 productized server lifecycle on immutable PR #29 head: live PASS; existing certificate reused, serial preserved, timer active/enabled, smoke PASS_NOT_DUE, TCP 80 free.
 
-Active productization:
+PR #29 status:
 
-- draft PR **#29** on `feat/trusted-rdp-cert-lifecycle`, head `e914a0f45a6cc734d25b02340353fc06ace6c7c8`;
-- lifecycle setup module, renewal wrapper and repository-owned systemd units implemented;
-- `install-server.sh --trusted-rdp-cert` explicit opt-in implemented while default install remains unchanged;
-- uninstall removes Hermes-owned units/wrapper but preserves ACME lineage;
-- CI #313 PASS on Linux + Windows PowerShell 5.1;
-- CI #316 PASS after installer/uninstall wiring on Linux + Windows PowerShell 5.1.
+- branch `feat/trusted-rdp-cert-lifecycle`;
+- tested head `e914a0f45a6cc734d25b02340353fc06ace6c7c8`;
+- CI #313 PASS Linux + Windows PowerShell 5.1;
+- CI #316 PASS Linux + Windows PowerShell 5.1 after installer/uninstall wiring;
+- server-side merge gate is satisfied.
 
 Next:
 
-- **CERT-009:** live-accept PR #29 certificate setup module on the current certificate host using the immutable PR head; it must reuse the existing production lineage, not request another certificate, install/adopt repository-owned renewal units, preserve certificate serial and leave TCP 80 free;
-- after live acceptance, reconcile/checkpoint PR #29 and decide merge readiness;
-- design authenticated delivery/rotation of the short-lived certificate to Windows devices;
-- do not expose a shared private key through a weak endpoint;
-- bind/test first on `SEC005 TEST` with the previous RDP listener certificate/state preserved for rollback;
-- validate the actual Microsoft Remote Desktop trust/name warning before wider rollout;
-- after Windows acceptance, make the certificate lifecycle a polished normal Hermes installation flow rather than an expert/manual feature.
+- merge/reconcile PR #29;
+- start **CERT-010** with a read-only Windows inventory on non-critical `SEC005 TEST` before any listener mutation;
+- confirm current RDP listener thumbprint/hash type and TerminalServices CIM provider behavior;
+- implement certificate delivery only over the existing pinned HTTPS + per-device bearer-auth channel;
+- import the PFX into `Cert:\LocalMachine\My` without making the private key exportable;
+- grant `NT AUTHORITY\NETWORK SERVICE` read access to the installed private key because Remote Desktop Services uses that identity;
+- capture the previous listener hash and certificate before binding so rollback is deterministic;
+- bind the trusted certificate only on `SEC005 TEST`, validate Microsoft Remote Desktop behavior, then test rollback;
+- after Windows acceptance, implement renewal-driven rotation and expand carefully.
 
-Architecture note: one separate Let’s Encrypt public-IP certificate per Windows device does not scale as the default design because all devices share the same IP identifier and the CA limits new certificates for an exact identifier set. Current scalable direction is one short-lived lineage per Hermes server plus a strongly authenticated rotation mechanism.
+Architecture constraint: one independent Let’s Encrypt public-IP certificate per Windows device is not the scalable default because all devices share the same exact public-IP identifier set and duplicate/exact-set issuance limits apply. Use one short-lived lineage per Hermes server plus authenticated distribution/rotation.
 
 ### 2. Release automation hardening
 
