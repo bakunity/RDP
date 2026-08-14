@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 from pathlib import Path
 
@@ -68,6 +69,35 @@ class WebsiteOpenSshContentTests(unittest.TestCase):
         self.assertIn('/assets/app.js', text)
         self.assertTrue((ROOT / "assets/styles.css").is_file())
         self.assertTrue((ROOT / "assets/app.js").is_file())
+
+    def test_vercel_deployments_are_limited_to_main_site_changes(self) -> None:
+        config = json.loads((ROOT / "vercel.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(
+            config["git"]["deploymentEnabled"],
+            {"*": False, "main": True},
+        )
+
+        ignore_command = config["ignoreCommand"]
+        self.assertIn("VERCEL_GIT_PREVIOUS_SHA", ignore_command)
+        self.assertIn("git diff --quiet", ignore_command)
+        for site_path in [
+            "index.html",
+            "assets/",
+            "robots.txt",
+            "site.webmanifest",
+        ]:
+            self.assertIn(site_path, ignore_command)
+
+        for non_site_path in [
+            "context/",
+            "docs/",
+            "scripts/",
+            "server/",
+            "client/",
+            "tests/",
+        ]:
+            self.assertNotIn(non_site_path, ignore_command)
 
 
 if __name__ == "__main__":
