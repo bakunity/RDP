@@ -1,0 +1,231 @@
+﻿param([string]$RepositoryRef = 'main')
+
+#Requires -RunAsAdministrator
+$ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
+
+$Repo = 'bakunity/RDP'
+$BaseDir = 'C:\ProgramData\HermesRDP'
+$TaskName = 'Hermes RDP Certificate Rotation'
+$ConfigPath = Join-Path $BaseDir 'device.json'
+$WorkerPath = Join-Path $BaseDir 'HermesRdpCertRotation.ps1'
+$SyncPath = Join-Path $BaseDir 'sync-rdp-certificate.ps1'
+$WorkerCandidate = Join-Path ([IO.Path]::GetTempPath()) (
+    "HermesRdpCertRotation-$([Guid]::NewGuid().ToString('N')).ps1"
+)
+$SyncCandidate = Join-Path ([IO.Path]::GetTempPath()) (
+    "HermesRdpCertSync-$([Guid]::NewGuid().ToString('N')).ps1"
+)
+
+function Resolve-RepositorySha {
+    param([string]$Ref)
+
+    if ($Ref -match '^[0-9a-fA-F]{40}$') {
+        return $Ref.ToLowerInvariant()
+    }
+
+    $Encoded = [Uri]::EscapeDataString($Ref)
+    $Commit = Invoke-RestMethod `
+        -UseBasicParsing `
+        -Uri "https://api.github.com/repos/$Repo/commits/$Encoded" `
+        -Headers @{ Accept = 'application/vnd.github+json' }
+
+    $Sha = [string]$Commit.sha
+    if ($Sha -notmatch '^[0-9a-fA-F]{40}$') {
+        throw 'Не удалось разрешить RepositoryRef в immutable commit SHA.'
+    }
+    return $Sha.ToLowerInvariant()
+}
+
+function Assert-PowerShellFile {
+    param([string]$Path)
+
+    $Tokens = $null
+    $Errors = $null
+    [void][Management.Automation.Language.Parser]::ParseFile(
+        $Path,
+        [ref]$Tokens,
+        [ref]$Errors
+    )
+    if ($Errors.Count -gt 0) {
+        throw "PowerShell parse error: $($Errors[0].Message)"
+    }
+}
+
+function Set-SystemScriptAcl {
+    param([string]$Path)
+
+    $Acl = Get-Acl -LiteralPath $Path
+    $Acl.SetSecurityDescriptorSddlForm(
+        'O:SYG:SYD:P(A;;FA;;;SY)(A;;FA;;;BA)'
+    )
+    Set-Acl -LiteralPath $Path -AclObject $Acl
+}
+
+function Get-NativePowerShellPath {
+    $System32 = Join-Path $env:WINDIR 'System32'
+    if (
+        [Environment]::Is64BitOperatingSystem -and
+        -not [Environment]::Is64BitProcess
+    ) {
+        $System32 = Join-Path $env:WINDIR 'Sysnative'
+    }
+    return Join-Path $System32 'WindowsPowerShell\v1.0\powershell.exe'
+}
+
+function Register-RotationTask {
+    $Action = New-ScheduledTaskAction `
+        -Execute 'powershell.exe' `
+        -Argument (
+            '-NoProfile -ExecutionPolicy Bypass -File ' +
+            "`"$WorkerPath`""
+        )
+    $Trigger = New-ScheduledTaskTrigger -AtStartup
+    $Trigger.Delay = 'PT45S'
+    $Principal = New-ScheduledTaskPrincipal `
+        -UserId 'SYSTEM' `
+        -LogonType ServiceAccount `
+        -RunLevel Highest
+    $Settings = New-ScheduledTaskSettingsSet `
+        -AllowStartIfOnBatteries `
+        -DontStopIfGoingOnBatteries `
+        -StartWhenAvailable `
+        -RestartCount 999 `
+        -RestartInterval (New-TimeSpan -Minutes 1) `
+        -ExecutionTimeLimit ([TimeSpan]::Zero)
+
+    Register-ScheduledTask `
+        -TaskName $TaskName `
+        -Action $Action `
+        -Trigger $Trigger `
+        -Principal $Principal `
+        -Settings $Settings `
+        -Force |
+        Out-Null
+}
+
+Write-Host '=== CERT-012 ==='
+
+if (-not (Test-Path -LiteralPath $ConfigPath)) {
+    throw 'Hermes device.json не найден. Сначала установите Hermes RDP client.'
+}
+
+$ResolvedSha = Resolve-RepositorySha -Ref $RepositoryRef
+$WorkerUrl = (
+    "https://raw.githubusercontent.com/$Repo/" +
+    "$ResolvedSha/client/HermesRdpCertRotation.ps1"
+)
+$SyncUrl = (
+    "https://raw.githubusercontent.com/$Repo/" +
+    "$ResolvedSha/scripts/sync-rdp-certificate.ps1"
+)
+
+$BackupRoot = Join-Path $BaseDir 'backups\cert-rotation'
+$BackupDir = Join-Path $BackupRoot (Get-Date -Format 'yyyyMMdd-HHmmss')
+New-Item -ItemType Directory -Path $BackupDir -Force | Out-Null
+
+$WorkerExisted = Test-Path -LiteralPath $WorkerPath
+$SyncExisted = Test-Path -LiteralPath $SyncPath
+$TaskBefore = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+$TaskExisted = $null -ne $TaskBefore
+$TaskStateBefore = if ($TaskBefore) { [string]$TaskBefore.State } else { 'ABSENT' }
+$TaskXmlBefore = if ($TaskBefore) { Export-ScheduledTask -TaskName $TaskName } else { $null }
+
+if ($WorkerExisted) {
+    Copy-Item -LiteralPath $WorkerPath -Destination (Join-Path $BackupDir 'HermesRdpCertRotation.ps1') -Force
+}
+if ($SyncExisted) {
+    Copy-Item -LiteralPath $SyncPath -Destination (Join-Path $BackupDir 'sync-rdp-certificate.ps1') -Force
+}
+if ($TaskExisted) {
+    $TaskXmlBefore | Set-Content -LiteralPath (Join-Path $BackupDir 'scheduled-task.xml') -Encoding UTF8
+}
+
+try {
+    Invoke-WebRequest -UseBasicParsing -Uri $WorkerUrl -OutFile $WorkerCandidate
+    Invoke-WebRequest -UseBasicParsing -Uri $SyncUrl -OutFile $SyncCandidate
+    Assert-PowerShellFile -Path $WorkerCandidate
+    Assert-PowerShellFile -Path $SyncCandidate
+
+    Copy-Item -LiteralPath $WorkerCandidate -Destination $WorkerPath -Force
+    Copy-Item -LiteralPath $SyncCandidate -Destination $SyncPath -Force
+    Set-SystemScriptAcl -Path $WorkerPath
+    Set-SystemScriptAcl -Path $SyncPath
+
+    $NativePowerShell = Get-NativePowerShellPath
+    & $NativePowerShell `
+        -NoProfile `
+        -ExecutionPolicy Bypass `
+        -File $WorkerPath `
+        -Once
+    if ($LASTEXITCODE -ne 0) {
+        throw "Initial certificate rotation check failed with code $LASTEXITCODE"
+    }
+
+    Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+    Register-RotationTask
+    Start-ScheduledTask -TaskName $TaskName
+    Start-Sleep -Seconds 2
+
+    $TaskAfter = Get-ScheduledTask -TaskName $TaskName -ErrorAction Stop
+    if ($TaskAfter.State -ne 'Running') {
+        throw "Certificate rotation task did not enter Running state: $($TaskAfter.State)"
+    }
+
+    Write-Host "RESOLVED_REF=$ResolvedSha"
+    Write-Host 'ROTATION_CHECK=PASS'
+    Write-Host 'ROTATION_TASK=RUNNING'
+    Write-Host "BACKUP=$BackupDir"
+    Write-Host 'CERT-012_SETUP=PASS'
+}
+catch {
+    $Failure = $_
+    Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+    Unregister-ScheduledTask `
+        -TaskName $TaskName `
+        -Confirm:$false `
+        -ErrorAction SilentlyContinue
+
+    if ($WorkerExisted) {
+        Copy-Item `
+            -LiteralPath (Join-Path $BackupDir 'HermesRdpCertRotation.ps1') `
+            -Destination $WorkerPath `
+            -Force
+    }
+    else {
+        Remove-Item -LiteralPath $WorkerPath -Force -ErrorAction SilentlyContinue
+    }
+
+    if ($SyncExisted) {
+        Copy-Item `
+            -LiteralPath (Join-Path $BackupDir 'sync-rdp-certificate.ps1') `
+            -Destination $SyncPath `
+            -Force
+    }
+    else {
+        Remove-Item -LiteralPath $SyncPath -Force -ErrorAction SilentlyContinue
+    }
+
+    if ($TaskExisted) {
+        Register-ScheduledTask `
+            -TaskName $TaskName `
+            -Xml $TaskXmlBefore `
+            -Force |
+            Out-Null
+        if ($TaskStateBefore -eq 'Running') {
+            Start-ScheduledTask -TaskName $TaskName
+        }
+        elseif ($TaskStateBefore -eq 'Disabled') {
+            Disable-ScheduledTask -TaskName $TaskName | Out-Null
+        }
+    }
+
+    Write-Host 'CERT-012_SETUP_ROLLBACK=PASS'
+    throw $Failure
+}
+finally {
+    Remove-Item `
+        -LiteralPath $WorkerCandidate, $SyncCandidate `
+        -Force `
+        -ErrorAction SilentlyContinue
+}
