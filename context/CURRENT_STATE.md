@@ -35,7 +35,7 @@ Admin SSH remains independent from Hermes tunnel SSH. FRP is not active runtime.
 ## Live deployment truth
 
 - Production controller remains deployed from accepted PR #25 head `0e2e7aef77ab1df804b70d9fd29d4b5736fbac60`.
-- Release/documentation merges did not redeploy or mutate production runtime.
+- Release/documentation/context merges did not redeploy or mutate production runtime.
 - SEC005 acceptance fixture remains healthy after updater/repair/RDP acceptance.
 
 ## Accepted stabilization baseline
@@ -63,14 +63,15 @@ The release workflow root cause is confirmed: selecting `git log -1 -- VERSION` 
 
 ## Current certificate state
 
-The trusted-certificate track now targets the **public IP**, not a new domain. Domain use is deferred because a domain alone does not change the certificate presented by the Windows RDP listener.
+The trusted-certificate track targets the **public IP**, not a new domain. Domain use is deferred because a domain alone does not change the certificate presented by the Windows RDP listener.
 
 Live server evidence:
 
 - Debian GNU/Linux 13 (trixie);
-- before certificate setup: Certbot absent, Nginx absent, TCP `80/443` unused;
-- Certbot installation completed successfully;
-- current Certbot version: **5.7.0**;
+- Certbot installation completed successfully; current version **5.7.0**;
+- CERT-003 external HTTP-01 reachability is **PASS**;
+- UFW has an explicit `80/tcp` allow rule for ACME HTTP-01;
+- a temporary HTTP listener on TCP 80 was reached successfully by five independent external probes, each returning HTTP `200`, with matching requests in the server access log;
 - no public IP certificate has been issued yet;
 - no Windows RDP certificate binding has been changed yet.
 
@@ -78,6 +79,6 @@ The target warning is controlled by the certificate presented by the Windows RDP
 
 ## Exact next step
 
-Run **CERT-003**: externally verify TCP `80` reachability for ACME HTTP validation. Then do a bounded staging/test public-IP certificate issuance before any Windows listener mutation.
+Run **CERT-004**: stop the temporary CERT-003 Python listener, then perform a bounded Let’s Encrypt staging issuance for the public IP using Certbot standalone HTTP-01 and the required `shortlived` profile. Inspect the resulting staging certificate before any production issuance or Windows mutation.
 
 First Windows acceptance target remains the non-critical `SEC005 TEST` device with rollback to its existing RDP listener certificate/state.
