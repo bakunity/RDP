@@ -2,7 +2,7 @@
 
 Updated: 2026-08-14
 
-For exact immediate action read `ACTIVE_WORK.md`. This file is the remaining product-level queue; completed work is removed rather than kept for history.
+For exact immediate action read `ACTIVE_WORK.md`. This file contains only remaining product-level work.
 
 ## North-star goal
 
@@ -14,49 +14,51 @@ Ship a stable self-hosted product where a user can install Hermes on Debian/Ubun
 
 ## Immediate work
 
-### 1. CERT-012 — automatic trusted RDP certificate rotation
+### 1. CERT-013 — integrate trusted certificate rotation into normal Windows lifecycle
 
-Already complete:
+CERT-001 through CERT-012 bounded acceptance is complete. PR #31 automatic rotation is merged as `bd25db552aae8303356953fe2807a7bd855cba95`.
 
-- CERT-001 through CERT-011: PASS;
-- PR #29 server certificate lifecycle merged/live accepted;
-- PR #30 authenticated Windows certificate delivery/binding merged/live accepted;
-- trusted → rollback → self-signed warning return → fixed reapply → trusted external connection sequence fully proven on `SEC005 TEST`;
-- draft PR #31 automatic rotation core implemented outside the performance-sensitive main agent loop;
-- PR #31 current immutable head `79cab42d43e4d9cdca12b8a1380574f7d40460f6`;
-- CI #344: Linux PASS + Windows PowerShell 5.1 PASS;
-- CERT-012 server deploy PASS on that immutable head;
-- server publishes only non-secret certificate status metadata and renewal refreshes that state;
-- production certificate serial stayed unchanged during deploy/smoke.
+Remaining product gap: the accepted rotation worker currently has a dedicated setup script; normal users should not need to run that step separately.
 
-Next bounded acceptance:
+Implement and test:
 
-1. Install the separate SYSTEM rotation worker transactionally on `SEC005 TEST` from `79cab42d...`.
-2. With current trusted binding, require `CERT_ROTATION=UNCHANGED`, task Running, and `CERT-012_SETUP=PASS`.
-3. Create local drift with the already accepted self-signed rollback mechanism.
-4. Do **not** manually reapply the trusted certificate; require the rotation worker to detect drift and restore CUSTOM trusted binding automatically.
-5. Confirm one fresh Microsoft Remote Desktop connection is trusted again.
-6. If green, mark PR #31 merge-ready and merge.
-7. Later observe a natural renewal-driven thumbprint change; do not force unnecessary production issuance just to test rotation.
-8. Wire the accepted rotation companion into normal fresh install / transactional update / repair if any lifecycle gap remains before the next release.
+1. fresh install installs/starts the rotation companion after device config exists;
+2. transactional update stages/parses/updates worker + sync companion and restores them/task on failure;
+3. Repair restores missing/disabled/broken rotation task/files without re-pairing or key rotation;
+4. uninstall removes Hermes-owned rotation task/files cleanly;
+5. preserve LocalSystem SID validation, mutex ACL behavior and immutable repository SHA;
+6. preserve Windows PowerShell 5.1 and Win10 x64 + x86 PowerShell/Sysnative compatibility;
+7. keep certificate work outside the 3-second main agent loop;
+8. add CI regression coverage and then perform bounded live acceptance on `SEC005 TEST`.
 
-Architecture constraint: one short-lived public-IP lineage per Hermes server plus authenticated distribution/rotation. No duplicate independent public-IP certificate per Windows device by default.
+Do not reopen already accepted certificate issuance/binding/rollback/drift tests unless lifecycle integration changes those exact paths.
 
-### 2. Release automation hardening
+### 2. Natural renewal observation — deferred/non-blocking
+
+When the existing short-lived production certificate renews naturally:
+
+- capture old/new server thumbprints;
+- confirm server non-secret state refreshes;
+- confirm Windows worker detects the changed thumbprint and rotates automatically;
+- confirm fresh Microsoft RDP remains trusted.
+
+Do **not** force unnecessary production issuance solely to satisfy this observation.
+
+### 3. Release automation hardening
 
 - review/merge prepared branch `fix/release-tag-head-v2` at `ef32b8dd95ffa1c274dc1749eae736867d2fb74b`;
 - release workflow must tag the exact validated workflow HEAD;
 - retain regression assertion;
 - do not alter published `v1.2.0` or `v1.2.1` tags.
 
-### 3. Post-certificate release/docs
+### 4. Next release / docs
 
-After automatic rotation is accepted:
+After CERT-013 lifecycle integration:
 
-- document public-IP trusted RDP requirements and automatic renewal/rotation;
+- document public-IP trusted RDP requirements, automatic renewal and Windows rotation;
 - decide next patch/minor release boundary;
-- reconcile website/readme messaging;
-- continue website v2 without reopening completed runtime tests.
+- reconcile README/website with the shipped lifecycle;
+- continue website v2 without reopening completed runtime acceptance.
 
 ## Optional deferred item
 
