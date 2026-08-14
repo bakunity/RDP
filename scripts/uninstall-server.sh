@@ -19,24 +19,32 @@ for path in \
   /var/lib/hermes-rdp \
   /etc/systemd/system/hermes-rdp.service \
   /etc/systemd/system/hermes-rdp-sshd.service \
+  /etc/systemd/system/hermes-rdp-cert-renew.service \
+  /etc/systemd/system/hermes-rdp-cert-renew.timer \
+  /usr/local/sbin/hermes-rdp-cert-renew \
   /etc/sudoers.d/hermes-rdp; do
   [[ -e "$path" ]] && cp -a --parents "$path" "$BACKUP/"
 done
 
 systemctl disable --now \
+  hermes-rdp-cert-renew.timer \
   hermes-rdp.service \
   hermes-rdp-sshd.service 2>/dev/null || true
 
 rm -f \
   /etc/systemd/system/hermes-rdp.service \
   /etc/systemd/system/hermes-rdp-sshd.service \
+  /etc/systemd/system/hermes-rdp-cert-renew.service \
+  /etc/systemd/system/hermes-rdp-cert-renew.timer \
+  /etc/hermes-rdp/trusted-rdp-cert.enabled \
   /etc/sudoers.d/hermes-rdp \
   /usr/local/bin/hermes-rdpctl \
   /usr/local/bin/hermes-rdp-authorized-keys \
-  /usr/local/sbin/hermes-rdp-close-tunnel
+  /usr/local/sbin/hermes-rdp-close-tunnel \
+  /usr/local/sbin/hermes-rdp-cert-renew
 
 systemctl daemon-reload
 
 echo "Hermes RDP services removed."
-echo "Data and configuration were preserved."
+echo "Data, configuration and ACME certificate lineage were preserved."
 echo "Backup: $BACKUP"
