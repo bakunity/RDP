@@ -41,7 +41,8 @@ Windows всегда инициирует исходящее SSH-соедине�
 - SQLite registry;
 - pairing;
 - telemetry и heartbeat;
-- очередь команд устройствам.
+- очередь команд устройствам;
+- authenticated certificate status/package endpoints для зарегистрированных устройств, когда trusted RDP lifecycle включён.
 
 ### SQLite
 
@@ -67,13 +68,46 @@ Windows всегда инициирует исходящее SSH-соедине�
 
 Приватный Ed25519-ключ остаётся в `C:\ProgramData\HermesRDP` с ACL только для `SYSTEM` и Administrators.
 
-## Trust chain
+Certificate lifecycle вынесен из performance-sensitive Agent loop в отдельный низкочастотный worker `HermesRdpCertRotation.ps1`, также запускаемый Scheduled Task от LocalSystem. Он сначала получает только non-secret desired certificate state и скачивает PFX package только при изменении thumbprint или локальном listener drift.
+
+## Две независимые TLS-границы
+
+Hermes использует два разных сертификатных контура, и их нельзя смешивать.
+
+### HTTPS API trust
 
 1. Пользователь получает API fingerprint через доверенный канал установки.
-2. Установщик закрепляет SHA-256 сертификата HTTPS API.
+2. Installer закрепляет SHA-256 сертификата HTTPS API.
 3. Через закреплённый API клиент получает SSH host key.
 4. SSH использует отдельный `known_hosts` и `StrictHostKeyChecking=yes`.
 5. Сервер принимает public key только для назначенного порта.
+
+### Windows RDP listener trust
+
+Опциональный trusted RDP certificate lifecycle работает отдельно:
+
+```text
+Let’s Encrypt public-IP certificate on Hermes server
+        |
+        | Hermes-owned renewal timer
+        v
+non-secret desired certificate state
+        |
+        | authenticated device check
+        v
+Windows LocalSystem rotation worker
+        |
+        | PFX only on change/drift
+        v
+LocalMachine\My + NETWORK SERVICE key access
+        |
+        v
+RDP-Tcp CUSTOM certificate binding
+```
+
+Это сертификат, который видит стандартный Microsoft Remote Desktop при подключении к `SERVER:RDP_PORT`. Именно он устраняет предупреждение о Windows self-signed listener certificate, если имя/IP в сертификате совпадает с адресом подключения и certificate chain доверена клиентом.
+
+Server-side private key не публикуется как static repository/config material. Certificate package выдаётся только authenticated зарегистрированному устройству через bounded helper path.
 
 ## Жизненный цикл устройства
 
@@ -82,11 +116,14 @@ Windows всегда инициирует исходящее SSH-соедине�
 3. API проверяет код и public key.
 4. Registry выдаёт постоянный RDP-порт и device token.
 5. Agent запускает reverse SSH.
-6. Устройство появляется ONLINE после heartbeat.
+6. Если trusted RDP certificate lifecycle включён, installer автоматически создаёт rotation companion и применяет текущий trusted listener certificate.
+7. Устройство появляется ONLINE после heartbeat.
+
+Normal Update и Repair используют тот же immutable source ref для основного Agent и certificate lifecycle setup. Отдельная ручная certificate setup-команда после штатного install/update/Repair не требуется.
 
 ## Удаление устройства
 
-DELETE:
+Server-side DELETE:
 
 - отзывает API-token;
 - отзывает SSH public key;
@@ -94,7 +131,13 @@ DELETE:
 - освобождает порт;
 - не удаляет локальные файлы Windows автоматически.
 
-Локальная очистка выполняется отдельным uninstall-скриптом.
+Локальный uninstall:
+
+- удаляет основной Agent task/runtime;
+- удаляет certificate rotation task/runtime;
+- архивирует активный Hermes client directory.
+
+После локального uninstall устройство нужно удалить в Telegram для server-side revoke/port release.
 
 ## Масштабирование
 
