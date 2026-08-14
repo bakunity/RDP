@@ -105,7 +105,10 @@ rollback_update() {
     /etc/systemd/system/hermes-rdp-sshd.service || rollback_ok=0
 
   restore_optional_file /usr/local/sbin/hermes-rdp-cert-package || rollback_ok=0
+  restore_optional_file /usr/local/sbin/hermes-rdp-cert-renew || rollback_ok=0
+  restore_optional_file /usr/local/sbin/hermes-rdp-cert-state-refresh || rollback_ok=0
   restore_optional_file /etc/sudoers.d/hermes-rdp-cert-package || rollback_ok=0
+  restore_optional_file /etc/hermes-rdp/trusted-rdp-cert-state.json || rollback_ok=0
 
   if [[ -s "$BACKUP/var/lib/hermes-rdp/state.sqlite3" ]]; then
     rm -f "$DB" "$DB-wal" "$DB-shm"
@@ -167,6 +170,8 @@ test -f "$ROOT/server/systemd/hermes-rdp.service"
 test -f "$ROOT/server/systemd/hermes-rdp-sshd.service"
 if ((TRUSTED_CERT_ENABLED == 1)); then
   test -f "$ROOT/server/bin/hermes-rdp-cert-package.sh"
+  test -f "$ROOT/server/bin/hermes-rdp-cert-renew.sh"
+  test -f "$ROOT/server/bin/hermes-rdp-cert-state-refresh.sh"
   test -f "$ROOT/server/sudoers/hermes-rdp-cert-package"
 fi
 PYTHONPATH="$ROOT/server" python3 -m compileall -q "$ROOT/server/hermes_rdp"
@@ -186,7 +191,10 @@ for path in \
   /etc/systemd/system/hermes-rdp.service \
   /etc/systemd/system/hermes-rdp-sshd.service \
   /usr/local/sbin/hermes-rdp-cert-package \
-  /etc/sudoers.d/hermes-rdp-cert-package; do
+  /usr/local/sbin/hermes-rdp-cert-renew \
+  /usr/local/sbin/hermes-rdp-cert-state-refresh \
+  /etc/sudoers.d/hermes-rdp-cert-package \
+  /etc/hermes-rdp/trusted-rdp-cert-state.json; do
   [[ -e "$path" ]] && cp -a --parents "$path" "$BACKUP/"
 done
 
@@ -268,10 +276,18 @@ if ((TRUSTED_CERT_ENABLED == 1)); then
   install -m 0755 \
     "$ROOT/server/bin/hermes-rdp-cert-package.sh" \
     /usr/local/sbin/hermes-rdp-cert-package
+  install -m 0755 \
+    "$ROOT/server/bin/hermes-rdp-cert-renew.sh" \
+    /usr/local/sbin/hermes-rdp-cert-renew
+  install -m 0755 \
+    "$ROOT/server/bin/hermes-rdp-cert-state-refresh.sh" \
+    /usr/local/sbin/hermes-rdp-cert-state-refresh
   install -m 0440 \
     "$ROOT/server/sudoers/hermes-rdp-cert-package" \
     /etc/sudoers.d/hermes-rdp-cert-package
   visudo -cf /etc/sudoers.d/hermes-rdp-cert-package >/dev/null
+  /usr/local/sbin/hermes-rdp-cert-state-refresh >/dev/null
+  test -s /etc/hermes-rdp/trusted-rdp-cert-state.json
 fi
 
 python3 - "$REF" "$RESOLVED_SHA" <<'PY'
