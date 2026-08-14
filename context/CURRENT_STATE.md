@@ -8,11 +8,13 @@ For immediate operational truth read `ACTIVE_WORK.md`; for detailed historical p
 
 - Stable published release: **v1.2.1**.
 - CERT-001 through CERT-013 bounded behavior is implemented, live accepted where environment-dependent, and merged into `main`.
-- PR #33 reconciled core install/architecture/security/operations/validation docs after CERT-013; merged with CI #418 PASS.
-- PR #34 reconciled README/public site and removed stale `1.1.0`/obsolete validation copy; merged with CI #420 PASS.
+- PR #33 reconciled core install/architecture/security/operations/validation docs; CI #418 PASS and merged.
+- PR #34 reconciled README/public site and removed stale `1.1.0`/obsolete validation copy; CI #420 PASS and merged.
 - Next release boundary selected: **v1.3.0** because trusted RDP certificates are a new backward-compatible product capability.
-- Draft PR #35 prepares the full v1.3.0 release tree. Initial head `13e2716276177849cb02a42864f824747537d88f`; CI #422 PASS on Linux full release checks + Windows PowerShell 5.1.
-- PR #35 must remain unmerged until explicit publication approval because merge triggers automatic tag/Release publication.
+- Draft PR #35 prepares the full v1.3.0 release tree.
+- Initial release head `13e2716276177849cb02a42864f824747537d88f`: CI #422 PASS.
+- Reconciled pre-approval head `8555aa3977f0f954f11fdf944a5ebedeeb3d815c`: CI #424 PASS on Linux full release checks + Windows PowerShell 5.1.
+- PR #35 remains draft. Merge triggers automatic immutable tag/GitHub Release publication and requires explicit approval.
 
 ## Runtime architecture
 
@@ -50,12 +52,12 @@ Natural renewal-driven thumbprint rotation remains deferred to the real next ren
 
 ## v1.3.0 candidate boundary
 
-v1.3.0 is a release cut of the already accepted merged behavior plus release/docs/presentation metadata. No intentional breaking change relative to v1.2.1.
+v1.3.0 is a release cut of already accepted merged behavior plus release/docs/presentation metadata. No intentional breaking change relative to v1.2.1.
 
 Trusted RDP certificate lifecycle remains optional and requires a globally routable public IPv4 plus reachable TCP 80 for ACME HTTP-01 when enabled.
 
-The release candidate includes concise public notes and separate long-form engineering history so GitHub Release remains readable without losing detailed evidence.
+The release candidate uses concise public notes plus a separate long-form engineering history.
 
 ## Exact next step
 
-Reconcile the new context-only main checkpoint into PR #35, require green exact-head CI, then keep the PR draft until explicit approval to publish v1.3.0.
+Wait for explicit publication approval. On approval, reconcile latest `main` context into PR #35 one final time, rerun exact-head CI, then mark ready/merge with exact-head guard and verify tag/Release publication.

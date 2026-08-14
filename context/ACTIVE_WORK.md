@@ -9,8 +9,10 @@ Updated: 2026-08-14
 - PR #32 CERT-013 Windows lifecycle integration: merged as `c23c168a7719a31b4958a4eee555828858d0507c` after complete bounded live acceptance.
 - PR #33 core trusted-certificate documentation reconciliation: merged as `636cea40342760d3dd1b9127f41c9e7d07e7b211`; CI #418 PASS.
 - PR #34 README/public-site reconciliation: merged as `57004e2d7e047655fd7ab5f4edb931a32cd1dba3`; CI #420 PASS.
-- Next release boundary is **v1.3.0**: this is a backward-compatible MINOR capability release, not a v1.2.x patch.
-- Draft PR #35 `release: Hermes RDP v1.3.0` is open. Initial atomic release-candidate head `13e2716276177849cb02a42864f824747537d88f`; CI #422 Linux full release checks + Windows PowerShell 5.1 PASS.
+- Next release boundary is **v1.3.0**: a backward-compatible MINOR capability release, not a v1.2.x patch.
+- Draft PR #35 `release: Hermes RDP v1.3.0` is open.
+- Atomic release tree head `13e2716276177849cb02a42864f824747537d88f`: CI #422 PASS.
+- After reconciling the first release-candidate context checkpoint, PR #35 head `8555aa3977f0f954f11fdf944a5ebedeeb3d815c`: CI #424 Linux full release checks + Windows PowerShell 5.1 PASS.
 - **Do not merge PR #35 without explicit publication approval.** Merge changes `VERSION` in `main` and triggers automatic immutable tag/GitHub Release publication.
 
 ## Stable architecture
@@ -65,7 +67,7 @@ SEC-004 remains intentionally fixture-unavailable. RL-006 remains PARTIAL PASS o
 
 The draft release tree contains:
 
-- version metadata `1.3.0`;
+- synchronized version metadata `1.3.0`;
 - concise `docs/releases/v1.3.0.md` public notes;
 - detailed `docs/releases/history/v1.3.0-full.md` engineering history;
 - `CHANGELOG.md` v1.3.0 section;
@@ -73,14 +75,21 @@ The draft release tree contains:
 - README/site/quickstart stable links updated to `v1.3.0`;
 - release protocol updated to exact validated-HEAD + release-body synchronization behavior.
 
-No new runtime live acceptance is required solely for the release metadata/presentation cut. Final publication gate is exact-head CI + explicit approval.
+No new runtime live acceptance is required solely for this release metadata/presentation cut.
 
 ## Exact next step
 
-1. Reconcile this context-only `main` checkpoint into PR #35 and rerun CI on the resulting exact release head.
-2. Keep PR #35 draft after green CI.
-3. Wait for explicit publication approval.
-4. On approval: mark ready, merge with exact-head guard, then verify immutable `v1.3.0` tag, GitHub Release body and `releases/latest`.
+**Wait for explicit publication decision.**
+
+If publication is approved:
+
+1. reconcile the latest `main` context-only checkpoint into PR #35 one final time;
+2. rerun Linux + Windows PowerShell 5.1 CI on the resulting exact head;
+3. mark PR #35 ready only after PASS;
+4. merge with exact-head guard;
+5. verify immutable `v1.3.0` tag, GitHub Release body and `releases/latest`.
+
+If publication is not approved yet, leave PR #35 draft and do not modify the release branch unnecessarily.
 
 Natural renewal-driven thumbprint rotation remains a deferred operational observation and is not a v1.3.0 blocker. Do not force extra production issuance solely for evidence.
 
