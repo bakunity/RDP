@@ -9,7 +9,7 @@ Primary truth remains `ACTIVE_WORK.md` / `CURRENT_STATE.md` / `NEXT_WORK.md` / `
 
 CERT-013 Windows lifecycle integration is active in draft PR #32.
 
-Current exact head:
+Current exact tested head:
 
 `29c19182ef99497b4cc314e3b4e9b6598ad95516`
 
@@ -18,46 +18,43 @@ CI #363:
 - Linux full release checks PASS;
 - Windows PowerShell 5.1 PASS.
 
-## CERT-013 live proof on `SEC005 TEST`
+## Live acceptance on `SEC005 TEST`
 
 Transactional Update — FULL PASS:
 
-- ordinary `update-client.ps1` automatically ran certificate lifecycle setup from the same immutable SHA;
+- ordinary Update automatically ran certificate lifecycle setup from the same immutable SHA;
 - worker returned `CERT_ROTATION=UNCHANGED`, setup returned `CERT-012_SETUP=PASS`;
 - Update returned `UPDATE=PASS` + `CertificateRotation: managed`;
-- device/config/private+public SSH key/known_hosts hashes, Device ID and RDP port unchanged;
+- identity/config/private+public SSH keys/known_hosts/Device ID/RDP port unchanged;
 - main task Running, one Agent, one Hermes `ssh.exe`;
 - rotation task Running as LocalSystem SID `S-1-5-18`;
-- trusted CUSTOM RDP listener + TCP3389 unchanged;
+- trusted CUSTOM listener + TCP3389 unchanged;
 - final `CERT-013_UPDATE=PASS`.
 
 Repair lifecycle — FULL PASS:
 
 - test removed only rotation Scheduled Task and `HermesRdpCertRotation.ps1`;
-- identity, device registration and RDP certificate binding were not intentionally changed;
-- public Repair returned existing core `REPAIR=PASS` plus `CertificateRotation: managed` and `CERT-013_REPAIR=PASS`;
-- worker/task were recreated automatically;
+- public Repair returned core `REPAIR=PASS` plus `CertificateRotation: managed` and `CERT-013_REPAIR=PASS`;
+- worker/task recreated automatically;
 - identity/config/keys/known_hosts/RDP port unchanged;
 - main Agent + one Hermes SSH process healthy;
-- restored rotation task runs as LocalSystem SID `S-1-5-18`;
-- trusted CUSTOM binding unchanged and TCP3389 listening;
+- restored rotation task LocalSystem SID `S-1-5-18`;
+- trusted CUSTOM binding unchanged, TCP3389 listening;
 - final `CERT-013_REPAIR_LIVE=PASS`.
 
-A test-wrapper-only `H` function name collided with Windows PowerShell `Get-History` alias before the first Update attempt; no product code/mutation had started. Corrected acceptance wrapper passed. This is not a Hermes runtime bug.
-
-## Do not touch `SEC005 TEST` destructively
-
-Do not use this fixture for fresh-install/uninstall acceptance. Its current state is accepted and healthy.
+The earlier acceptance-wrapper function name `H` collided with Windows PowerShell `Get-History` before product mutation. Corrected wrapper passed; this was not a Hermes runtime bug.
 
 ## Exact resume action
 
-Final PR #32 merge gate requires a **separate disposable supported Windows PC/VM**:
+Do not use `SEC005 TEST` for destructive fresh-install/uninstall acceptance.
+
+Final PR #32 merge gate requires a separate disposable supported Windows test fixture:
 
 1. fresh install from exact head `29c19182...`;
 2. verify pairing/OpenSSH tunnel, automatic certificate companion, LocalSystem task, trusted CUSTOM listener, TCP3389 and external RDP;
 3. run normal uninstall;
 4. verify both Hermes tasks/processes removed and active client directory archived according to current uninstall behavior;
-5. if PASS, update context/evidence, mark PR #32 ready and merge with exact-head guard.
+5. if PASS, update evidence/context, mark PR #32 ready and merge with exact-head guard.
 
 If no disposable fixture exists, leave PR #32 draft instead of risking `SEC005 TEST`.
 
