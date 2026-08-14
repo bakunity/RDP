@@ -1,24 +1,23 @@
-# Hermes RDP — Latest Audit Pointer
+# Hermes RDP — Latest Product Audit
 
-Updated: 2026-08-14
+Updated: 2026-08-08
+Status: **NO CURRENT DEEP AUDIT — previous audit superseded by later acceptance**
 
-The full historical product audit remains in:
+The previous detailed 2026-08-07 audit is no longer a reliable current-state document. Several issues it described as open were subsequently fixed or live-validated during PR #19 stabilization.
 
-`context/archive/2026-08-07-full-product-audit.md`
+Current truth is intentionally split into:
 
-Do not treat that archive as the current execution plan. For current truth use:
+- `ACTIVE_WORK.md` — current PR/deployment/blockers/next step;
+- `EVIDENCE_LEDGER.md` — durable PASS/FAIL/root-cause evidence;
+- `CURRENT_STATE.md` — consolidated current state;
+- `NEXT_WORK.md` — remaining work;
+- `PROJECT_HANDOFF.md` — stable architecture/product vector.
 
-1. `ACTIVE_WORK.md`
-2. `CURRENT_STATE.md`
-3. `NEXT_WORK.md`
-4. `EVIDENCE_LEDGER.md`
+Historical deep reasoning remains available in:
 
-Current major delta since the archived audit:
+- `archive/2026-08-07-full-product-audit.md`;
+- Git history for the previous version of this file.
 
-- trusted public-IP Windows RDP certificate lifecycle is bounded live-accepted through CERT-012;
-- CERT-013 normal Windows lifecycle integration completed all live product gates on accepted product/test code head `e11cf89ed26d551ca92b4010034d6e6792a9266b`;
-- CI #381 passed Linux full release checks + Windows PowerShell 5.1;
-- accepted CERT-013 paths: transactional Update, targeted Repair, clean Fresh Install on disposable Win10 fixture, real external trusted Microsoft RDP, normal Uninstall;
-- release-note process now uses rolling `docs/releases/UNRELEASED.md`, compact public version notes and separate long-form history files.
+Do **not** revive old TODOs from the historical audit without checking the current evidence ledger.
 
-Natural renewal-driven certificate thumbprint rotation remains a deferred real-world observation and is not a blocker.
+When a new deep product audit is genuinely needed, replace this file with that new audit and archive it again when superseded. Do not append multiple generations of audits here.
