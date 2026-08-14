@@ -10,15 +10,15 @@ Ship a stable self-hosted product where a user can install Hermes on Debian/Ubun
 
 ## Stable release
 
-**Hermes RDP v1.2.1** is the current published stable release until PR #35 is explicitly approved and merged. Historical tags are immutable.
+**Hermes RDP v1.2.1** remains the published stable release until draft PR #35 is explicitly approved and merged. Historical tags are immutable.
 
 ## Immediate work
 
-### 1. v1.3.0 release candidate
+### 1. v1.3.0 publication decision
 
 The next release is **v1.3.0**, not v1.2.2, because the cycle adds a new backward-compatible trusted RDP certificate capability across server, API and Windows lifecycle.
 
-Draft PR #35 prepares:
+Draft PR #35 contains:
 
 - synchronized `1.3.0` version metadata;
 - concise public release notes;
@@ -28,18 +28,22 @@ Draft PR #35 prepares:
 - README/site/quickstart stable `v1.3.0` links;
 - corrected release-process documentation.
 
-Initial release head `13e2716276177849cb02a42864f824747537d88f`; CI #422 PASS.
+CI evidence:
 
-Before publication:
+- atomic release tree head `13e2716276177849cb02a42864f824747537d88f`: CI #422 PASS;
+- reconciled pre-approval head `8555aa3977f0f954f11fdf944a5ebedeeb3d815c`: CI #424 PASS.
 
-1. reconcile the current context-only `main` checkpoint into PR #35;
+PR #35 remains draft intentionally.
+
+Do not merge automatically. Merge changes `VERSION` in `main` and triggers immutable tag + GitHub Release publication.
+
+On explicit approval:
+
+1. reconcile the latest context-only `main` checkpoint into PR #35 one final time;
 2. rerun exact-head Linux + Windows PowerShell 5.1 CI;
-3. keep PR #35 draft after PASS;
-4. obtain explicit publication approval;
-5. only then mark ready and merge with exact-head guard;
-6. verify immutable `v1.3.0` tag, GitHub Release body and latest-release pointer.
-
-Do not merge PR #35 automatically: merge triggers release publication.
+3. mark ready only after PASS;
+4. merge with exact-head guard;
+5. verify `v1.3.0` tag, GitHub Release body and latest-release pointer.
 
 ### 2. Natural renewal observation — deferred/non-blocking
 
