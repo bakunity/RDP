@@ -63,22 +63,33 @@ SEC-004 remains intentionally fixture-unavailable. RL-006 remains PARTIAL PASS o
 | CERT-011D | Default-self-signed rollback root cause/fix | RESOLVED / LIVE-ACCEPTED | Original type `1` had no explicit custom registry binding. Removing the binding restored exact original self-signed thumbprint/type and TCP 3389; external warning returned. |
 | CERT-011E | Fixed trusted reapply | PASS | Fixed sync restored CUSTOM trusted thumbprint; fresh external Microsoft RDP was trusted again. |
 | CERT-011F | PR #30 merge | PASS | PR #30 merged after complete live acceptance as `a03e406aaafeb5833bc720d3eef62cca60818118`. |
-| CERT-012A | Automatic rotation implementation/final CI | PASS | Final PR #31 head `14da128328589dfae6c8e3b6819977120be16739`; CI #353 Linux full release checks PASS + Windows PowerShell 5.1 PASS. Earlier CI #341/#344/#350 also passed bounded implementation stages. |
-| CERT-012B | Server non-secret certificate state deploy | PASS | Transactional deploy `UPDATE=PASS`; production cert serial unchanged; state helper installed; state file `root:hermes-rdp` mode `0640`; thumbprint matched current cert; payload limited to expected non-secret fields. |
-| CERT-012C | Renewal/status server path | PASS | Authenticated certificate-status endpoint installed; renewal service smoke PASS; controller/sshd/timer active; TCP 80 free after smoke. |
-| CERT-012D | Windows worker unchanged-state setup | PASS | `SEC005 TEST` returned `CERT_ROTATION=UNCHANGED`; task Running; LocalSystem identity verified by SID `S-1-5-18`; Russian localized `СИСТЕМА` correctly resolved to that SID. |
-| CERT-012E | Rotation setup upgrade global mutex ACL | FAIL / CONFIRMED BUG | Updating while old SYSTEM worker owned `Global\HermesRdpCertificateRotation` caused administrator preflight `Access denied`; transactional setup rollback returned PASS. |
-| CERT-012F | Rotation setup mutex fix | RESOLVED / LIVE-ACCEPTED | Fixed setup stops existing worker with bounded wait before preflight; mutex ACL permits only LocalSystem + Builtin Administrators; CI #353 PASS; fixed immutable setup live returned `CERT_ROTATION=UNCHANGED`, `ROTATION_TASK_SID=S-1-5-18`, task Running and `CERT-012_SETUP=PASS`. |
-| CERT-012G | Automatic local self-signed drift recovery | PASS | Controlled rollback created hash type `1`; scheduled worker detected drift, invoked sync itself, logged `CERT_ROTATION=UPDATED`, restored expected CUSTOM trusted thumbprint, kept TCP 3389 listening and remained Running. Final output included `CERT-012_DRIFT_RECOVERY=PASS`. |
-| CERT-012H | External trust after automatic recovery | PASS | Fresh Microsoft Remote Desktop connection after worker recovery succeeded as a protected/trusted connection with no self-signed warning. |
-| CERT-012I | PR #31 merge | PASS | PR #31 merged after bounded live acceptance as `bd25db552aae8303356953fe2807a7bd855cba95`. |
-| CERT-012J | Natural renewal-driven rotation | PENDING / DEFERRED | Observe a real future renewal thumbprint change and automatic Windows rotation. Do not force unnecessary production issuance solely for testing. |
+| CERT-012A | Automatic rotation implementation/final CI | PASS | Final PR #31 head `14da128328589dfae6c8e3b6819977120be16739`; CI #353 Linux full release checks PASS + Windows PowerShell 5.1 PASS. |
+| CERT-012B | Server non-secret certificate state deploy | PASS | Transactional deploy PASS; cert serial unchanged; state ACL/fields/thumbprint accepted. |
+| CERT-012C | Renewal/status server path | PASS | Authenticated status endpoint + renewal smoke PASS; controller/sshd/timer active; TCP 80 free. |
+| CERT-012D | Windows worker unchanged-state setup | PASS | `SEC005 TEST` returned `CERT_ROTATION=UNCHANGED`; task Running; LocalSystem SID `S-1-5-18`. |
+| CERT-012E | Rotation setup upgrade global mutex ACL | FAIL / CONFIRMED BUG | Existing SYSTEM-owned global mutex caused administrator preflight Access denied; setup rollback PASS. |
+| CERT-012F | Rotation setup mutex fix | RESOLVED / LIVE-ACCEPTED | Existing worker stopped before preflight; mutex ACL limited to LocalSystem + Builtin Administrators; CI/live accepted. |
+| CERT-012G | Automatic local self-signed drift recovery | PASS | Worker detected controlled drift, invoked sync, logged `CERT_ROTATION=UPDATED`, restored trusted CUSTOM listener, kept TCP 3389 and task Running. |
+| CERT-012H | External trust after automatic recovery | PASS | Fresh Microsoft RDP after automatic recovery was trusted with no self-signed warning. |
+| CERT-012I | PR #31 merge | PASS | PR #31 merged as `bd25db552aae8303356953fe2807a7bd855cba95`. |
+| CERT-012J | Natural renewal-driven rotation | PENDING / DEFERRED | Observe real future renewal; do not force production issuance solely for evidence. |
+
+## CERT-013 normal Windows lifecycle integration
+
+| ID | Scenario | Status | Evidence / boundary |
+|---|---|---|---|
+| CERT-013A | Lifecycle implementation + CI | PASS | PR #32 head `29c19182ef99497b4cc314e3b4e9b6598ad95516`; CI #363 Linux full release checks PASS + Windows PowerShell 5.1 PASS. |
+| CERT-013B | Transactional Update integrates certificate companion | PASS | Live `SEC005 TEST`: `CERT_ROTATION=UNCHANGED`, `CERT-012_SETUP=PASS`, `UPDATE=PASS`, `CertificateRotation: managed`, identity/keys/known_hosts/device ID/RDP port unchanged, one Agent + one Hermes SSH process, rotation task Running as SID `S-1-5-18`, CUSTOM listener + TCP 3389 preserved, final `CERT-013_UPDATE=PASS`. |
+| CERT-013C | Repair restores missing rotation scaffolding | PASS | Live `SEC005 TEST`: only rotation task + worker removed; public Repair returned `REPAIR=PASS` + `CERT-013_REPAIR=PASS`; identity/port/tunnel/trusted binding unchanged; worker/task recreated as LocalSystem; TCP 3389 preserved; final `CERT-013_REPAIR_LIVE=PASS`. |
+| CERT-013D | Fresh install + uninstall lifecycle | PENDING | Must use a separate disposable supported Windows fixture/VM. Do not destructively remove `SEC005 TEST` solely for acceptance. |
 
 ## Current exact acceptance boundary
 
-CERT-001 through CERT-012 bounded behavior is complete and should not be repeated without a concrete regression reason. Natural renewal-driven rotation is a future observation, not a merge blocker.
+CERT-001 through CERT-012 bounded behavior is complete. CERT-013 Update and Repair lifecycle paths are additionally live proven on PR #32 exact head `29c19182...`.
 
-Current product gap is lifecycle integration: the accepted certificate companion must become part of ordinary Windows fresh install, transactional update, Repair and uninstall flows. That work begins as CERT-013 and creates a new revalidation obligation only for the lifecycle paths it changes.
+PR #32 remains draft until fresh install/uninstall is accepted on a separate disposable Windows fixture. `SEC005 TEST` must not be used for that destructive gate.
+
+Natural renewal-driven rotation remains a future observation, not a merge blocker.
 
 ## Update triggers
 
