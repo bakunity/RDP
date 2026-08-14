@@ -23,20 +23,20 @@ Already complete:
 - CERT-001 server inventory: Debian 13; no Nginx; TCP `80/443` unused; Certbot initially absent.
 - CERT-002 Certbot installation: `certbot 5.7.0` PASS.
 - CERT-003 public HTTP-01 reachability: PASS; UFW explicitly allows `80/tcp`, and five independent external probes reached a temporary listener with HTTP `200` and matching server access-log entries.
+- CERT-004 Let’s Encrypt staging public-IP issuance: PASS; critical IP SAN, RSA 2048, Server Authentication EKU, expected short-lived validity, staging CA issuer, and TCP 80 released after issuance.
 
 Next:
 
-- **CERT-004:** stop the temporary CERT-003 listener and perform a bounded Let’s Encrypt staging issuance for the public IP using Certbot standalone HTTP-01 with the required `shortlived` profile;
-- inspect certificate SAN/identity, issuer/chain, EKU and validity before production issuance;
-- perform production issuance only after the staging artifact is structurally suitable;
+- **CERT-005:** inspect the staging lineage/chain and safe renewal metadata and verify leaf/private-key consistency without exposing private-key material;
+- after CERT-005, replace the staging lineage with one bounded production issuance and inspect the trusted production chain;
 - remember the trust warning is produced by the Windows RDP listener certificate, not by HTTPS API TLS;
 - design safe certificate/private-key delivery or issuance so secret material is not spread unnecessarily;
-- design automated renewal before deployment because public-IP certificates are short-lived;
+- design automated renewal before Windows deployment because public-IP certificates are short-lived and become renewal-eligible when about half of their <=10-day lifetime remains;
 - bind/test first on non-critical `SEC005 TEST` and preserve its previous listener certificate/state as rollback;
 - validate Microsoft Remote Desktop no longer reports the intended trust/name warning;
 - only then expand to other Windows devices.
 
-Do not mutate Windows/RDP until server-side certificate issuance is proven.
+Do not mutate Windows/RDP until server-side production certificate issuance and renewal design are proven.
 
 ### 2. Release automation hardening
 
