@@ -24,6 +24,12 @@ $TaskName = 'Hermes RDP Agent'
 $ApiBase = "https://${Server}:${ApiPort}"
 $StartupTimeoutSeconds = 75
 $StartupStableSeconds = 20
+$AgentCandidate = Join-Path (
+    [IO.Path]::GetTempPath()
+) ("HermesRdpInstallAgent-$([Guid]::NewGuid().ToString('N')).ps1")
+$CertSetupCandidate = Join-Path (
+    [IO.Path]::GetTempPath()
+) ("HermesRdpInstallCertSetup-$([Guid]::NewGuid().ToString('N')).ps1")
 $ExpectedFingerprint = (
     $Fingerprint -replace '[^0-9A-Fa-f]', ''
 ).ToUpperInvariant()
@@ -160,6 +166,69 @@ function Set-SecretAcl {
         'O:SYG:SYD:P(A;;FA;;;SY)(A;;FA;;;BA)'
     )
     Set-Acl -LiteralPath $Path -AclObject $Acl
+}
+
+function Resolve-RepositorySha {
+    param([string]$Ref)
+
+    if ($Ref -match '^[0-9a-fA-F]{40}$') {
+        return $Ref.ToLowerInvariant()
+    }
+
+    $Encoded = [Uri]::EscapeDataString($Ref)
+    $Commit = Invoke-RestMethod `
+        -UseBasicParsing `
+        -Uri "https://api.github.com/repos/$Repo/commits/$Encoded" `
+        -Headers @{ Accept = 'application/vnd.github+json' }
+
+    $Sha = [string]$Commit.sha
+    if ($Sha -notmatch '^[0-9a-fA-F]{40}$') {
+        throw 'Не удалось разрешить RepositoryRef в immutable commit SHA.'
+    }
+    return $Sha.ToLowerInvariant()
+}
+
+function Assert-PowerShellFile {
+    param([string]$Path)
+
+    $Tokens = $null
+    $Errors = $null
+    [void][Management.Automation.Language.Parser]::ParseFile(
+        $Path,
+        [ref]$Tokens,
+        [ref]$Errors
+    )
+    if ($Errors.Count -gt 0) {
+        throw "PowerShell parse error: $($Errors[0].Message)"
+    }
+}
+
+function Get-NativePowerShellPath {
+    $System32 = Join-Path $env:WINDIR 'System32'
+    if (
+        [Environment]::Is64BitOperatingSystem -and
+        -not [Environment]::Is64BitProcess
+    ) {
+        $System32 = Join-Path $env:WINDIR 'Sysnative'
+    }
+    return Join-Path $System32 'WindowsPowerShell\v1.0\powershell.exe'
+}
+
+function Invoke-CertificateRotationSetup {
+    param(
+        [string]$SetupPath,
+        [string]$ResolvedSha
+    )
+
+    $NativePowerShell = Get-NativePowerShellPath
+    & $NativePowerShell `
+        -NoProfile `
+        -ExecutionPolicy Bypass `
+        -File $SetupPath `
+        -RepositoryRef $ResolvedSha
+    if ($LASTEXITCODE -ne 0) {
+        throw "Certificate rotation setup failed with code $LASTEXITCODE"
+    }
 }
 
 function Stop-HermesProcesses {
@@ -444,6 +513,35 @@ if ([string]::IsNullOrWhiteSpace($Name)) {
     $Name = $env:COMPUTERNAME
 }
 
+$ResolvedSha = Resolve-RepositorySha -Ref $RepositoryRef
+$AgentUrl = (
+    "https://raw.githubusercontent.com/$Repo/" +
+    "$ResolvedSha/client/HermesRdpAgent.ps1"
+)
+$CertSetupUrl = (
+    "https://raw.githubusercontent.com/$Repo/" +
+    "$ResolvedSha/scripts/setup-client-cert-rotation.ps1"
+)
+try {
+    Invoke-WebRequest `
+        -UseBasicParsing `
+        -Uri $AgentUrl `
+        -OutFile $AgentCandidate
+    Invoke-WebRequest `
+        -UseBasicParsing `
+        -Uri $CertSetupUrl `
+        -OutFile $CertSetupCandidate
+    Assert-PowerShellFile -Path $AgentCandidate
+    Assert-PowerShellFile -Path $CertSetupCandidate
+}
+catch {
+    Remove-Item `
+        -LiteralPath $AgentCandidate, $CertSetupCandidate `
+        -Force `
+        -ErrorAction SilentlyContinue
+    throw
+}
+
 $OpenSsh = Ensure-OpenSshClient
 $SshPath = [string]$OpenSsh.ssh
 $KeygenPath = [string]$OpenSsh.keygen
@@ -492,25 +590,11 @@ if ($BaseDirExistedBefore) {
 New-Item -ItemType Directory -Path $BaseDir -Force | Out-Null
 
 $AgentPath = Join-Path $BaseDir 'HermesRdpAgent.ps1'
-$AgentUrl = (
-    "https://raw.githubusercontent.com/$Repo/" +
-    "$RepositoryRef/client/HermesRdpAgent.ps1"
-)
-Invoke-WebRequest `
-    -UseBasicParsing `
-    -Uri $AgentUrl `
-    -OutFile $AgentPath
-
-$Tokens = $null
-$ParseErrors = $null
-[void][Management.Automation.Language.Parser]::ParseFile(
-    $AgentPath,
-    [ref]$Tokens,
-    [ref]$ParseErrors
-)
-if ($ParseErrors.Count -gt 0) {
-    throw "Agent parse error: $($ParseErrors[0].Message)"
-}
+Copy-Item `
+    -LiteralPath $AgentCandidate `
+    -Destination $AgentPath `
+    -Force
+Assert-PowerShellFile -Path $AgentPath
 
 $SshKeyPath = Join-Path $BaseDir 'id_ed25519'
 $SshPublicKeyPath = "$SshKeyPath.pub"
@@ -684,12 +768,17 @@ try {
         -TimeoutSeconds $StartupTimeoutSeconds `
         -StableSeconds $StartupStableSeconds
 
+    Invoke-CertificateRotationSetup `
+        -SetupPath $CertSetupCandidate `
+        -ResolvedSha $ResolvedSha
+
     Write-Host
     Write-Host '=== ГОТОВО ===' -ForegroundColor Green
     Write-Host "Компьютер: $($Pair.device.name)"
     Write-Host "RDP: ${Server}:$($Pair.device.rdp_port)"
     Write-Host "Туннель: OpenSSH"
     Write-Host "Задача: $TaskName"
+    Write-Host 'Сертификат RDP: автоматическое управление'
     Write-Host "Лог: $BaseDir\agent.log"
 }
 catch {
@@ -739,5 +828,11 @@ catch {
     throw $InstallFailure
 }
 finally {
-    $Http.Dispose()
+    if ($Http) {
+        $Http.Dispose()
+    }
+    Remove-Item `
+        -LiteralPath $AgentCandidate, $CertSetupCandidate `
+        -Force `
+        -ErrorAction SilentlyContinue
 }

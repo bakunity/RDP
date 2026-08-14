@@ -13,6 +13,9 @@ $StartupStableSeconds = 20
 $CandidatePath = Join-Path (
     [IO.Path]::GetTempPath()
 ) ("HermesRdpAgent-$([Guid]::NewGuid().ToString('N')).ps1")
+$CertSetupCandidate = Join-Path (
+    [IO.Path]::GetTempPath()
+) ("HermesRdpUpdateCertSetup-$([Guid]::NewGuid().ToString('N')).ps1")
 
 function Get-Sha256 {
     param([string]$Path)
@@ -22,6 +25,49 @@ function Get-Sha256 {
             -LiteralPath $Path `
             -Algorithm SHA256
     ).Hash.ToLowerInvariant()
+}
+
+function Assert-PowerShellFile {
+    param([string]$Path)
+
+    $Tokens = $null
+    $Errors = $null
+    [void][Management.Automation.Language.Parser]::ParseFile(
+        $Path,
+        [ref]$Tokens,
+        [ref]$Errors
+    )
+    if ($Errors.Count -gt 0) {
+        throw "PowerShell parse error: $($Errors[0].Message)"
+    }
+}
+
+function Get-NativePowerShellPath {
+    $System32 = Join-Path $env:WINDIR 'System32'
+    if (
+        [Environment]::Is64BitOperatingSystem -and
+        -not [Environment]::Is64BitProcess
+    ) {
+        $System32 = Join-Path $env:WINDIR 'Sysnative'
+    }
+    return Join-Path $System32 'WindowsPowerShell\v1.0\powershell.exe'
+}
+
+function Invoke-CertificateRotationSetup {
+    param(
+        [string]$SetupPath,
+        [string]$ResolvedSha
+    )
+
+    $NativePowerShell = Get-NativePowerShellPath
+    & $NativePowerShell `
+        -NoProfile `
+        -ExecutionPolicy Bypass `
+        -File $SetupPath `
+        -RepositoryRef $ResolvedSha
+    if ($LASTEXITCODE -ne 0) {
+        throw "Certificate rotation setup failed with code $LASTEXITCODE"
+    }
 }
 
 function Get-HermesAgentProcesses {
@@ -243,23 +289,23 @@ $CandidateUrl = (
     "https://raw.githubusercontent.com/$Repo/" +
     "$ResolvedSha/client/HermesRdpAgent.ps1"
 )
+$CertSetupUrl = (
+    "https://raw.githubusercontent.com/$Repo/" +
+    "$ResolvedSha/scripts/setup-client-cert-rotation.ps1"
+)
 
 try {
     Invoke-WebRequest `
         -UseBasicParsing `
         -Uri $CandidateUrl `
         -OutFile $CandidatePath
+    Invoke-WebRequest `
+        -UseBasicParsing `
+        -Uri $CertSetupUrl `
+        -OutFile $CertSetupCandidate
 
-    $Tokens = $null
-    $ParseErrors = $null
-    [void][Management.Automation.Language.Parser]::ParseFile(
-        $CandidatePath,
-        [ref]$Tokens,
-        [ref]$ParseErrors
-    )
-    if ($ParseErrors.Count -gt 0) {
-        throw "Candidate parse error: $($ParseErrors[0].Message)"
-    }
+    Assert-PowerShellFile -Path $CandidatePath
+    Assert-PowerShellFile -Path $CertSetupCandidate
 
     $BackupRoot = Join-Path $BaseDir 'backups\updates'
     $BackupDir = Join-Path $BackupRoot (Get-Date -Format 'yyyyMMdd-HHmmss')
@@ -288,6 +334,7 @@ try {
         resolved_sha = $ResolvedSha
         previous_agent_sha256 = Get-Sha256 -Path $AgentPath
         candidate_agent_sha256 = Get-Sha256 -Path $CandidatePath
+        candidate_cert_setup_sha256 = Get-Sha256 -Path $CertSetupCandidate
         task_state_before = [string]$TaskBefore.State
         expected_ssh_before = [bool]$ExpectSsh
     } |
@@ -310,16 +357,7 @@ try {
             -Destination $AgentPath `
             -Force
 
-        $ActiveTokens = $null
-        $ActiveParseErrors = $null
-        [void][Management.Automation.Language.Parser]::ParseFile(
-            $AgentPath,
-            [ref]$ActiveTokens,
-            [ref]$ActiveParseErrors
-        )
-        if ($ActiveParseErrors.Count -gt 0) {
-            throw "Activated agent parse error: $($ActiveParseErrors[0].Message)"
-        }
+        Assert-PowerShellFile -Path $AgentPath
 
         Start-ScheduledTask -TaskName $TaskName
         $Ready = Wait-HermesRuntimeReady `
@@ -328,12 +366,20 @@ try {
             -TimeoutSeconds $StartupTimeoutSeconds `
             -StableSeconds $StartupStableSeconds
 
+        # The certificate setup is a transactional sub-operation. If it fails,
+        # it restores its own files/task and throws; this outer update then
+        # restores the previous main Agent/task below.
+        Invoke-CertificateRotationSetup `
+            -SetupPath $CertSetupCandidate `
+            -ResolvedSha $ResolvedSha
+
         Write-Host
         Write-Host 'UPDATE=PASS' -ForegroundColor Green
         Write-Host "ResolvedRef: $ResolvedSha"
         Write-Host "Backup: $BackupDir"
         Write-Host "AgentPID: $($Ready.AgentPid)"
         Write-Host "HermesSshCount: $($Ready.SshCount)"
+        Write-Host 'CertificateRotation: managed'
     }
     catch {
         $UpdateFailure = $_
@@ -383,7 +429,7 @@ try {
 }
 finally {
     Remove-Item `
-        -LiteralPath $CandidatePath `
+        -LiteralPath $CandidatePath, $CertSetupCandidate `
         -Force `
         -ErrorAction SilentlyContinue
 }

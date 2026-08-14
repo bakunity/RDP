@@ -2,17 +2,24 @@
 $ErrorActionPreference = 'Stop'
 $BaseDir = 'C:\ProgramData\HermesRDP'
 $TaskName = 'Hermes RDP Agent'
+$RotationTaskName = 'Hermes RDP Certificate Rotation'
+$AgentPath = Join-Path $BaseDir 'HermesRdpAgent.ps1'
+$RotationPath = Join-Path $BaseDir 'HermesRdpCertRotation.ps1'
 
 $Answer = Read-Host 'Введите REMOVE для удаления клиента'
 if ($Answer -ne 'REMOVE') {
     exit 1
 }
 
-Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-Unregister-ScheduledTask `
-    -TaskName $TaskName `
-    -Confirm:$false `
-    -ErrorAction SilentlyContinue
+foreach ($HermesTask in @($TaskName, $RotationTaskName)) {
+    Stop-ScheduledTask `
+        -TaskName $HermesTask `
+        -ErrorAction SilentlyContinue
+    Unregister-ScheduledTask `
+        -TaskName $HermesTask `
+        -Confirm:$false `
+        -ErrorAction SilentlyContinue
+}
 
 Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
     Where-Object {
@@ -20,7 +27,9 @@ Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
         ($_.Name -eq 'ssh.exe' -and $_.CommandLine -and
             $_.CommandLine.Contains('HermesRDP')) -or
         ($_.CommandLine -and
-            $_.CommandLine.Contains("$BaseDir\HermesRdpAgent.ps1"))
+            $_.CommandLine.Contains($AgentPath)) -or
+        ($_.CommandLine -and
+            $_.CommandLine.Contains($RotationPath))
     } |
     ForEach-Object {
         Stop-Process `

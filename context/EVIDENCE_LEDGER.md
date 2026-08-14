@@ -53,7 +53,7 @@ SEC-004 remains intentionally fixture-unavailable. RL-006 remains PARTIAL PASS o
 | CERT-004 | Let’s Encrypt staging public-IP issuance | PASS | Standalone HTTP-01 + short-lived IP profile succeeded; critical IP SAN and Server Authentication EKU present. |
 | CERT-005 | Staging lineage/key/renewal validation | PASS | Certificate/private-key public-key match PASS; full chain inspected; saved standalone renewal dry-run succeeded; TCP 80 free before/after. |
 | CERT-006 | Production public-IP issuance | PASS | Production Let’s Encrypt issuance succeeded; critical IP SAN, Server Authentication EKU, RSA key match and local trust-chain validation PASS. |
-| CERT-007 | Renewal scheduler inventory | PASS | Certbot venv install had no existing systemd/cron renewal schedule; gap confirmed before productization. |
+| CERT-007 | Renewal scheduler inventory | PASS | Certbot venv install had no existing systemd/cron renewal schedule; gap confirmed before mutation. |
 | CERT-008 | Hermes-owned renewal timer/service | PASS | systemd service/timer enabled and active; bounded not-due smoke succeeded; TCP 80 returned free. |
 | CERT-009 | Server lifecycle productization | PASS | PR #29 immutable live adoption reused existing production lineage without serial change; helper/timer/config accepted. |
 | CERT-010 | Windows listener inventory | PASS | Win10 Pro 19045 x64 + PowerShell 5.1 x64; default self-signed hash type `1`; exact rollback thumbprint known; TermService and TCP 3389 healthy. |
@@ -78,16 +78,19 @@ SEC-004 remains intentionally fixture-unavailable. RL-006 remains PARTIAL PASS o
 
 | ID | Scenario | Status | Evidence / boundary |
 |---|---|---|---|
-| CERT-013A | Lifecycle implementation + CI | PASS | PR #32 head `29c19182ef99497b4cc314e3b4e9b6598ad95516`; CI #363 Linux full release checks PASS + Windows PowerShell 5.1 PASS. |
+| CERT-013A | Lifecycle implementation + CI | PASS | PR #32 accepted product/test code head `e11cf89ed26d551ca92b4010034d6e6792a9266b`; reconcile CI #381 Linux full release checks PASS + Windows PowerShell 5.1 PASS. Later evidence-only commits do not change CERT-013 product/test files. |
 | CERT-013B | Transactional Update integrates certificate companion | PASS | Live `SEC005 TEST`: `CERT_ROTATION=UNCHANGED`, `CERT-012_SETUP=PASS`, `UPDATE=PASS`, `CertificateRotation: managed`, identity/keys/known_hosts/device ID/RDP port unchanged, one Agent + one Hermes SSH process, rotation task Running as SID `S-1-5-18`, CUSTOM listener + TCP 3389 preserved, final `CERT-013_UPDATE=PASS`. |
 | CERT-013C | Repair restores missing rotation scaffolding | PASS | Live `SEC005 TEST`: only rotation task + worker removed; public Repair returned `REPAIR=PASS` + `CERT-013_REPAIR=PASS`; identity/port/tunnel/trusted binding unchanged; worker/task recreated as LocalSystem; TCP 3389 preserved; final `CERT-013_REPAIR_LIVE=PASS`. |
-| CERT-013D | Fresh install + uninstall lifecycle | PENDING | Must use a separate disposable supported Windows fixture/VM. Do not destructively remove `SEC005 TEST` solely for acceptance. |
+| CERT-013D | Clean disposable fixture preflight | PASS | `DESKTOP-T9N368F`: Windows 10 Pro build 19045 x64, PowerShell 5.1 x64, Defender AV + real-time protection True, OpenSSH Client Installed, Hermes base/task/process state absent; final `CERT-013_CLEAN_FIXTURE=PASS`. |
+| CERT-013E | Fresh install manages certificate lifecycle automatically | PASS | Exact accepted head `e11cf89e...`; `CERT_ROTATION=UPDATED`, `CERT-012_SETUP=PASS`; device `CERT013 FRESH`, endpoint `SERVER_IP_OR_DOMAIN:53394`; main task/one Agent/one Hermes SSH healthy; rotation task LocalSystem SID `S-1-5-18`; CUSTOM trusted thumbprint `2E170C609B47E0D34F16238503998509EDDDC79C`; TCP 3389; Defender remained enabled with no Hermes exclusion; final `CERT-013_FRESH_INSTALL=PASS`. |
+| CERT-013F | Fresh-install external trusted RDP | PASS | User connected through `SERVER_IP_OR_DOMAIN:53394`; Microsoft RDP worked and certificate was trusted with no warning. |
+| CERT-013G | Normal uninstall removes full client runtime | PASS | Disposable fixture: both Hermes tasks absent; Agent/rotation/SSH counts all zero; active `C:\ProgramData\HermesRDP` absent; archive `C:\ProgramData\HermesRDP.removed.20260814-132332` validated; Defender real-time protection remained True; final `CERT-013_UNINSTALL=PASS`. |
 
 ## Current exact acceptance boundary
 
-CERT-001 through CERT-012 bounded behavior is complete. CERT-013 Update and Repair lifecycle paths are additionally live proven on PR #32 exact head `29c19182...`.
+CERT-001 through CERT-012 bounded behavior is complete. CERT-013 Update, Repair, clean Fresh Install, external trusted RDP and Uninstall are fully live proven on PR #32 accepted product/test code head `e11cf89ed26d551ca92b4010034d6e6792a9266b`.
 
-PR #32 remains draft until fresh install/uninstall is accepted on a separate disposable Windows fixture. `SEC005 TEST` must not be used for that destructive gate.
+PR #32 has no remaining live product gate. Evidence-only context/release commits after `e11cf89e...` do not invalidate the accepted code boundary. The next repository action is final CI on the evidence head, ready-for-review transition and exact-head merge.
 
 Natural renewal-driven rotation remains a future observation, not a merge blocker.
 
