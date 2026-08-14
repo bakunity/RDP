@@ -3,54 +3,44 @@
 Updated: 2026-08-14
 Status: **CHAT BOUNDARY DELTA / NON-AUTHORITATIVE**
 
-Primary truth remains `ACTIVE_WORK.md` / `CURRENT_STATE.md` / `NEXT_WORK.md`.
+Primary truth remains `ACTIVE_WORK.md` / `CURRENT_STATE.md` / `NEXT_WORK.md` / `EVIDENCE_LEDGER.md`.
 
-## Where this chat stopped
+## Where this chat is now
 
-The stabilization/release work is complete enough to move on:
+Trusted public-IP RDP certificate work reached full bounded acceptance through CERT-012.
 
-- stable release is **v1.2.1**;
-- rich product README with badges and full Hermes RDP description is restored;
-- `v1.2.0` remains historical packaging-error release and is not rewritten;
-- prepared release-workflow hardening branch `fix/release-tag-head-v2` exists at `ef32b8dd95ffa1c274dc1749eae736867d2fb74b`, but no PR was successfully opened yet.
+Merged work:
 
-The active workstream changed to **trusted Microsoft RDP certificate using the public IP**. Domain use is intentionally deferred unless a concrete need appears.
+- PR #29 server certificate lifecycle;
+- PR #30 authenticated Windows certificate delivery/binding + correct type-aware rollback;
+- PR #31 automatic Windows certificate rotation, merge commit `bd25db552aae8303356953fe2807a7bd855cba95`.
 
-## Certificate evidence already accepted
+Final PR #31 tested head: `14da128328589dfae6c8e3b6819977120be16739`; CI #353 Linux + Windows PowerShell 5.1 PASS.
 
-### CERT-001 — PASS
+## Key live proof
 
-Live server inventory:
+On non-critical `SEC005 TEST`:
 
-- Debian GNU/Linux 13 (trixie);
-- Certbot initially absent;
-- Nginx absent;
-- no listeners on TCP `80` or `443` at check time.
+- rotation task runs as LocalSystem SID `S-1-5-18`;
+- unchanged state returns `CERT_ROTATION=UNCHANGED`;
+- a global-mutex upgrade ACL bug was reproduced, rollback worked, then fixed and live accepted;
+- controlled rollback to Windows default self-signed created real local drift;
+- scheduled worker detected drift, invoked trusted sync itself and logged `CERT_ROTATION=UPDATED`;
+- trusted CUSTOM listener returned, TCP 3389 stayed listening, worker stayed Running;
+- fresh Microsoft Remote Desktop connection was protected/trusted with no self-signed warning.
 
-### CERT-002 — PASS
+Linux production has the accepted server-side certificate state/status/renewal slice deployed. Windows fixture has the final worker/setup fix.
 
-Certbot installation completed successfully.
-
-Observed final output:
-
-```text
-=== CERT-002 ===
-certbot 5.7.0
-```
-
-Do **not** ask the user to reinstall Certbot or repeat CERT-001 without a concrete regression reason.
-
-No certificate has been issued yet. No Windows RDP listener/certificate state has been changed yet.
+Natural renewal-driven thumbprint rotation is deferred until the existing short-lived certificate renews normally. Do not force extra production issuance solely for evidence.
 
 ## Exact resume action
 
-Start with **CERT-003 only**:
+Start **CERT-013** from current `main`:
 
-1. verify TCP `80` is reachable from the public Internet for ACME HTTP validation;
-2. if reachable, do a bounded staging/test public-IP certificate issuance with Certbot standalone;
-3. inspect identity/SAN/chain before production use;
-4. only later bind a trusted certificate to the Windows RDP listener, first on `SEC005 TEST`, preserving rollback.
+1. inspect normal Windows fresh install, transactional update, Repair and uninstall flows;
+2. integrate the accepted rotation worker + sync companion transactionally so no separate manual setup command is needed;
+3. preserve PowerShell 5.1, Win10 x86/Sysnative compatibility, LocalSystem SID validation, mutex ACL fix and rollback behavior;
+4. keep certificate work out of the 3-second main agent loop;
+5. add CI before any new live mutation.
 
-Critical conceptual boundary: installing TLS only on the Linux/API side does not remove the Microsoft Remote Desktop certificate warning. The Windows RDP listener is the certificate presenter for the tunneled RDP connection.
-
-Never put private keys, pairing codes, API tokens or ready-to-use secret material into context/chat.
+Do not repeat CERT-001..CERT-012 acceptance without a concrete regression reason. Never put private keys, PFX passwords, API/device tokens, pairing codes or other secrets into context/chat.
