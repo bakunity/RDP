@@ -28,63 +28,60 @@ Prepared branch `fix/release-tag-head-v2` changes the release SHA to the exact v
 
 ## Current product track — trusted RDP certificate on public IP
 
-User decision: **do not add a domain only for appearance**. Proceed with a certificate whose identity is the public IP, because a domain by itself does not remove the Microsoft Remote Desktop warning. The certificate that matters for that warning must ultimately be presented by the **Windows RDP listener**, not merely installed on the Linux/API side.
+User decision: **do not add a domain only for appearance**. Proceed with a certificate whose identity is the public IP. The certificate that matters for the Microsoft Remote Desktop warning must ultimately be presented by the **Windows RDP listener**, not merely installed on the Linux/API side.
 
 ### CERT-001 — server inventory — PASS
 
-Read-only live inventory on the certificate host:
-
-- OS: Debian GNU/Linux 13 (trixie);
-- Certbot was not installed yet;
-- Nginx absent;
-- no listeners on TCP `80` or `443` at the time of the check.
+- Debian GNU/Linux 13 (trixie).
+- Certbot was initially absent; Nginx absent; TCP `80/443` unused at the time of inventory.
 
 ### CERT-002 — Certbot install — PASS
 
 - Certbot installed in an isolated Python environment under `/opt/certbot` with `/usr/local/bin/certbot` entry point.
-- Live version output: `certbot 5.7.0`.
-- No certificate had been issued at this stage.
-- Windows/RDP listener had not been changed.
+- Live version: `certbot 5.7.0`.
 
 ### CERT-003 — external TCP 80 / HTTP-01 reachability — PASS
 
-- UFW is active with default incoming deny; explicit `80/tcp` ACME HTTP-01 allow rule was added.
-- Temporary standalone HTTP listener bound to `0.0.0.0:80` and served a unique test response locally.
-- Five independent external probes from different regions all reached the public IPv4 endpoint and returned HTTP `200`.
-- Server access log independently recorded all five external GET requests.
-- This proves the public path Internet -> TCP 80 -> host firewall -> local HTTP listener for HTTP-01 validation.
-- Do not repeat CERT-003 unless firewall/network state changes or ACME validation later contradicts it.
+- UFW explicitly allows `80/tcp` for ACME HTTP-01.
+- Five independent external probes reached a temporary listener and returned HTTP `200`; matching GETs appeared in the server access log.
+- Do not repeat unless firewall/network state changes or ACME validation later contradicts it.
 
 ### CERT-004 — staging public-IP issuance — PASS
 
-- Let’s Encrypt staging issuance succeeded with Certbot standalone HTTP-01 and `shortlived` profile.
-- Leaf SAN is critical and contains the public IPv4 identifier.
-- EKU is `TLS Web Server Authentication`.
-- RSA 2048 key requested; validity matches the short-lived IP-certificate profile.
-- TCP `80` was free again after Certbot exited.
-- Staging issuer is intentionally untrusted and is not for Windows deployment.
+- Let’s Encrypt staging issuance succeeded with standalone HTTP-01 and `shortlived`.
+- Leaf SAN contains the public IPv4 identifier; EKU is `TLS Web Server Authentication`; RSA 2048.
 
 ### CERT-005 — staging chain/key/renewal mechanics — PASS
 
-- `cert.pem`, `chain.pem`, `fullchain.pem` and `privkey.pem` are present.
-- Certificate public key matches the private key (`PUBLIC_KEY_MATCH=PASS`).
-- Staging fullchain parsed successfully as three certificates.
-- Renewal config retains `rsa`, `2048`, `shortlived`, staging ACME server and `standalone` authenticator.
+- Certificate/private-key public keys match.
+- Staging fullchain parsed correctly.
 - `certbot renew --cert-name <public-ip> --dry-run --non-interactive` succeeded.
-- TCP `80` was free both before and after the dry-run.
-- Evidence boundary: renewal **mechanics** are proven; automatic scheduling via systemd/cron has not yet been verified for this pip/venv install and remains required before Windows rollout.
+- Evidence boundary: renewal mechanics are proven; automatic scheduling was not yet verified.
+
+### CERT-006 — production public-IP issuance — PASS
+
+- Staging lineage had no external service references and was removed with `certbot delete`.
+- Real Let’s Encrypt production issuance succeeded using the proven standalone HTTP-01 + `shortlived` + RSA 2048 settings.
+- Production leaf issuer is Let’s Encrypt `YR1` and does not contain staging markers.
+- SAN critically contains the public IPv4 identifier; EKU is `TLS Web Server Authentication`.
+- Certificate/private-key public keys match (`PUBLIC_KEY_MATCH=PASS`).
+- Local trust verification against the host CA store returned `OK`.
+- Production renewal config points to `https://acme-v02.api.letsencrypt.org/directory`, uses `standalone`, RSA 2048 and `shortlived`.
+- TCP `80` was free after issuance.
+- Certificate is short-lived and requires reliable automated renewal/rotation before Windows deployment.
+- No Windows RDP listener certificate state has been changed yet.
 
 ## Exact resume action
 
-**CERT-006:** replace the staging lineage with a real Let’s Encrypt **production** public-IP certificate using the same proven standalone HTTP-01 + `shortlived` + RSA parameters. Before deleting the staging lineage, verify there are no external service references to it; use `certbot delete`, never manual deletion under `/etc/letsencrypt`.
+**CERT-007:** verify the real automatic-renewal scheduler on this pip/venv Certbot installation and, if absent, install a Hermes-owned systemd service/timer with safe cadence, locking, logging and failure visibility. Then prove it can invoke the existing production renewal path without leaving TCP `80` occupied.
 
-After production issuance succeeds:
+After scheduler acceptance:
 
-1. inspect production SAN, issuer/chain, EKU and validity and verify the certificate/key match;
-2. verify/configure an actual automatic renewal scheduler and a safe deploy/rotation hook path;
-3. design secure certificate/private-key delivery to the Windows RDP listener without exposing secret material;
-4. validate first on the non-critical `SEC005 TEST` device while keeping the current self-signed RDP listener state as rollback;
-5. only after user-facing Microsoft RDP trust acceptance expand to other devices.
+1. design renewal deploy/rotation hooks;
+2. design secure Windows certificate/private-key delivery or a safer per-device key model;
+3. integrate the proven certificate lifecycle into Hermes RDP rather than leaving it as manual operator commands;
+4. validate first on non-critical `SEC005 TEST`, preserving the existing listener certificate/state as rollback;
+5. only after Microsoft Remote Desktop trust acceptance expand to other devices.
 
 Do not expose private keys, pairing codes, API tokens or secret-bearing certificate material in chat/context.
 
