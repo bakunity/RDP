@@ -54,7 +54,7 @@ Live accepted:
 - **Update FULL PASS (`SEC005 TEST`)**: ordinary transactional Update automatically manages certificate rotation from the same immutable SHA; device/config/key/known_hosts/port identity stayed unchanged; main Agent/tunnel and rotation task remained healthy; trusted RDP binding/3389 unchanged.
 - **Repair FULL PASS (`SEC005 TEST`)**: only rotation task + worker were removed; public Repair recreated them automatically while preserving identity, port, tunnel, trusted CUSTOM listener and TCP 3389.
 - **Fresh Install FULL PASS (`DESKTOP-T9N368F`)**: clean Windows 10 Pro 19045 x64 / PowerShell 5.1 / Defender-enabled fixture installed from accepted head `e11cf89e...`; main Agent + SSH tunnel + LocalSystem rotation task came up automatically; trusted CUSTOM listener bound; no Defender exclusion required.
-- **External RDP PASS**: real connection to `150.241.94.110:53394` worked with trusted certificate and no self-signed warning.
+- **External RDP PASS**: real connection to `SERVER_IP_OR_DOMAIN:53394` worked with trusted certificate and no self-signed warning.
 - **Uninstall FULL PASS**: both Hermes tasks and all Hermes Agent/rotation/SSH processes removed; active client directory archived/removed; Defender real-time protection remained enabled.
 
 ## Exact next step
