@@ -53,6 +53,11 @@ function Get-RdpSetting {
         -Filter $RdpFilter
 }
 
+function Get-RegistryBindingPresent {
+    $Item = Get-Item -LiteralPath $RdpRegPath
+    return ($Item.Property -contains 'SSLCertificateSHA1Hash')
+}
+
 function Set-RdpThumbprint {
     param([string]$Thumbprint)
     $Clean = Normalize-Thumbprint -Value $Thumbprint
@@ -63,6 +68,53 @@ function Set-RdpThumbprint {
     [void]($Setting | Set-CimInstance -Property @{
         SSLCertificateSHA1Hash = $Clean
     })
+}
+
+function Restore-RdpBinding {
+    param(
+        [string]$Thumbprint,
+        [int]$HashType
+    )
+
+    $Clean = Normalize-Thumbprint -Value $Thumbprint
+    if ($Clean.Length -ne 40) {
+        throw 'Некорректный previous RDP certificate thumbprint.'
+    }
+
+    if ($HashType -eq 1) {
+        if (Get-RegistryBindingPresent) {
+            Remove-ItemProperty `
+                -LiteralPath $RdpRegPath `
+                -Name SSLCertificateSHA1Hash `
+                -Force
+        }
+        Start-Sleep -Milliseconds 500
+        $Check = Get-RdpSetting
+        $Actual = Normalize-Thumbprint -Value ([string]$Check.SSLCertificateSHA1Hash)
+        if ([int]$Check.SSLCertificateSHA1HashType -ne 1) {
+            throw "Default self-signed hash type не восстановился: $($Check.SSLCertificateSHA1HashType)"
+        }
+        if ($Actual -ne $Clean) {
+            throw 'Default self-signed RDP thumbprint не восстановился.'
+        }
+        if (Get-RegistryBindingPresent) {
+            throw 'Custom registry binding остался после default rollback.'
+        }
+        return
+    }
+
+    if ($HashType -eq 3) {
+        Set-RdpThumbprint -Thumbprint $Clean
+        Start-Sleep -Milliseconds 500
+        $Check = Get-RdpSetting
+        $Actual = Normalize-Thumbprint -Value ([string]$Check.SSLCertificateSHA1Hash)
+        if ([int]$Check.SSLCertificateSHA1HashType -ne 3 -or $Actual -ne $Clean) {
+            throw 'Previous custom RDP binding не восстановился.'
+        }
+        return
+    }
+
+    throw "Неподдерживаемый previous RDP hash type для rollback: $HashType"
 }
 
 function Get-PrivateKeyInfo {
@@ -136,28 +188,22 @@ function Grant-NetworkServiceRead {
     }
 }
 
-function Restore-FunctionalBinding {
-    param([string]$Thumbprint)
-    if ([string]::IsNullOrWhiteSpace($Thumbprint)) {
-        return
-    }
-    Set-RdpThumbprint -Thumbprint $Thumbprint
-}
-
 if ($Rollback) {
     $Backup = Read-JsonFile -Path $BackupPath
     if (-not $Backup) {
         throw "Rollback-файл не найден: $BackupPath"
     }
     $OldHash = Normalize-Thumbprint -Value ([string]$Backup.previous_thumbprint)
-    Restore-FunctionalBinding -Thumbprint $OldHash
+    $OldType = [int]$Backup.previous_hash_type
+    Restore-RdpBinding -Thumbprint $OldHash -HashType $OldType
     $Check = Get-RdpSetting
     $Actual = Normalize-Thumbprint -Value ([string]$Check.SSLCertificateSHA1Hash)
-    if ($Actual -ne $OldHash) {
-        throw 'Rollback RDP thumbprint не подтвердился.'
+    if ($Actual -ne $OldHash -or [int]$Check.SSLCertificateSHA1HashType -ne $OldType) {
+        throw 'Rollback RDP binding не подтвердился.'
     }
     Write-Host 'ROLLBACK=PASS'
     Write-Host "RDP_THUMBPRINT=$Actual"
+    Write-Host "RDP_HASH_TYPE=$OldType"
     Write-Host 'CERT-011=ROLLBACK_PASS'
     exit 0
 }
@@ -247,6 +293,7 @@ $Response = $null
 $PfxPath = $null
 $ImportedNew = $false
 $PreviousHash = $null
+$PreviousHashType = $null
 $NewThumbprint = $null
 try {
     $Request = New-Object System.Net.Http.HttpRequestMessage(
@@ -287,13 +334,17 @@ try {
 
     $RdpBefore = Get-RdpSetting
     $PreviousHash = Normalize-Thumbprint -Value ([string]$RdpBefore.SSLCertificateSHA1Hash)
+    $PreviousHashType = [int]$RdpBefore.SSLCertificateSHA1HashType
     if ($PreviousHash.Length -ne 40) {
         throw 'Не удалось получить текущий RDP certificate thumbprint.'
+    }
+    if ($PreviousHashType -notin @(1, 3)) {
+        throw "Hermes не поддерживает transactional rollback из RDP hash type $PreviousHashType."
     }
     $Backup = [ordered]@{
         captured_at = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
         previous_thumbprint = $PreviousHash
-        previous_hash_type = [int]$RdpBefore.SSLCertificateSHA1HashType
+        previous_hash_type = $PreviousHashType
         target_thumbprint = $NewThumbprint
     }
     Write-JsonFile -Path $BackupPath -Value $Backup
@@ -378,9 +429,11 @@ try {
 }
 catch {
     $Failure = $_
-    if ($PreviousHash -and $PreviousHash.Length -eq 40) {
+    if ($PreviousHash -and $PreviousHash.Length -eq 40 -and $null -ne $PreviousHashType) {
         try {
-            Restore-FunctionalBinding -Thumbprint $PreviousHash
+            Restore-RdpBinding `
+                -Thumbprint $PreviousHash `
+                -HashType ([int]$PreviousHashType)
             Write-Host 'AUTO_ROLLBACK=PASS'
         }
         catch {
