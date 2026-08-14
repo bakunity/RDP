@@ -104,6 +104,24 @@ function Register-RotationTask {
         Out-Null
 }
 
+function Get-PrincipalSid {
+    param([string]$UserId)
+
+    if ($UserId -match '^S-\d-') {
+        return $UserId
+    }
+    try {
+        return (
+            New-Object System.Security.Principal.NTAccount($UserId)
+        ).Translate(
+            [System.Security.Principal.SecurityIdentifier]
+        ).Value
+    }
+    catch {
+        return ''
+    }
+}
+
 Write-Host '=== CERT-012 ==='
 
 if (-not (Test-Path -LiteralPath $ConfigPath)) {
@@ -171,10 +189,18 @@ try {
     if ($TaskAfter.State -ne 'Running') {
         throw "Certificate rotation task did not enter Running state: $($TaskAfter.State)"
     }
+    $TaskSid = Get-PrincipalSid -UserId ([string]$TaskAfter.Principal.UserId)
+    if ($TaskSid -ne 'S-1-5-18') {
+        throw (
+            'Certificate rotation task is not LocalSystem: ' +
+            "UserId=$($TaskAfter.Principal.UserId) SID=$TaskSid"
+        )
+    }
 
     Write-Host "RESOLVED_REF=$ResolvedSha"
     Write-Host 'ROTATION_CHECK=PASS'
     Write-Host 'ROTATION_TASK=RUNNING'
+    Write-Host 'ROTATION_TASK_SID=S-1-5-18'
     Write-Host "BACKUP=$BackupDir"
     Write-Host 'CERT-012_SETUP=PASS'
 }
