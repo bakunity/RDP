@@ -36,7 +36,7 @@ Already accepted and must not be repeated without regression evidence:
 - PR #29 productized server lifecycle immutable live acceptance and merge;
 - CERT-010 read-only Windows 10 Pro x64 / PowerShell 5.1 x64 RDP listener inventory on `SEC005 TEST`, proving default self-signed baseline, TerminalServices CIM availability, rollback thumbprint, certificate tools and TCP 3389 listener.
 
-### CERT-011 — authenticated Windows certificate delivery/binding — PARTIAL PASS
+### CERT-011 — authenticated Windows certificate delivery/binding — CORE PASS, rollback/reapply pending
 
 Draft PR **#30**: `feat: add authenticated Windows RDP certificate rotation`.
 
@@ -44,43 +44,30 @@ Branch: `feat/windows-rdp-cert-rotation`.
 Tested/deployed head: `af054274405c33849b8bbdee0a730320a8b5ab33`.
 CI #324: Linux full release checks PASS + Windows PowerShell 5.1 PASS.
 
-Implemented:
+Implemented and live-accepted so far:
 
-- per-device authenticated `POST /v1/devices/{id}/rdp-certificate` endpoint;
-- existing bearer auth is checked before privileged helper invocation;
-- bounded root helper reads only the configured trusted Hermes lineage and emits an ephemeral password-protected PFX;
-- controller has no direct read access to `/etc/letsencrypt`;
-- exact-command sudoers rule permits only the package helper;
-- Windows sync uses existing pinned HTTPS + device token;
-- PFX imports to `LocalMachine\My` without `-Exportable` and verifies private-key non-exportability;
-- `NETWORK SERVICE` Read is applied to the private-key file;
-- previous listener thumbprint is saved before mutation;
-- custom RDP binding and local TCP 3389 are verified;
-- local failures trigger functional rollback;
-- server setup/updater/uninstall manage helper/sudoers transactionally.
+- authenticated per-device certificate package endpoint;
+- bearer auth before privileged helper execution;
+- bounded root helper reading only the configured trusted Hermes lineage;
+- exact-command sudoers boundary;
+- pinned HTTPS delivery to Windows;
+- PFX import into `LocalMachine\My` without `-Exportable`;
+- imported CNG private key verified non-exportable;
+- `NETWORK SERVICE` Read ACL on the private key;
+- previous RDP thumbprint saved before mutation;
+- custom RDP listener binding verified with TCP 3389 still listening;
+- transactional server updater deployed exact PR #30 head with `UPDATE=PASS`;
+- Let’s Encrypt certificate serial stayed unchanged during server deploy;
+- package helper runtime path `hermes-rdp -> sudo` passed;
+- controller, dedicated sshd and renewal timer remained active; TCP 80 remained free.
 
-Live server acceptance on PR #30 head:
+External Microsoft Remote Desktop acceptance on `SEC005 TEST`:
 
-- transactional updater returned `UPDATE=PASS`;
-- Let’s Encrypt certificate serial remained unchanged;
-- package helper files/sudoers present;
-- helper executed successfully through the real `hermes-rdp -> sudo` path without exposing PFX/password in chat;
-- controller, dedicated sshd and renewal timer remained active;
-- TCP 80 remained free.
+- fresh connection through the normal Hermes public-IP endpoint succeeded;
+- Microsoft Remote Desktop displayed **“Подлинность удаленного компьютера проверена с помощью сертификата сервера”** instead of the prior untrusted-certificate warning;
+- certificate dialog showed production Let’s Encrypt issuer `YR1` and the expected short-lived validity window.
 
-Live Windows local-binding acceptance on non-critical `SEC005 TEST`:
-
-- authenticated certificate package retrieval: PASS;
-- PFX import: PASS;
-- private-key provider: CNG;
-- private key verified non-exportable;
-- `NETWORK SERVICE` Read ACL: PASS;
-- RDP listener changed from the saved default self-signed thumbprint to the trusted certificate thumbprint;
-- `SSLCertificateSHA1HashType` became CUSTOM;
-- TCP 3389 remained listening;
-- rollback file exists at the Hermes data path.
-
-CERT-011 is not fully complete yet because the external client acceptance has not been performed. No claim yet that the Microsoft Remote Desktop certificate warning is gone.
+Therefore the core CERT-011 objective — a publicly trusted certificate actually presented by the Windows RDP listener through Hermes — is **PASS**.
 
 ## Security boundary
 
@@ -90,12 +77,13 @@ Current design sends an ephemeral password-protected PFX only after existing dev
 
 ## Exact resume action
 
-Complete the **external CERT-011 acceptance**:
+Complete the **CERT-011 rollback/reapply acceptance** on `SEC005 TEST` before merging PR #30:
 
-1. from a separate Microsoft Remote Desktop client, open a **new** connection to the normal Hermes public endpoint for `SEC005 TEST` using the public IP address;
-2. confirm the connection succeeds and the previous certificate identity/trust warning is absent;
-3. if a warning remains, capture only its exact text/screenshot and do not delete the rollback state;
-4. after external PASS, test the explicit Hermes rollback path once, then reapply trusted binding and confirm reconnect again;
-5. only after those bounded checks integrate periodic certificate sync into the normal Windows agent and validate a real renewal-driven rotation cycle.
+1. invoke the immutable sync script with `-Rollback` and verify the saved previous thumbprint is restored and TCP 3389 remains functional;
+2. re-run normal sync and verify the trusted certificate is re-applied as CUSTOM with the same trusted thumbprint;
+3. perform one fresh RDP connection after reapply to confirm trusted behavior still holds;
+4. only then mark PR #30 merge-ready.
+
+After PR #30 bounded acceptance, integrate periodic certificate sync into the normal Hermes Windows agent so renewal-driven rotation becomes automatic, then live-test one real renewal/rotation cycle before expanding to other Windows devices.
 
 Do not expose PFX content/passwords, private keys, pairing codes, API tokens or other secret-bearing material in chat/context.
