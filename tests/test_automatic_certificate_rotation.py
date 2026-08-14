@@ -30,7 +30,9 @@ class AutomaticCertificateRotationTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("STATE_REFRESH=/usr/local/sbin/hermes-rdp-cert-state-refresh", renew)
-        self.assertLess(renew.index('"$CERTBOT" renew'), renew.index('"$STATE_REFRESH"'))
+        certbot_call = renew.index('"$CERTBOT" renew')
+        refresh_call = renew.index('"$STATE_REFRESH" >/dev/null')
+        self.assertLess(certbot_call, refresh_call)
         self.assertIn("exec 9>", renew)
         self.assertIn("flock -w 300 9", renew)
 
@@ -38,7 +40,7 @@ class AutomaticCertificateRotationTests(unittest.TestCase):
         api = (ROOT / "server/hermes_rdp/api.py").read_text(encoding="utf-8")
         self.assertIn('action == "rdp-certificate-status"', api)
         start = api.index("    def _rdp_certificate_status")
-        end = api.index("    def _rdp_certificate", start)
+        end = api.index("    def _rdp_certificate(self", start)
         method = api[start:end]
         self.assertLess(method.index("self._device_auth(device_id)"), method.index("CERT_STATE_FILE"))
         self.assertIn("HTTPStatus.UNAUTHORIZED", method)
