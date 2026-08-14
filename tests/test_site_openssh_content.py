@@ -17,8 +17,8 @@ class WebsiteOpenSshContentTests(unittest.TestCase):
             "permitlisten",
             "Hermes Agent",
             "Trusted RDP certificate",
-            "Stable v1.2.1",
-            "current main ahead",
+            "Stable v1.3.0",
+            '"softwareVersion": "1.3.0"',
         ]:
             self.assertIn(required, text)
 
@@ -29,19 +29,23 @@ class WebsiteOpenSshContentTests(unittest.TestCase):
             "FRP-сервер",
             "OpenSSH build 1.1.0",
             '"softwareVersion": "1.1.0"',
+            "Stable v1.2.1 · current main ahead",
             "Следующая проверка: порт 53390",
         ]:
             self.assertNotIn(stale, text)
 
-    def test_readme_separates_stable_release_from_current_main(self) -> None:
+    def test_readme_points_to_current_stable_release(self) -> None:
         text = (ROOT / "README.md").read_text(encoding="utf-8")
 
-        self.assertIn("stable release", text)
-        self.assertIn("v1.2.1", text)
+        self.assertIn("Stable release", text)
+        self.assertIn("v1.3.0", text)
         self.assertIn("Trusted RDP certificate", text)
-        self.assertIn("current `main`", text)
         self.assertIn("--trusted-rdp-cert", text)
-        self.assertIn("immutable commit", text)
+        self.assertIn(
+            "https://github.com/bakunity/RDP/releases/tag/v1.3.0",
+            text,
+        )
+        self.assertIn("immutable ref", text)
 
     def test_documentation_has_real_acceptance_path(self) -> None:
         testing = (ROOT / "docs/TESTING_A_TO_Z.md").read_text(

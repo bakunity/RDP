@@ -2,6 +2,8 @@
 
 Этот путь рассчитан на чистый Debian/Ubuntu-сервер и Windows 10/11 Pro, Enterprise или Education.
 
+Stable release: **v1.3.0**.
+
 ## 1. Что понадобится
 
 - Linux-сервер с публичным IPv4 или доменом;
@@ -12,18 +14,16 @@
 
 Windows Home не является штатным RDP-host и не поддерживается.
 
-Если хотите trusted certificate именно для Windows RDP listener, нужен **глобально маршрутизируемый public IPv4** и доступный TCP `80` для ACME HTTP-01.
+Для trusted certificate именно Windows RDP listener нужен глобально маршрутизируемый public IPv4 и доступный TCP `80` для ACME HTTP-01.
 
 ## 2. Установка сервера
-
-До публикации следующего release tag используйте проверенный immutable source ref проекта, а не изменяемый `main`.
 
 Базовая установка:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/REF/scripts/install-server.sh -o /tmp/install-hermes-rdp.sh
+curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.3.0/scripts/install-server.sh -o /tmp/install-hermes-rdp.sh
 read -rsp 'Telegram bot token: ' TG_TOKEN; echo
-sudo env HERMES_RDP_REF=REF bash /tmp/install-hermes-rdp.sh \
+sudo env HERMES_RDP_REF=v1.3.0 bash /tmp/install-hermes-rdp.sh \
   --host SERVER_IP_OR_DOMAIN \
   --telegram-token "$TG_TOKEN" \
   --telegram-chat-id TELEGRAM_USER_ID
@@ -34,14 +34,18 @@ rm -f /tmp/install-hermes-rdp.sh
 С trusted public-IP RDP certificate lifecycle:
 
 ```bash
-sudo env HERMES_RDP_REF=REF bash /tmp/install-hermes-rdp.sh \
+curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.3.0/scripts/install-server.sh -o /tmp/install-hermes-rdp.sh
+read -rsp 'Telegram bot token: ' TG_TOKEN; echo
+sudo env HERMES_RDP_REF=v1.3.0 bash /tmp/install-hermes-rdp.sh \
   --host PUBLIC_IPV4 \
   --telegram-token "$TG_TOKEN" \
   --telegram-chat-id TELEGRAM_USER_ID \
   --trusted-rdp-cert
+unset TG_TOKEN
+rm -f /tmp/install-hermes-rdp.sh
 ```
 
-Trusted RDP mode получает Let’s Encrypt short-lived IP certificate и настраивает Hermes renewal timer. HTTPS API TLS при этом остаётся отдельной pinned trust boundary.
+Trusted RDP mode получает Let’s Encrypt short-lived IP certificate и настраивает Hermes renewal timer. HTTPS API TLS остаётся отдельной pinned trust boundary.
 
 Не публикуйте bot token, pairing-код, API fingerprint, PFX material или приватные ключи.
 
@@ -52,8 +56,6 @@ sudo hermes-rdpctl doctor
 sudo systemctl is-active hermes-rdp-sshd.service hermes-rdp.service
 sudo ss -ltnp | grep -E ':(7000|7443)\b'
 ```
-
-Ожидается `api: OK`, `ssh-tunnel: LISTEN 7000` и два активных сервиса.
 
 Если включён trusted RDP lifecycle:
 
@@ -75,7 +77,7 @@ sudo cat /etc/hermes-rdp/trusted-rdp-cert-state.json
 
 Установщик создаёт локальный Ed25519-ключ, проверяет API certificate fingerprint и SSH host key, включает RDP и регистрирует `Hermes RDP Agent`.
 
-Если server-side trusted certificate lifecycle включён, тот же fresh install автоматически создаёт `Hermes RDP Certificate Rotation` и применяет текущий trusted CUSTOM certificate к Windows RDP listener. Отдельная ручная certificate setup-команда не нужна.
+Если trusted certificate lifecycle включён на сервере, Fresh Install автоматически создаёт `Hermes RDP Certificate Rotation` и применяет текущий trusted CUSTOM certificate. Отдельная ручная certificate setup-команда не нужна.
 
 ## 5. Подключение
 
@@ -87,14 +89,14 @@ mstsc.exe /v:SERVER_IP_OR_DOMAIN:53389
 
 Проверяйте подключение из другой сети, например через мобильный интернет телефона.
 
-При включённом trusted public-IP certificate lifecycle свежий Microsoft Remote Desktop connection должен принимать certificate без прежнего self-signed warning.
+При включённом trusted lifecycle свежий Microsoft Remote Desktop connection должен принимать certificate без прежнего self-signed warning.
 
 ## 6. Финальная проверка
 
 - устройство отображается online в Telegram;
 - `ssh.exe` работает на Windows;
 - назначенный порт слушается на сервере;
-- RDP открывается из другой сети;
+- внешний RDP работает из другой сети;
 - `Hermes RDP Agent` находится в Running;
 - при trusted lifecycle `Hermes RDP Certificate Rotation` работает от LocalSystem, а RDP listener имеет CUSTOM certificate binding;
 - Microsoft Defender остаётся включён и Hermes не требует exclusions;
