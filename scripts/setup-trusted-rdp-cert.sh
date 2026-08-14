@@ -15,7 +15,8 @@ Installs and configures the Hermes RDP trusted public-IP certificate lifecycle:
 - isolated Let’s Encrypt staging validation before first production issuance;
 - production short-lived IP certificate;
 - Hermes-owned systemd renewal service/timer;
-- bounded root helper for authenticated Windows certificate delivery.
+- bounded root helper for authenticated Windows certificate delivery;
+- non-secret certificate state for automatic Windows rotation checks.
 EOF
 }
 
@@ -49,9 +50,11 @@ CONFIG=/etc/hermes-rdp/config.json
 LIVE="/etc/letsencrypt/live/$HOST"
 RENEW="/etc/letsencrypt/renewal/$HOST.conf"
 MARKER=/etc/hermes-rdp/trusted-rdp-cert.enabled
+STATE=/etc/hermes-rdp/trusted-rdp-cert-state.json
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CERT_RENEW_SOURCE="$SOURCE_ROOT/server/bin/hermes-rdp-cert-renew.sh"
+CERT_STATE_SOURCE="$SOURCE_ROOT/server/bin/hermes-rdp-cert-state-refresh.sh"
 CERT_PACKAGE_SOURCE="$SOURCE_ROOT/server/bin/hermes-rdp-cert-package.sh"
 CERT_PACKAGE_SUDOERS_SOURCE="$SOURCE_ROOT/server/sudoers/hermes-rdp-cert-package"
 SERVICE_SOURCE="$SOURCE_ROOT/server/systemd/hermes-rdp-cert-renew.service"
@@ -60,6 +63,7 @@ TIMER_SOURCE="$SOURCE_ROOT/server/systemd/hermes-rdp-cert-renew.timer"
 for required in \
   "$CONFIG" \
   "$CERT_RENEW_SOURCE" \
+  "$CERT_STATE_SOURCE" \
   "$CERT_PACKAGE_SOURCE" \
   "$CERT_PACKAGE_SUDOERS_SOURCE" \
   "$SERVICE_SOURCE" \
@@ -213,6 +217,7 @@ fi
 unset CERT_PUB KEY_PUB
 
 install -m 0755 "$CERT_RENEW_SOURCE" /usr/local/sbin/hermes-rdp-cert-renew
+install -m 0755 "$CERT_STATE_SOURCE" /usr/local/sbin/hermes-rdp-cert-state-refresh
 install -m 0755 "$CERT_PACKAGE_SOURCE" /usr/local/sbin/hermes-rdp-cert-package
 install -m 0440 \
   "$CERT_PACKAGE_SUDOERS_SOURCE" \
@@ -221,13 +226,14 @@ visudo -cf /etc/sudoers.d/hermes-rdp-cert-package >/dev/null
 install -m 0644 "$SERVICE_SOURCE" /etc/systemd/system/hermes-rdp-cert-renew.service
 install -m 0644 "$TIMER_SOURCE" /etc/systemd/system/hermes-rdp-cert-renew.timer
 
-python3 - "$CONFIG" "$HOST" <<'PY'
+python3 - "$CONFIG" "$HOST" "$STATE" <<'PY'
 import json
 import sys
 from pathlib import Path
 
 path = Path(sys.argv[1])
 host = sys.argv[2]
+state_file = sys.argv[3]
 data = json.loads(path.read_text(encoding='utf-8'))
 data['trusted_rdp_certificate'] = {
     'enabled': True,
@@ -235,6 +241,7 @@ data['trusted_rdp_certificate'] = {
     'live_dir': f'/etc/letsencrypt/live/{host}',
     'profile': 'shortlived',
     'renewal_timer': 'hermes-rdp-cert-renew.timer',
+    'state_file': state_file,
 }
 path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
 PY
@@ -242,6 +249,12 @@ chmod 0640 "$CONFIG"
 chown root:hermes-rdp "$CONFIG"
 printf '%s\n' "$HOST" > "$MARKER"
 chmod 0644 "$MARKER"
+
+/usr/local/sbin/hermes-rdp-cert-state-refresh >/dev/null
+if [[ ! -s "$STATE" ]]; then
+  echo "Hermes certificate state file was not created." >&2
+  exit 1
+fi
 
 systemd-analyze verify \
   /etc/systemd/system/hermes-rdp-cert-renew.service \
@@ -274,4 +287,5 @@ else
 fi
 echo "tcp80=FREE"
 echo "package_helper=READY"
+echo "certificate_state=READY"
 echo "TRUSTED_RDP_CERT=PASS"
