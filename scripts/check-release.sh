@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 echo '== Bash syntax =='
-find scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+find scripts server/bin -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
 
 echo '== Python compile =='
 python3 -m compileall -q server/hermes_rdp tests scripts/check-public-examples.py
@@ -18,6 +18,79 @@ python3 scripts/check-public-examples.py
 
 echo '== Installer archive reference =='
 python3 -c "from pathlib import Path; t=Path('scripts/install-server.sh').read_text(); assert 'archive/refs/heads/\$REF.tar.gz' not in t, 'installer treats release refs as branches'; assert 'https://codeload.github.com/\$REPO/tar.gz/\$REF' in t, 'missing branch/tag compatible archive endpoint'; print('installer-archive-ref=OK')"
+
+echo '== Trusted RDP certificate lifecycle =='
+python3 - <<'PY'
+from pathlib import Path
+
+setup = Path('scripts/setup-trusted-rdp-cert.sh').read_text(encoding='utf-8')
+renew = Path('server/bin/hermes-rdp-cert-renew.sh').read_text(encoding='utf-8')
+service = Path('server/systemd/hermes-rdp-cert-renew.service').read_text(encoding='utf-8')
+timer = Path('server/systemd/hermes-rdp-cert-renew.timer').read_text(encoding='utf-8')
+installer = Path('scripts/install-server.sh').read_text(encoding='utf-8')
+uninstaller = Path('scripts/uninstall-server.sh').read_text(encoding='utf-8')
+
+for marker in [
+    '--staging',
+    '--standalone',
+    '--preferred-profile shortlived',
+    '--ip-address "$HOST"',
+    "ufw allow 80/tcp comment 'Hermes ACME HTTP-01'",
+]:
+    if marker not in setup:
+        raise SystemExit(f'setup script missing required marker: {marker}')
+if 'CERT_PUB' not in setup or 'KEY_PUB' not in setup:
+    raise SystemExit('setup script lost certificate/private-key match validation')
+
+for marker in [
+    '/usr/bin/flock -w 300',
+    '"$CERTBOT" renew',
+    '--cert-name "$CERT_NAME"',
+    '--quiet',
+    '--non-interactive',
+]:
+    if marker not in renew:
+        raise SystemExit(f'renew wrapper missing required marker: {marker}')
+
+if 'ExecStart=/usr/local/sbin/hermes-rdp-cert-renew' not in service:
+    raise SystemExit('renewal service does not use Hermes wrapper')
+if 'ConditionPathExists=/etc/hermes-rdp/trusted-rdp-cert.enabled' not in service:
+    raise SystemExit('renewal service lacks Hermes enable marker')
+
+for marker in [
+    'OnCalendar=*-*-* 00,12:00:00',
+    'RandomizedDelaySec=1h',
+    'Persistent=true',
+    'Unit=hermes-rdp-cert-renew.service',
+]:
+    if marker not in timer:
+        raise SystemExit(f'renewal timer missing required marker: {marker}')
+
+for marker in [
+    '--trusted-rdp-cert',
+    'TRUSTED_RDP_CERT=1',
+    'setup-trusted-rdp-cert.sh',
+    'trusted_rdp_certificate=',
+]:
+    if marker not in installer:
+        raise SystemExit(f'installer missing trusted certificate wiring: {marker}')
+
+for marker in [
+    'hermes-rdp-cert-renew.timer',
+    'hermes-rdp-cert-renew.service',
+    '/usr/local/sbin/hermes-rdp-cert-renew',
+    'ACME certificate lineage were preserved',
+]:
+    if marker not in uninstaller:
+        raise SystemExit(f'uninstaller missing trusted certificate lifecycle handling: {marker}')
+
+if '/etc/letsencrypt' in '\n'.join(
+    line for line in uninstaller.splitlines() if line.lstrip().startswith('rm ')
+):
+    raise SystemExit('uninstaller must not delete the ACME certificate lineage')
+
+print('trusted-rdp-cert-lifecycle=OK')
+PY
 
 echo '== Release metadata =='
 python3 - <<'PY'
