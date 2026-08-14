@@ -74,7 +74,7 @@ Live acceptance:
 - targeted Repair recreated deliberately removed rotation task/worker without changing identity, port, tunnel or trusted RDP binding;
 - a separate clean Windows 10 Pro 19045 x64 / PowerShell 5.1 VM with Defender enabled passed fresh install from the exact accepted head;
 - fresh install created one main Agent, one Hermes SSH tunnel and a LocalSystem rotation task (`S-1-5-18`), applied the trusted CUSTOM RDP certificate, kept TCP 3389 listening and required no Defender exclusion;
-- real external Microsoft Remote Desktop to the disposable fixture worked through `150.241.94.110:53394` with the trusted certificate and no self-signed warning;
+- real external Microsoft Remote Desktop to the disposable fixture worked through `SERVER_IP_OR_DOMAIN:53394` with the trusted certificate and no self-signed warning;
 - normal uninstall removed both Hermes tasks/processes, stopped the Hermes SSH tunnel, removed the active `C:\ProgramData\HermesRDP` directory by archiving it, and left Defender real-time protection enabled.
 
 After PR #32 merges, move this section into the merged/current-main boundary and keep the evidence in context rather than reconstructing it later.
