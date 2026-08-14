@@ -22,30 +22,26 @@ Already complete:
 - PR #29 server certificate lifecycle: merged/live accepted.
 - CERT-011 core trusted binding: PASS on `SEC005 TEST`.
 - Fresh Microsoft Remote Desktop connection through Hermes accepted the production Let’s Encrypt public-IP certificate and reported the server certificate as verified.
+- Explicit rollback root cause confirmed and corrected: default Windows self-signed state is restored by removing the custom registry binding, not by assigning the self-signed thumbprint as CUSTOM.
+- Corrected rollback returned hash type `1`, exact original self-signed thumbprint and listening TCP 3389.
+- Fresh external RDP connection after rollback succeeded and the expected self-signed certificate warning returned.
+- PR #30 rollback fix CI #333: Linux PASS + Windows PowerShell 5.1 PASS.
 
 PR #30 current state:
 
 - draft `feat: add authenticated Windows RDP certificate rotation`;
 - current head `83e1b0b5d89b2728646a8eb518026ba9d1cf575a`;
-- CI #324 initial implementation: Linux PASS + Windows PowerShell 5.1 PASS;
-- live server deploy of initial head: PASS;
-- Windows authenticated package, non-exportable CNG key, NetworkService Read, CUSTOM binding and 3389 listener: PASS;
-- external trusted Microsoft RDP connection: PASS;
-- first rollback attempt exposed confirmed default-self-signed restoration bug;
-- live root cause: default self-signed is hash type `1` with no explicit `SSLCertificateSHA1Hash`, so it must be restored by removing the custom registry binding rather than setting its thumbprint as CUSTOM;
-- corrected manual rollback: PASS; exact original self-signed thumbprint/hash type restored and TCP 3389 remained listening;
-- PR fix uses type-aware rollback for explicit and automatic failure paths;
-- CI #333 on fixed head: Linux PASS + Windows PowerShell 5.1 PASS.
+- server-side initial head remains deployed and is compatible because the rollback fix changes the Windows sync/test layer;
+- `SEC005 TEST` is intentionally left on default self-signed state after rollback acceptance.
 
 Next:
 
-1. While `SEC005 TEST` is currently on restored default self-signed state, open one fresh external RDP connection and confirm access still works; the original certificate warning is expected.
-2. Reapply trusted binding using fixed head `83e1b0b...`.
-3. Confirm local CUSTOM binding / TCP 3389 and one fresh external trusted reconnect.
-4. Mark PR #30 merge-ready and merge after those bounded checks.
-5. Integrate periodic certificate sync into the normal Hermes Windows agent, triggered only when the server certificate thumbprint changes or local binding drifts.
-6. Validate one real renewal-driven rotation cycle before expanding to other devices.
-7. Then make trusted certificate delivery/rotation a polished normal Hermes installation/update feature.
+1. Reapply trusted binding using fixed head `83e1b0b...`.
+2. Confirm local CUSTOM binding / TCP 3389 and one fresh trusted Microsoft RDP reconnect.
+3. Mark PR #30 merge-ready and merge after those bounded checks.
+4. Integrate periodic certificate sync into the normal Hermes Windows agent, triggered only when the server certificate thumbprint changes or local binding drifts.
+5. Validate one real renewal-driven rotation cycle before expanding to other devices.
+6. Then make trusted certificate delivery/rotation a polished normal Hermes installation/update feature.
 
 Architecture constraint: use one short-lived public-IP lineage per Hermes server plus authenticated distribution/rotation; independent duplicate public-IP certificates per Windows device are not the scalable default.
 
