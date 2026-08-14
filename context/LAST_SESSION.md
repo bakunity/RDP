@@ -7,40 +7,60 @@ Primary truth remains `ACTIVE_WORK.md` / `CURRENT_STATE.md` / `NEXT_WORK.md` / `
 
 ## Where this chat is now
 
-Trusted public-IP RDP certificate work reached full bounded acceptance through CERT-012.
+CERT-013 Windows lifecycle integration is active in draft PR #32.
 
-Merged work:
+Current exact head:
 
-- PR #29 server certificate lifecycle;
-- PR #30 authenticated Windows certificate delivery/binding + correct type-aware rollback;
-- PR #31 automatic Windows certificate rotation, merge commit `bd25db552aae8303356953fe2807a7bd855cba95`.
+`29c19182ef99497b4cc314e3b4e9b6598ad95516`
 
-Final PR #31 tested head: `14da128328589dfae6c8e3b6819977120be16739`; CI #353 Linux + Windows PowerShell 5.1 PASS.
+CI #363:
 
-## Key live proof
+- Linux full release checks PASS;
+- Windows PowerShell 5.1 PASS.
 
-On non-critical `SEC005 TEST`:
+## CERT-013 live proof on `SEC005 TEST`
 
-- rotation task runs as LocalSystem SID `S-1-5-18`;
-- unchanged state returns `CERT_ROTATION=UNCHANGED`;
-- a global-mutex upgrade ACL bug was reproduced, rollback worked, then fixed and live accepted;
-- controlled rollback to Windows default self-signed created real local drift;
-- scheduled worker detected drift, invoked trusted sync itself and logged `CERT_ROTATION=UPDATED`;
-- trusted CUSTOM listener returned, TCP 3389 stayed listening, worker stayed Running;
-- fresh Microsoft Remote Desktop connection was protected/trusted with no self-signed warning.
+Transactional Update — FULL PASS:
 
-Linux production has the accepted server-side certificate state/status/renewal slice deployed. Windows fixture has the final worker/setup fix.
+- ordinary `update-client.ps1` automatically ran certificate lifecycle setup from the same immutable SHA;
+- worker returned `CERT_ROTATION=UNCHANGED`, setup returned `CERT-012_SETUP=PASS`;
+- Update returned `UPDATE=PASS` + `CertificateRotation: managed`;
+- device/config/private+public SSH key/known_hosts hashes, Device ID and RDP port unchanged;
+- main task Running, one Agent, one Hermes `ssh.exe`;
+- rotation task Running as LocalSystem SID `S-1-5-18`;
+- trusted CUSTOM RDP listener + TCP3389 unchanged;
+- final `CERT-013_UPDATE=PASS`.
 
-Natural renewal-driven thumbprint rotation is deferred until the existing short-lived certificate renews normally. Do not force extra production issuance solely for evidence.
+Repair lifecycle — FULL PASS:
+
+- test removed only rotation Scheduled Task and `HermesRdpCertRotation.ps1`;
+- identity, device registration and RDP certificate binding were not intentionally changed;
+- public Repair returned existing core `REPAIR=PASS` plus `CertificateRotation: managed` and `CERT-013_REPAIR=PASS`;
+- worker/task were recreated automatically;
+- identity/config/keys/known_hosts/RDP port unchanged;
+- main Agent + one Hermes SSH process healthy;
+- restored rotation task runs as LocalSystem SID `S-1-5-18`;
+- trusted CUSTOM binding unchanged and TCP3389 listening;
+- final `CERT-013_REPAIR_LIVE=PASS`.
+
+A test-wrapper-only `H` function name collided with Windows PowerShell `Get-History` alias before the first Update attempt; no product code/mutation had started. Corrected acceptance wrapper passed. This is not a Hermes runtime bug.
+
+## Do not touch `SEC005 TEST` destructively
+
+Do not use this fixture for fresh-install/uninstall acceptance. Its current state is accepted and healthy.
 
 ## Exact resume action
 
-Start **CERT-013** from current `main`:
+Final PR #32 merge gate requires a **separate disposable supported Windows PC/VM**:
 
-1. inspect normal Windows fresh install, transactional update, Repair and uninstall flows;
-2. integrate the accepted rotation worker + sync companion transactionally so no separate manual setup command is needed;
-3. preserve PowerShell 5.1, Win10 x86/Sysnative compatibility, LocalSystem SID validation, mutex ACL fix and rollback behavior;
-4. keep certificate work out of the 3-second main agent loop;
-5. add CI before any new live mutation.
+1. fresh install from exact head `29c19182...`;
+2. verify pairing/OpenSSH tunnel, automatic certificate companion, LocalSystem task, trusted CUSTOM listener, TCP3389 and external RDP;
+3. run normal uninstall;
+4. verify both Hermes tasks/processes removed and active client directory archived according to current uninstall behavior;
+5. if PASS, update context/evidence, mark PR #32 ready and merge with exact-head guard.
 
-Do not repeat CERT-001..CERT-012 acceptance without a concrete regression reason. Never put private keys, PFX passwords, API/device tokens, pairing codes or other secrets into context/chat.
+If no disposable fixture exists, leave PR #32 draft instead of risking `SEC005 TEST`.
+
+Natural renewal-driven thumbprint rotation remains deferred until a real renewal. Do not force production issuance solely for evidence.
+
+Never place private keys, PFX passwords, API/device tokens, pairing codes or other secrets into context/chat.
