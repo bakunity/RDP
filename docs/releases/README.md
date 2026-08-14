@@ -12,7 +12,7 @@ GitHub Release descriptions must be generated/synchronized from the matching fil
 
 ## Working rule
 
-Do **not** wait until release day to reconstruct the release from memory.
+Do not wait until release day to reconstruct the release from memory.
 
 Whenever meaningful product work is completed, a bug/root cause is confirmed, a live acceptance becomes PASS, compatibility changes, documentation is substantially updated, or a release blocker is discovered, update `UNRELEASED.md` in the same development cycle.
 
