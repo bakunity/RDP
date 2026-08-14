@@ -27,29 +27,35 @@ Already complete:
 - CERT-007 scheduler inventory: PASS; missing scheduler gap confirmed.
 - CERT-008 Hermes-owned automatic renewal: live PASS.
 - CERT-009 productized server lifecycle: live PASS and PR #29 merged as `33c7b6ac6e5a6fb732963988c4734a8a7ef8ec5e`.
-- CERT-010 read-only `SEC005 TEST` Windows RDP certificate inventory: PASS; default self-signed baseline and rollback thumbprint confirmed, no mutation.
+- CERT-010 read-only `SEC005 TEST` Windows RDP certificate inventory: PASS.
 
-Active CERT-011 work:
+CERT-011 partial acceptance complete:
 
 - draft PR #30 `feat: add authenticated Windows RDP certificate rotation`;
-- branch `feat/windows-rdp-cert-rotation`;
-- tested head `af054274405c33849b8bbdee0a730320a8b5ab33`;
-- authenticated device certificate-package endpoint implemented;
-- bounded root PFX helper and exact sudoers permission implemented;
-- Windows PowerShell 5.1 transactional sync/bind/rollback script implemented;
-- server setup/updater/uninstall lifecycle implemented;
-- CI #324 PASS: Linux full release checks + Windows PowerShell 5.1.
+- tested/deployed head `af054274405c33849b8bbdee0a730320a8b5ab33`;
+- CI #324 PASS: Linux full release checks + Windows PowerShell 5.1;
+- transactional server updater deploy: PASS;
+- current trusted certificate serial unchanged during deploy;
+- package helper/sudoers and real `hermes-rdp -> sudo` helper execution: PASS;
+- controller, sshd and renewal timer active; TCP 80 free;
+- `SEC005 TEST` authenticated package retrieval: PASS;
+- PFX import into `LocalMachine\My`: PASS;
+- imported CNG private key verified non-exportable;
+- `NETWORK SERVICE` Read ACL: PASS;
+- RDP listener switched to CUSTOM trusted-certificate thumbprint;
+- TCP 3389 remained listening;
+- previous self-signed thumbprint and rollback data preserved.
 
 Next:
 
-- deploy immutable PR #30 head to the current trusted-cert Linux host through the transactional server updater;
-- verify `UPDATE=PASS`, controller/sshd health, helper/sudoers presence and no certificate-lineage mutation;
-- run the immutable CERT-011 sync only on `SEC005 TEST`;
-- require pinned authenticated package retrieval, non-exportable LocalMachine private key, NetworkService Read ACL, CUSTOM RDP hash type and TCP 3389 listener preservation;
-- open a **new** Microsoft Remote Desktop connection through the Hermes endpoint and verify the intended trust/name warning is gone;
-- preserve the old thumbprint/rollback data until real reconnect acceptance is complete;
-- after bounded CERT-011 acceptance, integrate periodic certificate sync into the normal Hermes Windows agent so renewal-driven rotation is automatic;
-- then validate one real renewal/rotation cycle before expanding to other Windows devices.
+- open a **new** Microsoft Remote Desktop connection from a separate client through the normal Hermes public endpoint for `SEC005 TEST`;
+- verify connection succeeds and the old certificate trust/identity warning is absent;
+- if a warning remains, capture its exact text/screenshot rather than changing more state;
+- after external PASS, execute the explicit Hermes rollback once, confirm the old binding returns, then reapply the trusted binding and reconnect again;
+- after bounded bind/rollback acceptance, integrate periodic certificate sync into the normal Hermes Windows agent;
+- trigger sync only when the server certificate thumbprint changes or local binding drifts;
+- validate one actual renewal-driven rotation cycle before rollout to other devices;
+- then make trusted certificate delivery/rotation a polished normal Hermes installation/update feature and merge PR #30.
 
 Architecture constraint: one independent Let’s Encrypt public-IP certificate per Windows device is not the scalable default because all devices share the same exact public-IP identifier set and CA issuance limits apply. Use one short-lived lineage per Hermes server plus authenticated distribution/rotation.
 
