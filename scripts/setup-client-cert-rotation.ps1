@@ -122,6 +122,25 @@ function Get-PrincipalSid {
     }
 }
 
+function Stop-RotationTaskBounded {
+    $Existing = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+    if (-not $Existing) {
+        return
+    }
+
+    Stop-ScheduledTask -TaskName $TaskName -ErrorAction Stop
+    for ($Attempt = 0; $Attempt -lt 40; $Attempt++) {
+        $Current = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+        if (-not $Current -or [string]$Current.State -ne 'Running') {
+            Start-Sleep -Milliseconds 500
+            return
+        }
+        Start-Sleep -Milliseconds 250
+    }
+
+    throw 'Existing certificate rotation task did not stop within 10 seconds.'
+}
+
 Write-Host '=== CERT-012 ==='
 
 if (-not (Test-Path -LiteralPath $ConfigPath)) {
@@ -165,6 +184,10 @@ try {
     Assert-PowerShellFile -Path $WorkerCandidate
     Assert-PowerShellFile -Path $SyncCandidate
 
+    if ($TaskExisted) {
+        Stop-RotationTaskBounded
+    }
+
     Copy-Item -LiteralPath $WorkerCandidate -Destination $WorkerPath -Force
     Copy-Item -LiteralPath $SyncCandidate -Destination $SyncPath -Force
     Set-SystemScriptAcl -Path $WorkerPath
@@ -180,7 +203,6 @@ try {
         throw "Initial certificate rotation check failed with code $LASTEXITCODE"
     }
 
-    Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
     Register-RotationTask
     Start-ScheduledTask -TaskName $TaskName
     Start-Sleep -Seconds 2
