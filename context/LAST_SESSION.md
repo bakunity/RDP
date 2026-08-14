@@ -60,7 +60,7 @@ Fresh Install — FULL PASS from exact accepted head:
 
 - `CERT_ROTATION=UPDATED`;
 - `CERT-012_SETUP=PASS`;
-- device `CERT013 FRESH`, endpoint `150.241.94.110:53394`;
+- device `CERT013 FRESH`, endpoint `SERVER_IP_OR_DOMAIN:53394`;
 - one main Agent + one Hermes SSH process;
 - rotation task Running as LocalSystem SID `S-1-5-18`;
 - trusted CUSTOM RDP thumbprint `2E170C609B47E0D34F16238503998509EDDDC79C`;
@@ -70,7 +70,7 @@ Fresh Install — FULL PASS from exact accepted head:
 
 External Microsoft RDP — PASS:
 
-- real connection to `150.241.94.110:53394` worked;
+- real connection to `SERVER_IP_OR_DOMAIN:53394` worked;
 - trusted certificate worked with no warning.
 
 Uninstall — FULL PASS:
