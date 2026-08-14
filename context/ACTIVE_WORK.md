@@ -43,18 +43,27 @@ Read-only live inventory on the certificate host:
 
 - Certbot installed in an isolated Python environment under `/opt/certbot` with `/usr/local/bin/certbot` entry point.
 - Live version output: `certbot 5.7.0`.
-- No certificate has been issued yet.
-- Windows/RDP listener has not been changed yet.
+- No certificate had been issued at this stage.
+- Windows/RDP listener had not been changed.
+
+### CERT-003 — external TCP 80 / HTTP-01 reachability — PASS
+
+- UFW is active with default incoming deny; explicit `80/tcp` ACME HTTP-01 allow rule was added.
+- Temporary standalone HTTP listener bound to `0.0.0.0:80` and served a unique test response locally.
+- Five independent external probes from different regions all reached the public IPv4 endpoint and returned HTTP `200`.
+- Server access log independently recorded all five external GET requests.
+- This proves the public path Internet -> TCP 80 -> host firewall -> local HTTP listener for HTTP-01 validation.
+- Do not repeat CERT-003 unless firewall/network state changes or ACME validation later contradicts it.
 
 ## Exact resume action
 
-**CERT-003:** verify that the server's TCP `80` is reachable from the public Internet for ACME HTTP validation before requesting any certificate. Do not repeat CERT-001/CERT-002 unless there is evidence of regression.
+**CERT-004:** perform a bounded Let’s Encrypt **staging** issuance for the public IP using Certbot standalone + HTTP-01 with the required `shortlived` profile. Stop the temporary Python CERT-003 listener first so Certbot can bind TCP `80`.
 
-After external reachability is confirmed:
+After staging issuance succeeds:
 
-1. perform a bounded staging/test issuance for the public IP using Certbot standalone;
-2. inspect the resulting certificate identity/SAN and chain before using it;
-3. design the secure Windows listener binding/renewal path;
+1. inspect certificate SAN/identity, issuer/chain, EKU and validity before any production use;
+2. perform production issuance only after the staging artifact is proven structurally suitable;
+3. design automated renewal and secure certificate/private-key delivery to the Windows RDP listener;
 4. validate first on the non-critical `SEC005 TEST` device while keeping the current self-signed RDP listener state as rollback;
 5. only after user-facing Microsoft RDP trust acceptance expand to other devices.
 
