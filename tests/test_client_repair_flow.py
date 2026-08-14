@@ -10,7 +10,11 @@ ROOT = Path(__file__).resolve().parents[1]
 class ClientRepairFlowTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.text = (ROOT / "scripts/repair-client.ps1").read_text(
+        # CERT-013 deliberately preserves the previously live-accepted Repair
+        # implementation byte-for-byte as repair-client-core.ps1. Keep all
+        # historical Repair invariants attached to that core; lifecycle wrapper
+        # composition/rollback is covered separately by the CERT-013 suite.
+        cls.text = (ROOT / "scripts/repair-client-core.ps1").read_text(
             encoding="utf-8-sig"
         )
 
