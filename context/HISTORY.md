@@ -1,56 +1,149 @@
-# Hermes RDP — History
+# Hermes RDP — Milestone History
 
-## Milestones
+Updated: 2026-08-14
 
-### OpenSSH architecture stabilization
+Compact project milestones only. Detailed evidence belongs in `EVIDENCE_LEDGER.md`; current work belongs in `ACTIVE_WORK.md`; deep historical reasoning belongs in Git history/archive.
 
-Hermes RDP moved to a dedicated reverse Microsoft OpenSSH transport with persistent per-device public endpoints, independent admin SSH, Telegram control and durable per-device identity.
+## 2026-08-05 — Multi-PC product shape
 
-Accepted product behavior includes external Microsoft RDP, multi-device operation/failure isolation, Windows/Linux reboot recovery, Windows Server 2019, Win10 x64 + x86 PowerShell/Sysnative compatibility, transactional updater rollback, existing-device Repair, Defender coexistence and the optimized main Agent fast path without the earlier RDP micro-freeze behavior.
+Hermes RDP evolved from a single reverse-RDP setup into a self-hosted multi-device system with a Linux controller, per-device endpoints, Telegram pairing/control, telemetry and first `v1.0.x` releases.
 
-### Trusted public-IP RDP certificate lifecycle — CERT-001 through CERT-012
+## 2026-08-06 — FRP deployment problem -> OpenSSH redesign
 
-A full trusted-certificate path was built and bounded live-accepted:
+Real Windows deployment exposed Microsoft Defender friction with the FRP binary. Product direction changed instead of requiring Defender exclusions.
 
-- Let’s Encrypt short-lived public-IP certificate issuance;
-- Hermes-owned renewal scheduling;
-- authenticated Windows certificate package delivery;
-- non-exportable normal-API private-key behavior;
-- `NETWORK SERVICE` key Read ACL;
-- transactional CUSTOM RDP listener binding and correct rollback to Windows default self-signed state;
-- external Microsoft RDP trust without the self-signed warning;
-- non-secret certificate status/state;
-- separate low-frequency LocalSystem rotation worker outside the main 3-second Agent loop;
-- automatic recovery from controlled local listener drift;
-- LocalSystem SID validation and global mutex ACL upgrade bug fixes.
+Active transport became:
 
-PR #30 merged as `a03e406aaafeb5833bc720d3eef62cca60818118`.
-PR #31 merged as `bd25db552aae8303356953fe2807a7bd855cba95`.
+- Microsoft system OpenSSH on Windows;
+- isolated Hermes sshd on Linux;
+- per-device Ed25519 identity;
+- server-side endpoint restriction;
+- pinned API/SSH trust path.
 
-Natural renewal-driven new-thumbprint rotation remains a deferred real-world observation, not a blocker; do not force unnecessary production issuance.
+FRP left the active runtime architecture.
 
-### CERT-013 — normal Windows certificate lifecycle integration
+## 2026-08-06 — First clean OpenSSH installation + external RDP PASS
 
-CERT-013 integrated the accepted certificate rotation companion into ordinary Windows install/update/Repair/uninstall behavior so a normal user does not need a separate manual certificate setup command.
+A Windows device paired successfully, received a persistent endpoint, started its Scheduled Task/reverse tunnel and was reached through standard RDP from an external mobile network.
 
-Accepted product/test code head before evidence-only commits:
+This established the OpenSSH architecture as a working real-world baseline.
 
-`e11cf89ed26d551ca92b4010034d6e6792a9266b`
+## 2026-08-06 — Legacy Windows ACL migration defect discovered
 
-Reconcile CI #381 passed Linux full release checks and Windows PowerShell 5.1 validation.
+Upgrade over an old protected Hermes/WinMon/FRP directory exposed a recursive-backup ACL failure. Future migration direction became whole-directory archival/rename with scoped ACL fallback.
 
-Live acceptance completed on 2026-08-14:
+## 2026-08-06 — v1.1.0 published
 
-- transactional Update on `SEC005 TEST`: FULL PASS while preserving identity/config/keys/known_hosts/device ID/RDP port/main runtime/trusted listener;
-- targeted Repair on `SEC005 TEST`: FULL PASS after removing only rotation task/worker; lifecycle scaffolding was recreated without changing identity/port/tunnel/trusted binding;
-- clean disposable fixture `DESKTOP-T9N368F`: Windows 10 Pro 19045 x64, PowerShell 5.1 x64, Defender enabled, Hermes absent before install;
-- Fresh Install from accepted head: `CERT_ROTATION=UPDATED`, `CERT-012_SETUP=PASS`, main Agent + one Hermes SSH, LocalSystem rotation task SID `S-1-5-18`, trusted CUSTOM RDP listener, TCP3389, no Defender exclusion, final `CERT-013_FRESH_INSTALL=PASS`;
-- real external Microsoft RDP to `150.241.94.110:53394`: connection and trusted certificate both PASS with no self-signed warning;
-- normal Uninstall: both Hermes tasks absent, Agent/rotation/SSH counts zero, active client directory archived/removed, Defender still enabled, final `CERT-013_UNINSTALL=PASS`.
+`v1.1.0` became the first published OpenSSH transport release.
 
-No CERT-013 live product gate remained after this acceptance. Later context/release-only commits do not change the accepted product/test code boundary.
+## 2026-08-07 — Reboot + Telegram OFF/ON behavioral PASS
 
-## Historical deferred items
+Live testing confirmed:
 
-- SEC-004: fixture unavailable by design; do not reconstruct revoked credentials only to manufacture evidence.
-- RL-006: PARTIAL only for an optional final exact-Windows one-process observation after already-clean reconnect cycles; do not repeat the stress test.
+- tested Windows reboot -> Hermes recovered -> RDP usable;
+- Telegram OFF interrupted active RDP access;
+- Telegram ON restored access.
+
+The focus shifted from “does transport work?” to truthful observability/control and reliability.
+
+## 2026-08-07 — Win10 x64 / x86 PowerShell compatibility bug confirmed
+
+Real Win10 x64 launched from 32-bit PowerShell exposed WOW64 redirection: native Microsoft OpenSSH required `Sysnative` probing instead of blindly using `System32` or PATH/Git SSH.
+
+This became a v1.2.0 compatibility item.
+
+## 2026-08-07 — Persistent cross-chat context initialized
+
+Created repository `context/` so project continuity no longer depends entirely on old chat availability.
+
+## 2026-08-08 — State truth + endpoint truth + RDP-channel acceptance
+
+PR #19 stabilization live-validated:
+
+- independent heartbeat / desired / applied / SSH / endpoint state;
+- Linux listener as authoritative public endpoint truth;
+- OFF=CLOSED / ON=OPEN;
+- direct LAN/VPN vs Hermes RDP channel classification;
+- existing-install safety guard without identity/key/port loss.
+
+## 2026-08-08 — Telemetry performance regression identified
+
+Real timing showed that heavy 3-second TCP/process diagnostics could consume most of the agent interval and coincided with RDP micro-freezes.
+
+The branch moved to fast/background/on-demand telemetry and an explicit 60-second observation lease. A Windows Server installer ProductType blocker was also found and fixed in code pending live acceptance.
+
+## 2026-08-08 — Continuous project-memory model
+
+Project memory stopped depending on end-of-chat handoff:
+
+- `ACTIVE_WORK.md` became hot operational state;
+- `EVIDENCE_LEDGER.md` became durable acceptance evidence;
+- checkpoints became event-driven during work;
+- context-only checkpoints may be persisted independently of an open product PR.
+
+## 2026-08-08 — Context lifecycle / garbage collection model
+
+The memory system was completed with long-term hygiene rules:
+
+- HOT / WARM / COLD context layers;
+- semantic staleness and `SUPERSEDED` retirement;
+- evidence scoping and `REVALIDATION REQUIRED` after relevant code changes;
+- release evidence rotation;
+- soft size budgets and compaction triggers;
+- disposable `LAST_SESSION` and single-current `LATEST_AUDIT`;
+- archive index/rules;
+- concurrent-writer reconciliation;
+- batched context checkpoints where tooling permits;
+- feature-branch/base drift must be reconciled before merge.
+
+The design goal is stronger than cross-chat handoff: losing the current chat, accumulating months of history, or changing implementation should not make current project truth ambiguous.
+
+## 2026-08-13 — v1.2 stabilization acceptance completed
+
+The stabilization cycle closed the major runtime reliability and lifecycle work:
+
+- control-plane deadlock/stale-state fixes;
+- Win10 x64 + x86 PowerShell/Sysnative support;
+- Windows Server 2019 acceptance;
+- reboot/reconnect and multi-device isolation;
+- device security/revocation/port reuse;
+- transactional server and Windows updates with automatic rollback;
+- bounded existing-device Repair with rollback;
+- Telegram Repair and new pairing-code UX.
+
+## 2026-08-13 — v1.2.1 published after release packaging hotfix
+
+The first `v1.2.0` publication exposed a release-workflow packaging flaw: tag resolution followed the commit that changed `VERSION`, not the complete release tree. The published `v1.2.0` tag was left immutable.
+
+`v1.2.1` was then published as the stable patch release with synchronized version metadata, full release tree and restored rich product README. The full README again includes badges/links, product architecture, quick start, update/repair and security sections.
+
+A follow-up branch prepares release tagging against the exact validated workflow `HEAD` so future releases cannot repeat this failure mode.
+
+## 2026-08-14 — Trusted RDP certificate phase begins
+
+The next product phase targeted removing the Microsoft Remote Desktop trust warning without adding a domain solely for appearance.
+
+Direction:
+
+- use a publicly trusted certificate matching the existing public IP;
+- keep HTTPS/API TLS separate from the Windows RDP listener certificate;
+- issue and renew server-side;
+- bind/test first on a non-critical Windows fixture with rollback.
+
+## 2026-08-14 — Trusted public-IP RDP + automatic rotation live accepted
+
+The certificate phase reached bounded end-to-end acceptance:
+
+- Let’s Encrypt short-lived public-IP certificate issuance and Hermes-owned renewal lifecycle;
+- authenticated certificate package delivery to Windows;
+- non-exportable Windows private key and `NETWORK SERVICE` ACL;
+- trusted CUSTOM RDP listener with Microsoft Remote Desktop trust warning removed;
+- correct rollback to Windows default self-signed state and fixed reapply;
+- non-secret server certificate-status path;
+- separate low-frequency LocalSystem rotation worker outside the main 3-second agent loop;
+- automatic recovery from deliberate local self-signed certificate drift;
+- external Microsoft RDP remained trusted after automatic recovery.
+
+Two live bugs were caught and resolved during acceptance: default-self-signed rollback must remove the explicit custom binding, and rotation-worker upgrades must handle cross-context global mutex ACLs. PR #30 and PR #31 were merged after CI and live acceptance.
+
+The next gap is product lifecycle integration so fresh install/update/Repair/uninstall manage the accepted rotation companion automatically.
