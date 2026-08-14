@@ -1,90 +1,188 @@
 # Hermes RDP — Project Handoff
 
-Updated: 2026-08-14
+Updated: 2026-08-08
 
-## Current product state
+Purpose: stable architecture/product context. For current PR/deployment/blockers read `ACTIVE_WORK.md`; for proven behavior read `EVIDENCE_LEDGER.md`; for current product snapshot read `CURRENT_STATE.md`.
 
-Hermes RDP uses a dedicated OpenSSH reverse-tunnel architecture:
+## Product vector
+
+Hermes RDP is a self-hosted **multi-device remote-access control plane**:
+
+> One public Linux Hermes server provides controlled RDP access to multiple Windows devices. Every device has its own persistent endpoint and identity; Telegram provides pairing, status and access control.
+
+OpenSSH is the transport implementation, not the product identity.
+
+## Architecture
 
 ```text
-Telegram control
-      |
-Hermes API/controller + SQLite
-      |
-dedicated Hermes sshd :7000
-      |
-reverse Microsoft OpenSSH
-      |
-Windows RDP :3389
-      |
-persistent endpoint per device
+Telegram user
+     |
+     v
+Hermes Controller / HTTPS API / SQLite
+     |
+     +---- dedicated Hermes sshd
+                 |
+          reverse OpenSSH
+           /      |      \
+      Windows   Windows   Windows
+       :3389     :3389     :3389
+           \      |      /
+        persistent per-device
+          public RDP endpoints
+                 |
+          standard RDP client
 ```
 
-Admin SSH is independent. FRP is not active runtime. Each Windows device has its own Ed25519 identity.
+### Linux server
 
-Trusted RDP certificate work is separate from the performance-sensitive main Agent loop. A low-frequency LocalSystem rotation worker checks non-secret desired certificate state and invokes authenticated PFX sync only on thumbprint change or local listener drift.
+- `hermes-rdp.service`: HTTPS API + Telegram bot + SQLite registry;
+- `hermes-rdp-sshd.service`: isolated OpenSSH daemon for reverse forwarding;
+- administrative SSH remains separate;
+- server allocates a persistent public RDP endpoint per device;
+- server stores device public keys and enforces endpoint isolation.
 
-## Stable release
+### Windows device
 
-Current published stable release: **v1.2.1**.
+- Microsoft system `ssh.exe` / `ssh-keygen.exe`;
+- `HermesRdpAgent.ps1` runs as Scheduled Task under `SYSTEM`;
+- per-device Ed25519 keypair;
+- per-device API token / device ID / assigned RDP port;
+- private SSH key stays on Windows;
+- API certificate is pinned;
+- SSH host key is received through the pinned HTTPS API and stored in dedicated `known_hosts`.
 
-Release-note process is durable:
+## Durable boundaries
 
-- `docs/releases/UNRELEASED.md` accumulates work continuously;
-- compact public release notes live in `docs/releases/vX.Y.Z.md`;
-- full engineering history lives in `docs/releases/history/vX.Y.Z-full.md`;
-- release workflow tags the validated workflow HEAD and synchronizes release bodies without rewriting historical tags.
+### All Windows devices are equal clients
 
-## Accepted baseline — do not repeat without regression evidence
+There is no “main PC” architecture. A desktop, laptop or Windows Server follows the same device model unless a platform-specific compatibility path is explicitly required.
 
-- external Microsoft RDP through Hermes;
-- multi-device simultaneous operation/failure isolation;
-- Windows and Linux reboot recovery;
-- Windows Server 2019;
-- Win10 x64 + x86 PowerShell -> Sysnative/native OpenSSH compatibility;
-- Telegram OFF/ON/RESTART + status UX;
-- Stage 3 security/device lifecycle;
-- transactional server/client update rollback;
-- existing-device Repair success/rollback;
-- Defender coexistence;
-- CERT-001 through CERT-012 trusted public-IP certificate lifecycle;
-- CERT-013 normal Windows lifecycle integration: Update, Repair, clean Fresh Install, external trusted RDP, Uninstall.
+Only the Linux Hermes server has the infrastructure role.
 
-SEC-004 remains fixture-unavailable. RL-006 remains PARTIAL only for its optional deferred exact-Windows one-process observation.
+### OpenSSH replaced FRP
 
-## CERT-013 final accepted boundary
+FRP was removed from the active runtime after the Windows deployment experience conflicted with Microsoft Defender. Do not reintroduce FRP as a casual workaround.
 
-PR #32 accepted product/test code head:
+### Do not weaken Defender
 
-`e11cf89ed26d551ca92b4010034d6e6792a9266b`
+The supported product path must not depend on disabling Defender or adding broad exclusions.
 
-Reconcile CI #381:
+### Telegram is control plane only
 
-- Linux full release checks PASS;
-- Windows PowerShell 5.1 PASS.
+RDP traffic does not pass through Telegram.
 
-Live acceptance:
+### Agent online is independent from access enabled
 
-- `SEC005 TEST`: transactional Update FULL PASS and targeted Repair FULL PASS while preserving identity/config/keys/known_hosts/device ID/RDP port/tunnel/trusted listener.
-- disposable `DESKTOP-T9N368F`: clean Win10 Pro 19045 x64 / PowerShell 5.1 / Defender-enabled preflight PASS.
-- Fresh Install from exact accepted head: `CERT_ROTATION=UPDATED`, `CERT-012_SETUP=PASS`, one Agent, one Hermes SSH, LocalSystem rotation task SID `S-1-5-18`, trusted CUSTOM listener, TCP3389, no Defender exclusion, final `CERT-013_FRESH_INSTALL=PASS`.
-- external Microsoft RDP to `150.241.94.110:53394`: connection PASS, trusted certificate/no self-signed warning.
-- normal Uninstall: both tasks absent, Agent/rotation/SSH counts zero, active base directory archived/removed, Defender remained enabled, final `CERT-013_UNINSTALL=PASS`.
+A valid disabled state is:
 
-Evidence/context/release-only commits after `e11cf89e...` do not alter the accepted CERT-013 product/test code.
+```text
+Agent online
+Desired access off
+Applied access off
+SSH disconnected
+Public endpoint closed
+```
 
-## Immediate resume point
+The agent remains online so it can receive the next ON command.
 
-1. Require green CI on the final evidence-only PR #32 head.
-2. Mark PR #32 ready and merge with exact-head guard.
-3. Delete disposable `CERT013 FRESH` device in Telegram so token/key are revoked and RDP port `53394` is freed.
-4. Record merged PR #32 SHA in context.
-5. Continue with the next product gap; do not reopen completed CERT-013 tests without regression evidence.
+### Dashboard represents measured truth
 
-## Deferred observation
+Keep independent concepts for:
 
-Allow the current short-lived production certificate to renew naturally. When it does, capture only bounded old/new thumbprint, server-state refresh, automatic Windows rotation and fresh trusted Microsoft RDP evidence. Do not force production issuance solely for testing.
+- agent heartbeat;
+- desired RDP access;
+- applied agent access state;
+- command lifecycle/result;
+- SSH transport/process state;
+- server endpoint listener state;
+- actual RDP-channel activity.
 
-## Secrets rule
+Do not infer one dimension solely from another.
 
-Never store pairing codes, API/device tokens, SSH private keys, PFX passwords or other secrets in context/release notes/chat.
+### Per-device trust/isolation
+
+Each device owns its own identity. The private key never goes to the server. The server-side SSH authorization must restrict a device to its assigned endpoint.
+
+### Stable releases use immutable refs
+
+Published tags are immutable. Production installation/update documentation should use a release tag or known immutable commit, not mutable `main`.
+
+## Proven product baseline
+
+The detailed acceptance matrix is in `EVIDENCE_LEDGER.md`. Stable high-level baseline includes:
+
+- OpenSSH reverse RDP works end-to-end;
+- real external-network RDP works;
+- tested Windows reboot recovery works;
+- Telegram OFF/ON works at user-visible level;
+- server-authoritative public endpoint CLOSED/OPEN has been live-validated on the stabilization branch;
+- direct LAN/VPN RDP vs Hermes RDP channel classification has been live-validated;
+- existing-install safety guard has been live-validated;
+- native OpenSSH visibility through `Sysnative` under x86 PowerShell on x64 Win10 is confirmed.
+
+Do not re-prove these baselines unless a relevant change can regress them.
+
+## Product phase
+
+Current broad phase: **stabilization** toward `v1.2.0`.
+
+The project should prioritize:
+
+1. deterministic installation/compatibility;
+2. truthful low-cost telemetry/control;
+3. recovery and lifecycle acceptance;
+4. safe migration/update/rollback;
+5. coherent Telegram UX;
+6. documentation/README rebuild;
+7. Website v2;
+8. final release acceptance.
+
+Exact current order and blockers belong in `ACTIVE_WORK.md` / `NEXT_WORK.md`, not here.
+
+## Known future product areas
+
+These are broad areas, not a current TODO checklist:
+
+- reconnect/recovery under network/server/service failures;
+- device revoke/delete/port reuse/isolation acceptance;
+- legacy Windows protected-ACL migration;
+- transactional server/client update + rollback;
+- command timeout semantics;
+- rich explanatory docs/README;
+- final Website v2.
+
+Use `NEXT_WORK.md` for actual remaining queue because individual items may already have moved to PASS.
+
+## Documentation/product presentation principles
+
+Documentation should explain the system visually and behaviorally, not just list files.
+
+Core user-facing model:
+
+```text
+Windows devices -> one Hermes server -> Remote Desktop from anywhere
+                         |
+                         +-> Telegram control
+```
+
+Explain the product first, then OpenSSH/Ed25519/pinning implementation details.
+
+Older `v1.0.7` documentation may be used as a structural/clarity reference only; do not restore obsolete FRP implementation details.
+
+## Engineering interaction rules
+
+- Russian;
+- direct practical engineering discussion;
+- one live infrastructure stage at a time;
+- whole copy-paste commands instead of manual editor workflows where possible;
+- explicit PASS/FAIL from evidence;
+- rollback plan/point for risky changes where practical;
+- do not expose secrets in diagnostics/context;
+- do not claim deployed/current state from code alone;
+- do not let chat be the only copy of durable project facts.
+
+## Context note
+
+This file intentionally avoids active PR SHA, temporary root-cause hypotheses and detailed open acceptance. Those facts change quickly and belong to HOT context.
+
+If this file starts accumulating temporary debugging state again, compact it according to `CONTEXT_LIFECYCLE.md`.
