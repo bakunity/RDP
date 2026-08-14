@@ -7,22 +7,25 @@ Primary truth remains `ACTIVE_WORK.md` / `CURRENT_STATE.md` / `NEXT_WORK.md` / `
 
 ## Where this chat is now
 
-CERT-013 Windows lifecycle integration is active in draft PR #32.
+CERT-013 Windows lifecycle integration has completed all bounded live acceptance.
 
-Current exact tested head:
+Accepted product/test code head:
 
-`29c19182ef99497b4cc314e3b4e9b6598ad95516`
+`e11cf89ed26d551ca92b4010034d6e6792a9266b`
 
-CI #363:
+Reconcile CI #381:
 
 - Linux full release checks PASS;
 - Windows PowerShell 5.1 PASS.
 
-## Live acceptance on `SEC005 TEST`
+Evidence/context/release-only commits after `e11cf89e...` do not alter the accepted CERT-013 product/test files.
+
+## Live acceptance
+
+### `SEC005 TEST`
 
 Transactional Update — FULL PASS:
 
-- ordinary Update automatically ran certificate lifecycle setup from the same immutable SHA;
 - worker returned `CERT_ROTATION=UNCHANGED`, setup returned `CERT-012_SETUP=PASS`;
 - Update returned `UPDATE=PASS` + `CertificateRotation: managed`;
 - identity/config/private+public SSH keys/known_hosts/Device ID/RDP port unchanged;
@@ -42,21 +45,51 @@ Repair lifecycle — FULL PASS:
 - trusted CUSTOM binding unchanged, TCP3389 listening;
 - final `CERT-013_REPAIR_LIVE=PASS`.
 
-The earlier acceptance-wrapper function name `H` collided with Windows PowerShell `Get-History` before product mutation. Corrected wrapper passed; this was not a Hermes runtime bug.
+### Disposable clean fixture `DESKTOP-T9N368F`
+
+Preflight PASS:
+
+- Windows 10 Pro build 19045 x64;
+- PowerShell 5.1 x64;
+- Defender AV + real-time protection enabled;
+- Hermes absent;
+- OpenSSH Client Installed;
+- final `CERT-013_CLEAN_FIXTURE=PASS`.
+
+Fresh Install — FULL PASS from exact accepted head:
+
+- `CERT_ROTATION=UPDATED`;
+- `CERT-012_SETUP=PASS`;
+- device `CERT013 FRESH`, endpoint `150.241.94.110:53394`;
+- one main Agent + one Hermes SSH process;
+- rotation task Running as LocalSystem SID `S-1-5-18`;
+- trusted CUSTOM RDP thumbprint `2E170C609B47E0D34F16238503998509EDDDC79C`;
+- TCP3389 listening;
+- Defender enabled with no Hermes exclusion;
+- final `CERT-013_FRESH_INSTALL=PASS`.
+
+External Microsoft RDP — PASS:
+
+- real connection to `150.241.94.110:53394` worked;
+- trusted certificate worked with no warning.
+
+Uninstall — FULL PASS:
+
+- both Hermes Scheduled Tasks absent;
+- Agent/rotation/SSH process counts zero;
+- active `C:\ProgramData\HermesRDP` absent;
+- validated archive `C:\ProgramData\HermesRDP.removed.20260814-132332`;
+- Defender real-time protection remained enabled;
+- final `CERT-013_UNINSTALL=PASS`.
 
 ## Exact resume action
 
-Do not use `SEC005 TEST` for destructive fresh-install/uninstall acceptance.
+PR #32 has no remaining live product gate.
 
-Final PR #32 merge gate requires a separate disposable supported Windows test fixture:
-
-1. fresh install from exact head `29c19182...`;
-2. verify pairing/OpenSSH tunnel, automatic certificate companion, LocalSystem task, trusted CUSTOM listener, TCP3389 and external RDP;
-3. run normal uninstall;
-4. verify both Hermes tasks/processes removed and active client directory archived according to current uninstall behavior;
-5. if PASS, update evidence/context, mark PR #32 ready and merge with exact-head guard.
-
-If no disposable fixture exists, leave PR #32 draft instead of risking `SEC005 TEST`.
+1. Wait for CI on the final evidence-only PR head.
+2. Mark PR #32 ready and merge with exact-head guard.
+3. Delete disposable `CERT013 FRESH` in Telegram so token/key are revoked and port `53394` is freed.
+4. Record merged SHA and continue to the next product gap.
 
 Natural renewal-driven thumbprint rotation remains deferred until a real renewal. Do not force production issuance solely for evidence.
 
