@@ -30,6 +30,15 @@ then
   exit 2
 fi
 
+TRUSTED_CERT_ENABLED="$(python3 - <<'PY'
+import json
+with open('/etc/hermes-rdp/config.json', encoding='utf-8') as handle:
+    data = json.load(handle)
+trusted = data.get('trusted_rdp_certificate') or {}
+print(1 if trusted.get('enabled') is True else 0)
+PY
+)"
+
 DB_UID="$(stat -c '%u' "$DB")"
 DB_GID="$(stat -c '%g' "$DB")"
 DB_MODE="$(stat -c '%a' "$DB")"
@@ -64,6 +73,15 @@ PY
   return 1
 }
 
+restore_optional_file() {
+  local path="$1"
+  rm -f "$path"
+  if [[ -e "$BACKUP$path" ]]; then
+    install -d -m 0755 "$(dirname "$path")"
+    cp -a "$BACKUP$path" "$path"
+  fi
+}
+
 rollback_update() {
   local status="$1" line="$2" rollback_ok=1
   trap - ERR
@@ -86,6 +104,9 @@ rollback_update() {
   cp -a "$BACKUP/etc/systemd/system/hermes-rdp-sshd.service" \
     /etc/systemd/system/hermes-rdp-sshd.service || rollback_ok=0
 
+  restore_optional_file /usr/local/sbin/hermes-rdp-cert-package || rollback_ok=0
+  restore_optional_file /etc/sudoers.d/hermes-rdp-cert-package || rollback_ok=0
+
   if [[ -s "$BACKUP/var/lib/hermes-rdp/state.sqlite3" ]]; then
     rm -f "$DB" "$DB-wal" "$DB-shm"
     install \
@@ -100,6 +121,9 @@ rollback_update() {
 
   systemctl daemon-reload || rollback_ok=0
   /usr/sbin/sshd -t -f /etc/hermes-rdp/sshd_config || rollback_ok=0
+  if [[ -e /etc/sudoers.d/hermes-rdp-cert-package ]]; then
+    visudo -cf /etc/sudoers.d/hermes-rdp-cert-package >/dev/null || rollback_ok=0
+  fi
   systemctl restart hermes-rdp-sshd.service hermes-rdp.service || rollback_ok=0
   systemctl is-active --quiet hermes-rdp-sshd.service || rollback_ok=0
   systemctl is-active --quiet hermes-rdp.service || rollback_ok=0
@@ -141,6 +165,10 @@ ROOT="$(find "$WORK" -maxdepth 1 -mindepth 1 -type d -name 'RDP-*' | head -n1)"
 test -f "$ROOT/server/pyproject.toml"
 test -f "$ROOT/server/systemd/hermes-rdp.service"
 test -f "$ROOT/server/systemd/hermes-rdp-sshd.service"
+if ((TRUSTED_CERT_ENABLED == 1)); then
+  test -f "$ROOT/server/bin/hermes-rdp-cert-package.sh"
+  test -f "$ROOT/server/sudoers/hermes-rdp-cert-package"
+fi
 PYTHONPATH="$ROOT/server" python3 -m compileall -q "$ROOT/server/hermes_rdp"
 
 PREVIOUS_REF="$(python3 - <<'PY'
@@ -156,7 +184,9 @@ for path in \
   /etc/hermes-rdp/config.json \
   /etc/hermes-rdp/sshd_config \
   /etc/systemd/system/hermes-rdp.service \
-  /etc/systemd/system/hermes-rdp-sshd.service; do
+  /etc/systemd/system/hermes-rdp-sshd.service \
+  /usr/local/sbin/hermes-rdp-cert-package \
+  /etc/sudoers.d/hermes-rdp-cert-package; do
   [[ -e "$path" ]] && cp -a --parents "$path" "$BACKUP/"
 done
 
@@ -233,6 +263,16 @@ install -m 0644 \
 install -m 0644 \
   "$ROOT/server/systemd/hermes-rdp-sshd.service" \
   /etc/systemd/system/hermes-rdp-sshd.service
+
+if ((TRUSTED_CERT_ENABLED == 1)); then
+  install -m 0755 \
+    "$ROOT/server/bin/hermes-rdp-cert-package.sh" \
+    /usr/local/sbin/hermes-rdp-cert-package
+  install -m 0440 \
+    "$ROOT/server/sudoers/hermes-rdp-cert-package" \
+    /etc/sudoers.d/hermes-rdp-cert-package
+  visudo -cf /etc/sudoers.d/hermes-rdp-cert-package >/dev/null
+fi
 
 python3 - "$REF" "$RESOLVED_SHA" <<'PY'
 import json

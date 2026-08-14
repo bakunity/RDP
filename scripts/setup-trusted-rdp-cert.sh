@@ -14,7 +14,8 @@ Installs and configures the Hermes RDP trusted public-IP certificate lifecycle:
 - UFW TCP 80 rule for ACME HTTP-01;
 - isolated Let’s Encrypt staging validation before first production issuance;
 - production short-lived IP certificate;
-- Hermes-owned systemd renewal service/timer.
+- Hermes-owned systemd renewal service/timer;
+- bounded root helper for authenticated Windows certificate delivery.
 EOF
 }
 
@@ -51,10 +52,18 @@ MARKER=/etc/hermes-rdp/trusted-rdp-cert.enabled
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CERT_RENEW_SOURCE="$SOURCE_ROOT/server/bin/hermes-rdp-cert-renew.sh"
+CERT_PACKAGE_SOURCE="$SOURCE_ROOT/server/bin/hermes-rdp-cert-package.sh"
+CERT_PACKAGE_SUDOERS_SOURCE="$SOURCE_ROOT/server/sudoers/hermes-rdp-cert-package"
 SERVICE_SOURCE="$SOURCE_ROOT/server/systemd/hermes-rdp-cert-renew.service"
 TIMER_SOURCE="$SOURCE_ROOT/server/systemd/hermes-rdp-cert-renew.timer"
 
-for required in "$CONFIG" "$CERT_RENEW_SOURCE" "$SERVICE_SOURCE" "$TIMER_SOURCE"; do
+for required in \
+  "$CONFIG" \
+  "$CERT_RENEW_SOURCE" \
+  "$CERT_PACKAGE_SOURCE" \
+  "$CERT_PACKAGE_SUDOERS_SOURCE" \
+  "$SERVICE_SOURCE" \
+  "$TIMER_SOURCE"; do
   if [[ ! -e "$required" ]]; then
     echo "Missing required Hermes file: $required" >&2
     exit 1
@@ -74,6 +83,7 @@ apt-get install -y -qq \
   openssl \
   python3 \
   python3-venv \
+  sudo \
   ufw \
   util-linux >/dev/null
 
@@ -203,6 +213,11 @@ fi
 unset CERT_PUB KEY_PUB
 
 install -m 0755 "$CERT_RENEW_SOURCE" /usr/local/sbin/hermes-rdp-cert-renew
+install -m 0755 "$CERT_PACKAGE_SOURCE" /usr/local/sbin/hermes-rdp-cert-package
+install -m 0440 \
+  "$CERT_PACKAGE_SUDOERS_SOURCE" \
+  /etc/sudoers.d/hermes-rdp-cert-package
+visudo -cf /etc/sudoers.d/hermes-rdp-cert-package >/dev/null
 install -m 0644 "$SERVICE_SOURCE" /etc/systemd/system/hermes-rdp-cert-renew.service
 install -m 0644 "$TIMER_SOURCE" /etc/systemd/system/hermes-rdp-cert-renew.timer
 
@@ -258,4 +273,5 @@ else
   echo "renewal_smoke=PASS_RENEWED"
 fi
 echo "tcp80=FREE"
+echo "package_helper=READY"
 echo "TRUSTED_RDP_CERT=PASS"
