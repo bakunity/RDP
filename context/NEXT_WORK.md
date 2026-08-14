@@ -20,35 +20,38 @@ Already complete:
 
 - CERT-001 server inventory: PASS.
 - CERT-002 Certbot 5.7.0 installation: PASS.
-- CERT-003 public HTTP-01 reachability through UFW/TCP 80: PASS.
+- CERT-003 public HTTP-01 reachability: PASS.
 - CERT-004 Let’s Encrypt staging public-IP issuance: PASS.
-- CERT-005 staging key/fullchain/renewal mechanics and dry-run: PASS.
-- CERT-006 production Let’s Encrypt public-IP issuance: PASS.
+- CERT-005 key/fullchain/renewal dry-run: PASS.
+- CERT-006 production public-IP issuance: PASS.
 - CERT-007 scheduler inventory: PASS; missing scheduler gap confirmed.
-- CERT-008 Hermes-owned systemd renewal service/timer: live PASS.
-- CERT-009 productized server lifecycle on immutable PR #29 head: live PASS; existing certificate reused, serial preserved, timer active/enabled, smoke PASS_NOT_DUE, TCP 80 free.
+- CERT-008 Hermes-owned automatic renewal: live PASS.
+- CERT-009 productized server lifecycle: live PASS and PR #29 merged as `33c7b6ac6e5a6fb732963988c4734a8a7ef8ec5e`.
+- CERT-010 read-only `SEC005 TEST` Windows RDP certificate inventory: PASS; default self-signed baseline and rollback thumbprint confirmed, no mutation.
 
-PR #29 status:
+Active CERT-011 work:
 
-- branch `feat/trusted-rdp-cert-lifecycle`;
-- tested head `e914a0f45a6cc734d25b02340353fc06ace6c7c8`;
-- CI #313 PASS Linux + Windows PowerShell 5.1;
-- CI #316 PASS Linux + Windows PowerShell 5.1 after installer/uninstall wiring;
-- server-side merge gate is satisfied.
+- draft PR #30 `feat: add authenticated Windows RDP certificate rotation`;
+- branch `feat/windows-rdp-cert-rotation`;
+- tested head `af054274405c33849b8bbdee0a730320a8b5ab33`;
+- authenticated device certificate-package endpoint implemented;
+- bounded root PFX helper and exact sudoers permission implemented;
+- Windows PowerShell 5.1 transactional sync/bind/rollback script implemented;
+- server setup/updater/uninstall lifecycle implemented;
+- CI #324 PASS: Linux full release checks + Windows PowerShell 5.1.
 
 Next:
 
-- merge/reconcile PR #29;
-- start **CERT-010** with a read-only Windows inventory on non-critical `SEC005 TEST` before any listener mutation;
-- confirm current RDP listener thumbprint/hash type and TerminalServices CIM provider behavior;
-- implement certificate delivery only over the existing pinned HTTPS + per-device bearer-auth channel;
-- import the PFX into `Cert:\LocalMachine\My` without making the private key exportable;
-- grant `NT AUTHORITY\NETWORK SERVICE` read access to the installed private key because Remote Desktop Services uses that identity;
-- capture the previous listener hash and certificate before binding so rollback is deterministic;
-- bind the trusted certificate only on `SEC005 TEST`, validate Microsoft Remote Desktop behavior, then test rollback;
-- after Windows acceptance, implement renewal-driven rotation and expand carefully.
+- deploy immutable PR #30 head to the current trusted-cert Linux host through the transactional server updater;
+- verify `UPDATE=PASS`, controller/sshd health, helper/sudoers presence and no certificate-lineage mutation;
+- run the immutable CERT-011 sync only on `SEC005 TEST`;
+- require pinned authenticated package retrieval, non-exportable LocalMachine private key, NetworkService Read ACL, CUSTOM RDP hash type and TCP 3389 listener preservation;
+- open a **new** Microsoft Remote Desktop connection through the Hermes endpoint and verify the intended trust/name warning is gone;
+- preserve the old thumbprint/rollback data until real reconnect acceptance is complete;
+- after bounded CERT-011 acceptance, integrate periodic certificate sync into the normal Hermes Windows agent so renewal-driven rotation is automatic;
+- then validate one real renewal/rotation cycle before expanding to other Windows devices.
 
-Architecture constraint: one independent Let’s Encrypt public-IP certificate per Windows device is not the scalable default because all devices share the same exact public-IP identifier set and duplicate/exact-set issuance limits apply. Use one short-lived lineage per Hermes server plus authenticated distribution/rotation.
+Architecture constraint: one independent Let’s Encrypt public-IP certificate per Windows device is not the scalable default because all devices share the same exact public-IP identifier set and CA issuance limits apply. Use one short-lived lineage per Hermes server plus authenticated distribution/rotation.
 
 ### 2. Release automation hardening
 
