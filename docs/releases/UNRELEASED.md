@@ -49,41 +49,35 @@ Both fixes passed Linux/Windows PowerShell 5.1 CI and live revalidation.
 
 ### Release-process hardening
 
-Release documentation is being promoted to a durable source-of-truth model:
+Release documentation now follows a durable source-of-truth model:
 
-- full long-form notes live in `docs/releases/vX.Y.Z.md`;
+- compact public GitHub Release notes live in `docs/releases/vX.Y.Z.md`;
+- long-form engineering history lives in `docs/releases/history/vX.Y.Z-full.md`;
 - `UNRELEASED.md` accumulates work continuously;
 - release workflow tags the validated workflow HEAD rather than the commit that last touched `VERSION`;
 - existing GitHub Release descriptions synchronize from the corresponding versioned release-note file without rewriting historical tags.
 
-## In progress / NOT release-ready yet
+## Accepted / pending merge
 
 ### CERT-013 — certificate rotation in ordinary Windows lifecycle
 
-PR #32 is still open/draft and is **not yet part of main**.
+PR #32 has completed all bounded live gates and is ready to merge. Exact accepted head: `e11cf89ed26d551ca92b4010034d6e6792a9266b`.
 
-Goal: users should not need a separate manual certificate setup command after normal install/update/repair.
-
-Current tested code head: `29c19182ef99497b4cc314e3b4e9b6598ad95516`.
-
-CI #363:
+CI #381:
 
 - Linux full release checks PASS;
 - Windows PowerShell 5.1 validation PASS.
 
-Live accepted on `SEC005 TEST`:
+Live acceptance:
 
-- transactional Update automatically manages certificate rotation lifecycle;
-- identity/config/private-public SSH keys/`known_hosts`/Device ID/RDP port remained unchanged;
-- main Agent/tunnel remained healthy;
-- rotation Scheduled Task remained Running as LocalSystem SID `S-1-5-18`;
-- trusted CUSTOM RDP binding and TCP 3389 remained healthy;
-- targeted Repair test removed only rotation worker/task and public Repair recreated them without changing identity or RDP binding.
+- transactional Update on `SEC005 TEST` automatically managed certificate rotation while preserving `device.json`, SSH identity, `known_hosts`, Device ID, RDP port, main Agent/tunnel and trusted listener;
+- targeted Repair recreated deliberately removed rotation task/worker without changing identity, port, tunnel or trusted RDP binding;
+- a separate clean Windows 10 Pro 19045 x64 / PowerShell 5.1 VM with Defender enabled passed fresh install from the exact accepted head;
+- fresh install created one main Agent, one Hermes SSH tunnel and a LocalSystem rotation task (`S-1-5-18`), applied the trusted CUSTOM RDP certificate, kept TCP 3389 listening and required no Defender exclusion;
+- real external Microsoft Remote Desktop to the disposable fixture worked through `150.241.94.110:53394` with the trusted certificate and no self-signed warning;
+- normal uninstall removed both Hermes tasks/processes, stopped the Hermes SSH tunnel, removed the active `C:\ProgramData\HermesRDP` directory by archiving it, and left Defender real-time protection enabled.
 
-Still required before merge/release readiness:
-
-- fresh install → verify → uninstall on a disposable supported Windows fixture/VM;
-- do not destructively use the already accepted `SEC005 TEST` fixture for that final gate.
+After PR #32 merges, move this section into the merged/current-main boundary and keep the evidence in context rather than reconstructing it later.
 
 ## Deferred observation / not a blocker
 
