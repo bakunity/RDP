@@ -6,91 +6,91 @@ Updated: 2026-08-14
 
 - Repository: `bakunity/RDP`.
 - Stable published release: **v1.2.1**.
-- PR #19 through PR #25: merged / runtime accepted.
+- PR #19–#25: merged / runtime accepted stabilization work.
 - PR #26 documentation reconciliation: merged.
-- PR #27 `v1.2.0`: merged, but its automated tag resolved to an intermediate VERSION-changing commit rather than the complete release tree.
-- `v1.2.0` tag is intentionally not rewritten after publication.
-- PR #28 `v1.2.1` packaging hotfix: merged; Linux + Windows PowerShell 5.1 CI PASS.
-- `v1.2.1` annotated tag points to exact commit `fd3c323da49f8994215d973e580d3949638b0f61` and is the release to use for installs/updates.
+- PR #27 `v1.2.0`: historical packaging-error release; published tag is intentionally not rewritten.
+- PR #28 `v1.2.1`: merged packaging hotfix; Linux + Windows PowerShell 5.1 CI PASS.
+- Production controller/app still runs accepted PR #25 head `0e2e7aef77ab1df804b70d9fd29d4b5736fbac60`; certificate work has not redeployed the controller/runtime.
 
-## Deployment truth
+## Secondary release follow-up
 
-- Live Linux controller/app remains deployed from accepted PR #25 head `0e2e7aef77ab1df804b70d9fd29d4b5736fbac60`; release/context changes did not redeploy production runtime.
-- `SEC005 TEST` remains healthy after updater, repair and Microsoft RDP acceptance.
-- Do not repeat completed stabilization/live acceptance without a concrete regression reason.
-
-## Release automation follow-up
-
-Prepared branch `fix/release-tag-head-v2` remains at `ef32b8dd95ffa1c274dc1749eae736867d2fb74b`; no PR is open yet. This remains secondary to the current certificate track.
+Prepared branch `fix/release-tag-head-v2` remains at `ef32b8dd95ffa1c274dc1749eae736867d2fb74b`; no PR is open. This remains secondary to the certificate track.
 
 ## Current product track — trusted RDP certificate on public IP
 
-User decision: **do not add a domain only for appearance**. Proceed with a certificate whose identity is the public IP. The certificate relevant to the Microsoft Remote Desktop warning must ultimately be presented by the **Windows RDP listener**, not merely installed on Linux/API.
+User decision: do not add a domain only for appearance. The trusted identity is the existing public IPv4. The Microsoft Remote Desktop warning is controlled by the certificate presented by the **Windows RDP listener**, not Linux/API TLS.
 
-### CERT-001 — server inventory — PASS
+### CERT-001 through CERT-006 — PASS
 
-- Debian GNU/Linux 13 (trixie).
-- Certbot initially absent; Nginx absent; TCP `80/443` unused at inventory time.
+Already accepted and must not be repeated without regression evidence:
 
-### CERT-002 — Certbot install — PASS
+- Debian 13 certificate-host inventory;
+- Certbot 5.7.0 under `/opt/certbot` with `/usr/local/bin/certbot` entry point;
+- public TCP 80 / HTTP-01 reachability through UFW;
+- Let’s Encrypt staging public-IP issuance using standalone HTTP-01 + `shortlived` + RSA 2048;
+- staging certificate/key/fullchain inspection and `certbot renew --dry-run`;
+- production Let’s Encrypt public-IP issuance;
+- production IP SAN, TLS Server Authentication EKU, certificate/private-key match and local trust-chain verification.
 
-- Certbot installed under `/opt/certbot`; `/usr/local/bin/certbot` entry point.
-- Live version: `certbot 5.7.0`.
+The production certificate lineage is valid and no Windows RDP listener binding has been changed yet.
 
-### CERT-003 — external TCP 80 / HTTP-01 reachability — PASS
+### CERT-007 — scheduler inventory — PASS / GAP CONFIRMED
 
-- UFW explicitly allows `80/tcp` for ACME HTTP-01.
-- Five independent external probes returned HTTP `200` from a temporary listener with matching server access-log GETs.
+Live read-only inventory proved that the pip/venv Certbot installation had no systemd timer/service and no cron entry running `certbot renew`.
 
-### CERT-004 — staging public-IP issuance — PASS
+### CERT-008 — Hermes-owned automatic renewal — PASS
 
-- Let’s Encrypt staging issuance succeeded with standalone HTTP-01 + `shortlived`.
-- Critical SAN contains the public IPv4 identifier; EKU is TLS Web Server Authentication; RSA 2048.
+Live runtime acceptance completed:
 
-### CERT-005 — staging chain/key/renewal mechanics — PASS
+- `hermes-rdp-cert-renew.service` and `.timer` created;
+- `systemd-analyze verify` PASS;
+- timer is `enabled` and `active`;
+- schedule is twice daily with `RandomizedDelaySec=1h` and `Persistent=yes`;
+- bounded manual service run returned `Result=success`, exit status `0`;
+- certificate was correctly not renewed early;
+- TCP `80` was free after service execution;
+- journal recorded clean start/finish.
 
-- Certificate/private-key public keys match.
-- Fullchain parsed correctly.
-- `certbot renew --cert-name <public-ip> --dry-run --non-interactive` succeeded.
+### CERT-009 — productization in Hermes RDP — ACTIVE
 
-### CERT-006 — production public-IP issuance — PASS
+Draft PR **#29**: `feat: add trusted RDP certificate lifecycle module`.
 
-- Staging lineage safely removed with `certbot delete` after confirming no external service references.
-- Production Let’s Encrypt issuance succeeded using standalone HTTP-01 + `shortlived` + RSA 2048.
-- Production issuer is Let’s Encrypt `YR1`; critical SAN contains the public IPv4 identifier; EKU is TLS Web Server Authentication.
-- Certificate/private-key public keys match; local trust verification returned `OK`.
-- Production renewal config uses production ACME, standalone, RSA 2048 and `shortlived`.
-- TCP `80` was free after issuance.
-- No Windows RDP listener certificate state has been changed yet.
+Branch: `feat/trusted-rdp-cert-lifecycle`.
+Current head: `e914a0f45a6cc734d25b02340353fc06ace6c7c8`.
 
-### CERT-007 — automatic-renewal scheduler inventory — PASS / GAP CONFIRMED
+Implemented in the PR:
 
-Read-only live inventory proved:
+- `scripts/setup-trusted-rdp-cert.sh` encapsulates Certbot install, isolated staging validation, production issuance/reuse, certificate/key validation, UFW 80 and timer setup;
+- Hermes renewal wrapper uses `flock` and certificate-specific normal `certbot renew`;
+- repository-owned renewal service/timer match the accepted runtime cadence;
+- `install-server.sh` exposes explicit opt-in `--trusted-rdp-cert`; default install behavior is unchanged;
+- installer requires a globally routable IPv4 for this option;
+- uninstall removes Hermes-owned renewal units/wrapper but deliberately preserves the ACME lineage/private material;
+- release checks enforce staging, `shortlived`, IP issuance, locking, timer persistence/randomization, installer wiring and non-destructive uninstall behavior.
 
-- Certbot path: `/usr/local/bin/certbot` -> `/opt/certbot/bin/certbot`;
-- no matching systemd timer exists;
-- no matching systemd service/unit exists;
-- no `certbot renew` command exists in systemd units;
-- no `certbot renew` command exists in cron;
-- TCP `80` is currently free;
-- production certificate remains valid through 2026-08-20 21:54:07 UTC.
+CI evidence:
 
-Therefore renewal **mechanics** are proven, but automatic renewal is not configured. This is a blocker before Windows rollout because the public-IP certificate is short-lived.
+- CI #313 on the lifecycle module: Linux PASS + Windows PowerShell 5.1 PASS.
+- CI #316 after installer/uninstall wiring: Linux full release checks PASS + Windows PowerShell 5.1 PASS.
+
+No PR #29 code has been deployed to production yet. No Windows certificate delivery/binding has been implemented yet.
+
+## Certificate architecture constraint
+
+Per-device public certificates with separate Windows-local private keys are attractive for isolation, but Let’s Encrypt limits new certificates for the exact same identifier set. Because all Hermes devices behind one server are reached through the same public IP, issuing one independent public-IP certificate per device does not scale as the default product model.
+
+Current product direction for the next stage: one short-lived public-IP lineage per Hermes server, then a carefully authenticated/rotated Windows distribution path. Do not expose the shared private key through a weak or unauthenticated endpoint.
 
 ## Exact resume action
 
-**CERT-008:** install a Hermes-owned systemd renewal service/timer for this validated Certbot lineage, using periodic `certbot renew`, persistent scheduling, randomized delay, explicit logging/failure visibility and no forced renewal. Then validate unit syntax/state, next-run scheduling and a bounded manual service invocation without leaving TCP `80` occupied.
+Complete **CERT-009 live acceptance** on the current certificate host using the immutable PR #29 head. The setup module must detect and reuse the already-valid production lineage rather than request another certificate, install the repository-owned wrapper/units, add the trusted-certificate config marker, and pass its bounded renewal smoke test without changing the certificate serial or leaving TCP `80` occupied.
 
-After scheduler acceptance:
+After CERT-009 live acceptance:
 
-1. design a deploy/rotation hook that runs only after successful renewal;
-2. design the secure Windows certificate/private-key model;
-3. integrate ACME install/issuance/renewal/rotation into Hermes RDP rather than leaving manual operator commands;
-4. validate first on non-critical `SEC005 TEST`, preserving its existing listener certificate/state as rollback;
-5. only after Microsoft Remote Desktop trust acceptance expand to other devices.
+1. checkpoint the runtime evidence and reconcile PR #29;
+2. design/implement the authenticated Windows certificate delivery + rotation path;
+3. preserve the existing Windows RDP listener certificate/state as rollback;
+4. first bind/test only on non-critical `SEC005 TEST`;
+5. validate the actual Microsoft Remote Desktop trust/name warning before expansion.
 
 Do not expose private keys, pairing codes, API tokens or secret-bearing certificate material in chat/context.
-
-## Context rule
-
-Checkpoint meaningful outcomes, not raw transcripts. Never store pairing codes, API tokens, private keys or ready-to-use secret material in context.
