@@ -20,25 +20,24 @@ This is the active product stage. Domain introduction is deferred unless later r
 
 Already complete:
 
-- CERT-001 server inventory: Debian 13; no Nginx; TCP `80/443` unused; Certbot initially absent.
-- CERT-002 Certbot installation: `certbot 5.7.0` PASS.
-- CERT-003 public HTTP-01 reachability: PASS; UFW explicitly allows `80/tcp`, and five independent external probes reached a temporary listener with HTTP `200` and matching server access-log entries.
-- CERT-004 Let’s Encrypt staging public-IP issuance: PASS with standalone HTTP-01 + `shortlived`; IP SAN and Server Authentication EKU confirmed.
-- CERT-005 staging key/fullchain/renewal mechanics: PASS; certificate/private-key public keys match and `certbot renew --dry-run` succeeded. Scheduler existence is not yet verified.
+- CERT-001 server inventory: PASS.
+- CERT-002 Certbot 5.7.0 installation: PASS.
+- CERT-003 public HTTP-01 reachability through UFW/TCP 80: PASS.
+- CERT-004 Let’s Encrypt staging public-IP issuance: PASS.
+- CERT-005 staging key/fullchain/renewal mechanics and `renew --dry-run`: PASS.
+- CERT-006 real production Let’s Encrypt public-IP issuance: PASS; production issuer, IP SAN, Server Authentication EKU, RSA 2048, key match and local trust verification all confirmed.
 
 Next:
 
-- **CERT-006:** verify no service references use the staging lineage, delete it with `certbot delete`, then obtain a real production Let’s Encrypt public-IP certificate with the same proven standalone HTTP-01 + `shortlived` + RSA settings;
-- inspect production SAN/identity, issuer/chain, EKU, validity and certificate/key match;
-- verify/configure an actual automatic renewal scheduler for the pip/venv Certbot install;
-- design deploy/rotation hooks because public-IP certificates are short-lived;
-- remember the trust warning is produced by the Windows RDP listener certificate, not by HTTPS API TLS;
-- design safe certificate/private-key delivery or issuance so secret material is not spread unnecessarily;
-- bind/test first on non-critical `SEC005 TEST` and preserve its previous listener certificate/state as rollback;
+- **CERT-007:** inspect actual automatic-renewal scheduling for the pip/venv Certbot install; if absent, install a Hermes-owned systemd service/timer with locking, logging and failure visibility, then validate its command and schedule;
+- design deploy/rotation hooks for short-lived certificate replacement;
+- design the secure Windows certificate/private-key model; do not casually copy one shared private key to every Windows device;
+- integrate ACME install/issuance/renewal/rotation into Hermes RDP so production operation does not depend on manual shell commands;
+- bind/test first on non-critical `SEC005 TEST` and preserve the previous RDP listener certificate/state as rollback;
 - validate Microsoft Remote Desktop no longer reports the intended trust/name warning;
 - only then expand to other Windows devices.
 
-Do not mutate Windows/RDP until production server-side certificate issuance and renewal automation are proven.
+Do not mutate Windows/RDP until production server-side issuance and renewal automation are proven.
 
 ### 2. Release automation hardening
 
