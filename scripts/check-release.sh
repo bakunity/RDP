@@ -34,18 +34,15 @@ for marker in [
     '--preferred-profile shortlived',
     '--ip-address "$HOST"',
     "ufw allow 80/tcp comment 'Hermes ACME HTTP-01'",
-    'PUBLIC_KEY_MATCH',
 ]:
-    if marker == 'PUBLIC_KEY_MATCH':
-        if 'CERT_PUB' not in setup or 'KEY_PUB' not in setup:
-            raise SystemExit('setup script lost certificate/private-key match validation')
-        continue
     if marker not in setup:
         raise SystemExit(f'setup script missing required marker: {marker}')
+if 'CERT_PUB' not in setup or 'KEY_PUB' not in setup:
+    raise SystemExit('setup script lost certificate/private-key match validation')
 
 for marker in [
     '/usr/bin/flock -w 300',
-    'certbot" renew',
+    '"$CERTBOT" renew',
     '--cert-name "$CERT_NAME"',
     '--quiet',
     '--non-interactive',
