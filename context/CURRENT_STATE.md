@@ -12,7 +12,6 @@ For immediate operational truth read `ACTIVE_WORK.md`; for detailed historical p
 - PR #27: `v1.2.0` release PR merged, but automated tag selected an intermediate VERSION-changing commit rather than the complete release tree.
 - Published `v1.2.0` tag is not rewritten; it remains historical evidence of the packaging error.
 - PR #28: `v1.2.1` packaging hotfix merged after Linux + Windows PowerShell 5.1 CI PASS.
-- `v1.2.1` tag points to exact commit `fd3c323da49f8994215d973e580d3949638b0f61` and contains consistent `VERSION`, package version, `pyproject.toml`, release notes and full rich product README.
 
 ## Runtime architecture
 
@@ -35,8 +34,8 @@ Admin SSH remains independent from Hermes tunnel SSH. FRP is not active runtime.
 ## Live deployment truth
 
 - Production controller remains deployed from accepted PR #25 head `0e2e7aef77ab1df804b70d9fd29d4b5736fbac60`.
-- Release/documentation/context merges did not redeploy or mutate production runtime.
-- SEC005 acceptance fixture remains healthy after updater/repair/RDP acceptance.
+- Release/documentation/context changes did not redeploy or mutate production runtime.
+- `SEC005 TEST` remains healthy after updater/repair/RDP acceptance.
 
 ## Accepted stabilization baseline
 
@@ -59,31 +58,33 @@ SEC-004 remains intentionally fixture-unavailable. RL-006 remains PARTIAL PASS o
 
 ## Release automation follow-up
 
-The release workflow root cause is confirmed: selecting `git log -1 -- VERSION` can tag an incomplete release tree. Prepared branch `fix/release-tag-head-v2` at `ef32b8dd95ffa1c274dc1749eae736867d2fb74b` changes tagging to exact validated workflow `HEAD` and adds a regression assertion. No PR is open yet.
+Prepared branch `fix/release-tag-head-v2` at `ef32b8dd95ffa1c274dc1749eae736867d2fb74b` changes release tagging to exact validated workflow `HEAD` and adds a regression assertion. No PR is open yet; certificate work remains higher priority.
 
 ## Current certificate state
 
-The trusted-certificate track targets the **public IP**, not a new domain. Domain use is deferred because a domain alone does not change the certificate presented by the Windows RDP listener.
+The trusted-certificate track targets the **public IP**, not a new domain.
 
-Live server evidence:
+Server-side certificate evidence now accepted:
 
 - Debian GNU/Linux 13 (trixie);
-- Certbot installation completed successfully; current version **5.7.0**;
-- CERT-003 external HTTP-01 reachability is **PASS** and UFW explicitly allows `80/tcp`;
-- CERT-004 Let’s Encrypt staging public-IP issuance is **PASS** using standalone HTTP-01 and `shortlived`;
-- staging leaf SAN contains the public IPv4 identifier and EKU is TLS Web Server Authentication;
-- CERT-005 certificate/private-key match and staging `fullchain` inspection are **PASS**;
-- staging `certbot renew --dry-run` is **PASS**, proving renewal mechanics;
-- automatic scheduling through systemd/cron has not yet been verified for this pip/venv Certbot install;
-- no production-trusted public-IP certificate has been issued yet;
+- Certbot 5.7.0 installed under `/opt/certbot` with `/usr/local/bin/certbot` entry point;
+- CERT-003 public HTTP-01 reachability: PASS; UFW explicitly allows `80/tcp`;
+- CERT-004 staging public-IP issuance: PASS;
+- CERT-005 certificate/key/fullchain inspection and renewal dry-run mechanics: PASS;
+- CERT-006 real Let’s Encrypt production public-IP issuance: PASS;
+- production SAN contains the public IPv4 identifier;
+- EKU is TLS Web Server Authentication;
+- issuer is production Let’s Encrypt `YR1`, not staging;
+- certificate/private-key public keys match;
+- local CA trust verification returns `OK`;
+- production renewal config uses standalone HTTP-01, RSA 2048 and the `shortlived` profile;
+- TCP `80` is free after issuance;
 - no Windows RDP certificate binding has been changed yet.
 
-The target warning is controlled by the certificate presented by the Windows RDP listener. Installing a certificate only on the Hermes Linux/API endpoint is insufficient.
+The certificate is intentionally short-lived, so reliable automatic renewal and deploy/rotation are mandatory before user-facing rollout.
 
 ## Exact next step
 
-Run **CERT-006**: safely remove the staging-only certificate lineage after checking it has no service references, then obtain the real publicly trusted Let’s Encrypt public-IP certificate using the same proven standalone HTTP-01, `shortlived`, RSA configuration. Do not manually remove files under `/etc/letsencrypt`.
+Run **CERT-007**: inspect whether this pip/venv Certbot installation already has a real systemd/cron renewal scheduler. If not, install a Hermes-owned systemd service/timer, then verify its exact command, next-run state, logging and safe interaction with standalone TCP `80`.
 
-After production issuance, inspect the new production chain and then verify/configure automatic scheduling plus the secure Windows delivery/rotation path before touching the RDP listener.
-
-First Windows acceptance target remains the non-critical `SEC005 TEST` device with rollback to its existing RDP listener certificate/state.
+After that, design the secure Windows certificate/key model and integrate the proven certificate lifecycle into Hermes RDP before first binding on `SEC005 TEST`.
