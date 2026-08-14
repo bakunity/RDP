@@ -74,6 +74,24 @@ class AutomaticCertificateRotationTests(unittest.TestCase):
         self.assertNotIn("pfx_base64", worker)
         self.assertNotIn("Import-PfxCertificate", worker)
 
+    def test_rotation_mutex_allows_only_system_and_builtin_admins(self) -> None:
+        worker = (ROOT / "client/HermesRdpCertRotation.ps1").read_text(
+            encoding="utf-8-sig"
+        )
+        for marker in (
+            "function New-RotationMutex",
+            "System.Security.AccessControl.MutexSecurity",
+            "System.Security.AccessControl.MutexAccessRule",
+            "S-1-5-18",
+            "S-1-5-32-544",
+            "MutexRights]::Synchronize",
+            "MutexRights]::Modify",
+            "$Mutex = New-RotationMutex",
+        ):
+            self.assertIn(marker, worker)
+        self.assertNotIn("S-1-1-0", worker)
+        self.assertNotIn("Everyone", worker)
+
     def test_rotation_setup_is_system_startup_transactional_and_immutable(self) -> None:
         setup = (ROOT / "scripts/setup-client-cert-rotation.ps1").read_text(
             encoding="utf-8-sig"
@@ -96,6 +114,26 @@ class AutomaticCertificateRotationTests(unittest.TestCase):
         ):
             self.assertIn(marker, setup)
         self.assertLess(setup.index("Assert-PowerShellFile"), setup.index("Register-RotationTask"))
+
+    def test_rotation_setup_stops_existing_worker_before_preflight(self) -> None:
+        setup = (ROOT / "scripts/setup-client-cert-rotation.ps1").read_text(
+            encoding="utf-8-sig"
+        )
+        for marker in (
+            "function Stop-RotationTaskBounded",
+            "Stop-ScheduledTask -TaskName $TaskName -ErrorAction Stop",
+            "$Attempt -lt 40",
+            "Existing certificate rotation task did not stop within 10 seconds.",
+            "if ($TaskExisted)",
+            "Stop-RotationTaskBounded",
+        ):
+            self.assertIn(marker, setup)
+
+        stop_call = setup.index("        Stop-RotationTaskBounded")
+        copy_worker = setup.index("    Copy-Item -LiteralPath $WorkerCandidate")
+        preflight = setup.index("    & $NativePowerShell")
+        self.assertLess(stop_call, copy_worker)
+        self.assertLess(stop_call, preflight)
 
     def test_server_setup_installs_and_refreshes_state(self) -> None:
         setup = (ROOT / "scripts/setup-trusted-rdp-cert.sh").read_text(
