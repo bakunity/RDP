@@ -88,6 +88,9 @@ class AutomaticCertificateRotationTests(unittest.TestCase):
             "-UserId 'SYSTEM'",
             "-RunLevel Highest",
             "RestartCount 999",
+            "Get-PrincipalSid",
+            "S-1-5-18",
+            "ROTATION_TASK_SID=S-1-5-18",
             "CERT-012_SETUP=PASS",
             "CERT-012_SETUP_ROLLBACK=PASS",
         ):
