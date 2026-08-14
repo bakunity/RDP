@@ -23,20 +23,30 @@ Already complete:
 - CERT-003 public HTTP-01 reachability through UFW/TCP 80: PASS.
 - CERT-004 Let’s Encrypt staging public-IP issuance: PASS.
 - CERT-005 staging key/fullchain/renewal mechanics and dry-run: PASS.
-- CERT-006 real production Let’s Encrypt public-IP issuance: PASS.
-- CERT-007 automatic-renewal scheduler inventory: PASS; **gap confirmed** — this pip/venv installation has no systemd timer/service and no cron entry running `certbot renew`.
+- CERT-006 production Let’s Encrypt public-IP issuance: PASS.
+- CERT-007 scheduler inventory: PASS; missing scheduler gap confirmed.
+- CERT-008 Hermes-owned systemd renewal service/timer: live PASS, including unit verification, active/enabled timer, bounded service run and TCP 80 cleanup.
+
+Active productization:
+
+- draft PR **#29** on `feat/trusted-rdp-cert-lifecycle`, head `e914a0f45a6cc734d25b02340353fc06ace6c7c8`;
+- lifecycle setup module, renewal wrapper and repository-owned systemd units implemented;
+- `install-server.sh --trusted-rdp-cert` explicit opt-in implemented while default install remains unchanged;
+- uninstall removes Hermes-owned units/wrapper but preserves ACME lineage;
+- CI #313 PASS on Linux + Windows PowerShell 5.1;
+- CI #316 PASS after installer/uninstall wiring on Linux + Windows PowerShell 5.1.
 
 Next:
 
-- **CERT-008:** install a Hermes-owned systemd service/timer for periodic normal `certbot renew`, with persistent scheduling, randomized delay, locking/logging/failure visibility; validate unit files, next run and a bounded manual service invocation;
-- add a deploy hook only after scheduler acceptance, so Windows rotation happens only after a successful renewal;
-- design the secure Windows certificate/private-key model; do not casually copy one shared private key to every device;
-- integrate ACME installation, issuance, renewal and rotation into Hermes RDP server/client flows so normal operation does not require manual shell commands;
-- bind/test first on non-critical `SEC005 TEST`, preserving the previous RDP listener certificate/state as rollback;
-- validate Microsoft Remote Desktop no longer reports the intended trust/name warning;
-- only then expand to other Windows devices.
+- **CERT-009:** live-accept PR #29 certificate setup module on the current certificate host using the immutable PR head; it must reuse the existing production lineage, not request another certificate, install/adopt repository-owned renewal units, preserve certificate serial and leave TCP 80 free;
+- after live acceptance, reconcile/checkpoint PR #29 and decide merge readiness;
+- design authenticated delivery/rotation of the short-lived certificate to Windows devices;
+- do not expose a shared private key through a weak endpoint;
+- bind/test first on `SEC005 TEST` with the previous RDP listener certificate/state preserved for rollback;
+- validate the actual Microsoft Remote Desktop trust/name warning before wider rollout;
+- after Windows acceptance, make the certificate lifecycle a polished normal Hermes installation flow rather than an expert/manual feature.
 
-Do not mutate Windows/RDP until server-side issuance and automatic renewal are proven.
+Architecture note: one separate Let’s Encrypt public-IP certificate per Windows device does not scale as the default design because all devices share the same IP identifier and the CA limits new certificates for an exact identifier set. Current scalable direction is one short-lived lineage per Hermes server plus a strongly authenticated rotation mechanism.
 
 ### 2. Release automation hardening
 
@@ -49,8 +59,8 @@ Do not mutate Windows/RDP until server-side issuance and automatic renewal are p
 
 After certificate behavior is accepted:
 
-- document public-IP trusted RDP certificate requirements and renewal;
-- reconcile website messaging with `v1.2.1` and the full product README;
+- document public-IP trusted RDP certificate requirements, renewal and Windows rotation;
+- reconcile website messaging with the stable release and product README;
 - continue website v2 without reopening completed runtime acceptance.
 
 ## Optional deferred item
