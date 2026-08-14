@@ -11,6 +11,7 @@ SSH_PORT=7000
 PORT_START=53389
 PORT_END=53420
 MIGRATE=0
+TRUSTED_RDP_CERT=0
 SSH_USER="hermes-tunnel"
 
 usage() {
@@ -24,6 +25,7 @@ Options:
   --frp-port PORT       compatibility alias for --ssh-port
   --port-start PORT     first RDP port (default: 53389)
   --port-end PORT       last RDP port (default: 53420)
+  --trusted-rdp-cert    enable trusted public-IP RDP certificate lifecycle
   --migrate             replace an existing Hermes FRP installation
 EOF
 }
@@ -37,6 +39,7 @@ while (($#)); do
     --ssh-port|--frp-port) SSH_PORT="${2:?}"; shift 2 ;;
     --port-start) PORT_START="${2:?}"; shift 2 ;;
     --port-end) PORT_END="${2:?}"; shift 2 ;;
+    --trusted-rdp-cert) TRUSTED_RDP_CERT=1; shift ;;
     --migrate) MIGRATE=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
@@ -96,6 +99,21 @@ if [[ -z "$SOURCE_ROOT" || ! -f "$SOURCE_ROOT/server/pyproject.toml" ]]; then
   exit 1
 fi
 
+if ((TRUSTED_RDP_CERT == 1)); then
+  if [[ ! -f "$SOURCE_ROOT/scripts/setup-trusted-rdp-cert.sh" ]]; then
+    echo "Trusted RDP certificate module is missing from source." >&2
+    exit 1
+  fi
+  python3 - "$HOST" <<'PY'
+import ipaddress
+import sys
+
+value = ipaddress.ip_address(sys.argv[1])
+if value.version != 4 or not value.is_global:
+    raise SystemExit('--trusted-rdp-cert requires --host to be a globally routable public IPv4 address')
+PY
+fi
+
 install -d -m 0700 "$BACKUP_DIR"
 for path in \
   /etc/frp \
@@ -105,6 +123,9 @@ for path in \
   /etc/systemd/system/frps.service \
   /etc/systemd/system/hermes-rdp-sshd.service \
   /etc/systemd/system/hermes-rdp.service \
+  /etc/systemd/system/hermes-rdp-cert-renew.service \
+  /etc/systemd/system/hermes-rdp-cert-renew.timer \
+  /usr/local/sbin/hermes-rdp-cert-renew \
   /etc/sudoers.d/hermes-rdp; do
   if [[ -e "$path" ]]; then
     cp -a --parents "$path" "$BACKUP_DIR/"
@@ -367,6 +388,10 @@ PY
   sleep 2
 fi
 
+if ((TRUSTED_RDP_CERT == 1)); then
+  bash "$SOURCE_ROOT/scripts/setup-trusted-rdp-cert.sh" --host "$HOST"
+fi
+
 echo
 echo "=== HERMES RDP OPENSSH INSTALLED ==="
 echo "backup=$BACKUP_DIR"
@@ -376,6 +401,9 @@ echo "ssh_tunnel_port=$SSH_PORT"
 echo "rdp_ports=$PORT_START-$PORT_END"
 echo "ssh_tunnel=$(systemctl is-active hermes-rdp-sshd.service)"
 echo "controller=$(systemctl is-active hermes-rdp.service)"
+if ((TRUSTED_RDP_CERT == 1)); then
+  echo "trusted_rdp_certificate=$(systemctl is-active hermes-rdp-cert-renew.timer)"
+fi
 echo
 echo "Create the first PC code while preserving port $PORT_START:"
 echo "  sudo hermes-rdpctl pair create --name 'Windows-PC-01' --port $PORT_START"
