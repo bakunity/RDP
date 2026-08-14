@@ -134,6 +134,19 @@ Do not store or echo:
 
 Hermes secures registration/tunnel/control but does not replace Windows RDP security. NLA, strong credentials, updates and sensible network policy remain relevant.
 
+### 29. Trusted RDP certificate track targets the public IP first
+
+Do not introduce a domain solely to make the endpoint look nicer. The user chose to proceed with a publicly trusted certificate for the existing public IP if issuance and renewal are practical.
+
+Important boundary:
+
+- HTTPS/API TLS and Windows RDP listener TLS are separate;
+- adding a domain alone does not remove the Microsoft Remote Desktop certificate warning;
+- the certificate presented by the **Windows RDP listener** must match the address used by the RDP client;
+- domain-based design may be revisited only if public-IP certificate issuance/renewal proves unsuitable or if it provides a concrete product benefit.
+
+First acceptance must be on a non-critical Windows fixture with rollback to the previous listener certificate/state.
+
 ## Documentation / product presentation
 
 ### 21. Documentation must explain architecture visually
