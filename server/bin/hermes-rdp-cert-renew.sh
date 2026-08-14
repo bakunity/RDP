@@ -3,10 +3,15 @@ set -Eeuo pipefail
 
 CONFIG=/etc/hermes-rdp/config.json
 CERTBOT=/usr/local/bin/certbot
+STATE_REFRESH=/usr/local/sbin/hermes-rdp-cert-state-refresh
 LOCK=/run/hermes-rdp-cert-renew.lock
 
 if [[ ! -x "$CERTBOT" ]]; then
   echo "Hermes certificate renewal: certbot is unavailable at $CERTBOT" >&2
+  exit 1
+fi
+if [[ ! -x "$STATE_REFRESH" ]]; then
+  echo "Hermes certificate renewal: state refresher is unavailable at $STATE_REFRESH" >&2
   exit 1
 fi
 if [[ ! -s "$CONFIG" ]]; then
@@ -34,8 +39,15 @@ print(name)
 PY
 )"
 
-exec /usr/bin/flock -w 300 "$LOCK" \
-  "$CERTBOT" renew \
-    --cert-name "$CERT_NAME" \
-    --quiet \
-    --non-interactive
+exec 9>"$LOCK"
+if ! /usr/bin/flock -w 300 9; then
+  echo "Hermes certificate renewal: timed out waiting for lock" >&2
+  exit 1
+fi
+
+"$CERTBOT" renew \
+  --cert-name "$CERT_NAME" \
+  --quiet \
+  --non-interactive
+
+"$STATE_REFRESH" >/dev/null
