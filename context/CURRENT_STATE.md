@@ -1,6 +1,6 @@
 # Hermes RDP — Current State Snapshot
 
-Updated: 2026-08-13
+Updated: 2026-08-14
 
 For immediate operational truth read `ACTIVE_WORK.md`; for detailed historical proof read `EVIDENCE_LEDGER.md`.
 
@@ -12,7 +12,7 @@ For immediate operational truth read `ACTIVE_WORK.md`; for detailed historical p
 - PR #27: `v1.2.0` release PR merged, but automated tag selected an intermediate VERSION-changing commit rather than the complete release tree.
 - Published `v1.2.0` tag is not rewritten; it remains historical evidence of the packaging error.
 - PR #28: `v1.2.1` packaging hotfix merged after Linux + Windows PowerShell 5.1 CI PASS.
-- `v1.2.1` tag points to exact commit `fd3c323da49f8994215d973e580d3949638b0f61` and contains consistent `VERSION`, package version, `pyproject.toml`, release notes and rich product README.
+- `v1.2.1` tag points to exact commit `fd3c323da49f8994215d973e580d3949638b0f61` and contains consistent `VERSION`, package version, `pyproject.toml`, release notes and full rich product README.
 
 ## Runtime architecture
 
@@ -59,8 +59,25 @@ SEC-004 remains intentionally fixture-unavailable. RL-006 remains PARTIAL PASS o
 
 ## Release automation follow-up
 
-The release workflow root cause is confirmed: selecting `git log -1 -- VERSION` can tag an incomplete release tree. Branch `fix/release-tag-head-v2` contains a prepared correction to tag the validated `HEAD` plus a regression test. It is not merged yet.
+The release workflow root cause is confirmed: selecting `git log -1 -- VERSION` can tag an incomplete release tree. Prepared branch `fix/release-tag-head-v2` at `ef32b8dd95ffa1c274dc1749eae736867d2fb74b` changes tagging to exact validated workflow `HEAD` and adds a regression assertion. No PR is open yet.
 
-## Next product track
+## Current certificate state
 
-Begin the separate **RDP trusted-certificate / domain track**. HTTPS API TLS does not replace the certificate presented by the Windows RDP listener; the listener requires a hostname-matching trusted certificate to remove the standard Microsoft Remote Desktop trust warning.
+The trusted-certificate track now targets the **public IP**, not a new domain. Domain use is deferred because a domain alone does not change the certificate presented by the Windows RDP listener.
+
+Live server evidence:
+
+- Debian GNU/Linux 13 (trixie);
+- before certificate setup: Certbot absent, Nginx absent, TCP `80/443` unused;
+- Certbot installation completed successfully;
+- current Certbot version: **5.7.0**;
+- no public IP certificate has been issued yet;
+- no Windows RDP certificate binding has been changed yet.
+
+The target warning is controlled by the certificate presented by the Windows RDP listener. Installing a certificate only on the Hermes Linux/API endpoint is insufficient.
+
+## Exact next step
+
+Run **CERT-003**: externally verify TCP `80` reachability for ACME HTTP validation. Then do a bounded staging/test public-IP certificate issuance before any Windows listener mutation.
+
+First Windows acceptance target remains the non-critical `SEC005 TEST` device with rollback to its existing RDP listener certificate/state.
