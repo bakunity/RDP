@@ -55,17 +55,31 @@ Read-only live inventory on the certificate host:
 - This proves the public path Internet -> TCP 80 -> host firewall -> local HTTP listener for HTTP-01 validation.
 - Do not repeat CERT-003 unless firewall/network state changes or ACME validation later contradicts it.
 
+### CERT-004 — Let’s Encrypt staging IP issuance — PASS
+
+- Temporary CERT-003 listener was removed before issuance and TCP `80` was free for Certbot standalone.
+- Certbot standalone + HTTP-01 successfully obtained a Let’s Encrypt staging certificate for the public IPv4 identity using the `shortlived` profile.
+- Certificate lineage was created under `/etc/letsencrypt/live/<public-ip>/`.
+- Leaf certificate identity is carried in a critical Subject Alternative Name as an IP Address.
+- Key type: RSA 2048.
+- Extended Key Usage: TLS Web Server Authentication.
+- Validity matches the short-lived IP-certificate model (about 160 hours / just over six days).
+- Issuer is a Let’s Encrypt staging CA, so the current artifact is intentionally not publicly trusted and must not be deployed to Windows RDP.
+- TCP `80` was free again after Certbot completed.
+- Windows/RDP listener state remains unchanged.
+
 ## Exact resume action
 
-**CERT-004:** perform a bounded Let’s Encrypt **staging** issuance for the public IP using Certbot standalone + HTTP-01 with the required `shortlived` profile. Stop the temporary Python CERT-003 listener first so Certbot can bind TCP `80`.
+**CERT-005:** inspect the staging lineage/chain and renewal metadata without exposing private-key material, confirm certificate/private-key consistency by public-key comparison, and verify that standalone HTTP-01 + `shortlived` are preserved for future renewal. Do not mutate Windows/RDP yet.
 
-After staging issuance succeeds:
+After CERT-005 passes:
 
-1. inspect certificate SAN/identity, issuer/chain, EKU and validity before any production use;
-2. perform production issuance only after the staging artifact is proven structurally suitable;
-3. design automated renewal and secure certificate/private-key delivery to the Windows RDP listener;
-4. validate first on the non-critical `SEC005 TEST` device while keeping the current self-signed RDP listener state as rollback;
-5. only after user-facing Microsoft RDP trust acceptance expand to other devices.
+1. remove/replace the staging lineage cleanly and perform one bounded **production** issuance for the public IP;
+2. inspect the production SAN, issuer/chain, EKU and validity;
+3. design automated renewal because IP certificates are short-lived and standalone must be able to bind TCP `80`;
+4. design secure certificate/private-key delivery to the Windows RDP listener;
+5. validate first on the non-critical `SEC005 TEST` device while keeping the current self-signed RDP listener state as rollback;
+6. only after user-facing Microsoft RDP trust acceptance expand to other devices.
 
 Do not expose private keys, pairing codes, API tokens or secret-bearing certificate material in chat/context.
 
