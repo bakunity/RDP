@@ -26,10 +26,10 @@ Accepted live paths:
 - transactional Update on `SEC005 TEST`;
 - targeted Repair on `SEC005 TEST`;
 - clean Fresh Install on disposable Win10 Pro 19045 x64 fixture `DESKTOP-T9N368F` with Defender enabled;
-- real external Microsoft RDP to `150.241.94.110:53394` with trusted certificate/no self-signed warning;
+- real external Microsoft RDP to `SERVER_IP_OR_DOMAIN:53394` with trusted certificate/no self-signed warning;
 - normal Uninstall removing both Hermes tasks/processes and archiving/removing the active client directory while Defender stayed enabled.
 
-Do not repeat any of those tests without concrete regression evidence.
+Do not repeat those tests without regression evidence.
 
 Next actions:
 
