@@ -14,28 +14,29 @@ Ship a stable self-hosted product where a user can install Hermes on Debian/Ubun
 
 ## Immediate work
 
-### 1. CERT-013 final gate
+### 1. Merge CERT-013
 
-PR #32 head: `29c19182ef99497b4cc314e3b4e9b6598ad95516`.
-CI #363: Linux full release checks PASS + Windows PowerShell 5.1 PASS.
+PR #32 has completed all bounded live acceptance.
 
-Already live accepted on `SEC005 TEST`:
+Accepted product/test code head: `e11cf89ed26d551ca92b4010034d6e6792a9266b`.
+Reconcile CI #381: Linux full release checks PASS + Windows PowerShell 5.1 PASS.
 
-- transactional Update automatically manages certificate lifecycle while preserving identity, keys, known_hosts, Device ID, RDP port, main Agent/tunnel and trusted listener;
-- targeted Repair recreates missing certificate rotation worker/task while preserving identity, port, tunnel and trusted RDP binding.
+Accepted live paths:
 
-Do not repeat those tests without regression evidence. Do not uninstall `SEC005 TEST` for acceptance.
+- transactional Update on `SEC005 TEST`;
+- targeted Repair on `SEC005 TEST`;
+- clean Fresh Install on disposable Win10 Pro 19045 x64 fixture `DESKTOP-T9N368F` with Defender enabled;
+- real external Microsoft RDP to `150.241.94.110:53394` with trusted certificate/no self-signed warning;
+- normal Uninstall removing both Hermes tasks/processes and archiving/removing the active client directory while Defender stayed enabled.
 
-Remaining merge gate requires a separate disposable supported Windows test fixture:
+Do not repeat any of those tests without concrete regression evidence.
 
-1. fresh install from exact PR #32 head;
-2. verify pairing, OpenSSH tunnel and external RDP;
-3. verify certificate rotation worker/task are created automatically without manual certificate setup and run as LocalSystem SID `S-1-5-18`;
-4. verify trusted CUSTOM listener and TCP 3389;
-5. run normal uninstall;
-6. verify both Hermes tasks/processes are removed and the active client directory is archived according to current uninstall behavior.
+Next actions:
 
-If no disposable fixture is available, keep PR #32 draft instead of risking the accepted `SEC005 TEST` state.
+1. wait for CI on evidence-only PR head;
+2. mark PR #32 ready and merge with exact-head guard;
+3. delete the disposable `CERT013 FRESH` Telegram registration so its API token/SSH key are revoked and port `53394` is freed;
+4. checkpoint merged SHA and move to the next product gap.
 
 ### 2. Natural renewal observation — deferred/non-blocking
 
@@ -48,20 +49,14 @@ When the current short-lived production certificate renews naturally:
 
 Do **not** force unnecessary production issuance solely for this observation.
 
-### 3. Release automation hardening
+### 3. Next release / docs
 
-- review/merge prepared branch `fix/release-tag-head-v2` at `ef32b8dd95ffa1c274dc1749eae736867d2fb74b`;
-- release workflow must tag the exact validated workflow HEAD;
-- retain regression assertion;
-- do not alter published `v1.2.0` or `v1.2.1` tags.
+Release-process hardening is already complete: exact validated HEAD tagging, compact public release notes, long-form history files and rolling `UNRELEASED.md` are in `main`.
 
-### 4. Next release / docs
+After CERT-013 merge:
 
-After CERT-013 lifecycle integration:
-
-- document public-IP trusted RDP requirements, automatic renewal and Windows rotation;
-- decide next patch/minor release boundary;
-- reconcile README/website with the shipped lifecycle;
+- reconcile README/website/docs with the now-shipped automatic certificate lifecycle;
+- decide next patch/minor release boundary from `UNRELEASED.md`;
 - continue website v2 without reopening completed runtime acceptance.
 
 ## Optional deferred item
