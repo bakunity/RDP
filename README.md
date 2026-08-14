@@ -25,68 +25,68 @@ Hermes RDP публикует RDP нескольких Windows-компьюте�
 
 На домашнем или офисном роутере Windows-ПК не требуется пробрасывать входящий RDP-порт: соединение к Hermes инициирует сам Windows-клиент.
 
-> **Главный принцип проекта:** все Windows-компьютеры равноправны. Для каждого используется один и тот же installer и один и тот же Hermes Agent. Специальным узлом является только Linux-сервер Hermes.
+> **Главный принцип проекта:** все Windows-компьютеры равноправны. Для каждого используется один installer и один Hermes Agent. Специальным узлом является только Linux-сервер Hermes.
+
+> **Версии:** `v1.2.1` остаётся текущим stable release. В `main` уже находится принятый trusted public-IP RDP certificate lifecycle для следующего релиза. Production-установки используйте с конкретного release tag или заранее проверенного immutable commit.
 
 ## Что умеет Hermes RDP
 
 - несколько независимых Windows-ПК через один сервер;
 - постоянные endpoints вида `SERVER:53389`, `SERVER:53390`, `SERVER:53391`;
 - стандартный Microsoft Remote Desktop без отдельного RDP-клиента Hermes;
-- системный Microsoft OpenSSH вместо стороннего `frpc.exe`;
+- системный Microsoft OpenSSH вместо стороннего tunnel binary;
 - отдельный Ed25519 keypair, API-token и порт для каждого устройства;
-- Telegram `ON`, `OFF`, `RESTART`, удаление и LIVE-состояние каждого ПК;
+- Telegram `ON`, `OFF`, `RESTART`, Repair, удаление и LIVE-состояние каждого ПК;
 - автоматический reconnect после сетевых сбоев и перезагрузок;
 - Windows 10/11 и Windows Server support;
 - transactional server/client update с backup и automatic rollback;
-- отдельный Repair существующего клиента без повторного pairing и смены identity/порта;
-- работа без Defender exclusions и без отключения Microsoft Defender.
+- Repair существующего клиента без повторного pairing и смены identity/порта;
+- работа без Defender exclusions и без отключения Microsoft Defender;
+- в текущем `main`: автоматический trusted certificate lifecycle для Windows RDP listener — server renewal, Windows rotation, Update/Repair/Uninstall integration.
 
 ## Схема
 
 ```text
-┌────────────────────────┐
-│ Windows: Домашний ПК   │──┐
-│ RDP :3389              │  │
-│ Hermes Agent + ssh.exe │  │
-└────────────────────────┘  │
-                            │ reverse OpenSSH :7000
-┌────────────────────────┐  ├───────────────────────────┐
-│ Windows: Ноутбук       │──┤                           │
-│ Hermes Agent + ssh.exe │  │                           ▼
-└────────────────────────┘  │              ┌─────────────────────────┐
-                            │ HTTPS :7443  │ Hermes Linux server     │
-┌────────────────────────┐  ├─────────────▶│ dedicated sshd          │
-│ Windows: Офисный ПК    │──┘              │ API + Telegram + SQLite │
-│ Hermes Agent + ssh.exe │                 └───────────┬─────────────┘
-└────────────────────────┘                             │
-                                                       ▼
-                                                 Telegram owner
+Windows ПК ─┐
+Windows ПК ─┼─ reverse OpenSSH :7000 ─> Hermes Linux server ─> SERVER:RDP_PORT
+Windows ПК ─┘                                  │
+                                              ├─ HTTPS API :7443
+                                              ├─ SQLite registry
+                                              └─ Telegram control
 
-Microsoft RDP client
-  ├── SERVER:53389 ── reverse SSH ──> Домашний ПК :3389
-  ├── SERVER:53390 ── reverse SSH ──> Ноутбук     :3389
-  └── SERVER:53391 ── reverse SSH ──> Офисный ПК  :3389
+Microsoft Remote Desktop
+  └─ SERVER:RDP_PORT ─> reverse SSH ─> Windows :3389
 ```
 
-## Компоненты
+Каждый device key ограничен сервером только своим endpoint через `permitlisten`. Административный SSH `:22` и Hermes tunnel sshd `:7000` независимы.
 
-| Компонент | Назначение |
-|---|---|
-| `hermes-rdp-sshd.service` | отдельный OpenSSH daemon для reverse-туннелей |
-| `hermes-rdp.service` | HTTPS API, Telegram controller и registry |
-| SQLite | устройства, pairing, команды, telemetry, token hashes и public keys |
-| Windows OpenSSH Client | встроенные `ssh.exe` и `ssh-keygen.exe` |
-| `HermesRdpAgent.ps1` | туннель, heartbeat, telemetry и управление доступом |
+## Trusted RDP certificate — current `main`
 
-Hermes tunnel sshd отделён от административного SSH сервера. Tunnel-user не получает обычный shell/SFTP/PTY, а `permitlisten` ограничивает каждый device key только назначенным RDP endpoint.
+Опциональный `--trusted-rdp-cert` включает отдельный certificate lifecycle для **Windows RDP listener**:
 
-Приватный Ed25519-ключ создаётся локально на Windows и не передаётся серверу.
+```text
+Let’s Encrypt public-IP certificate
+        ↓
+Hermes renewal timer + non-secret state
+        ↓
+authenticated Windows LocalSystem rotation worker
+        ↓
+CUSTOM certificate binding RDP-Tcp
+        ↓
+Microsoft Remote Desktop без прежнего self-signed warning
+```
+
+Это отдельная trust boundary от HTTPS API certificate pinning. Сертификат API защищает control plane; сертификат Windows RDP listener видит Microsoft Remote Desktop.
+
+После включения server-side lifecycle normal Fresh Install, Update и Repair автоматически управляют rotation companion. Uninstall удаляет обе Hermes Scheduled Tasks и локальный runtime. Certificate work остаётся вне performance-sensitive 3-second Agent loop.
+
+Требования и детали: [INSTALL_SERVER](docs/INSTALL_SERVER.md), [INSTALL_WINDOWS](docs/INSTALL_WINDOWS.md), [SECURITY](docs/SECURITY.md).
 
 ## Telegram dashboard
 
-Для нового компьютера используется **➕ ДОБАВИТЬ ПК**. Pairing-код одноразовый; если он истёк или уже использован, кнопка **🔁 НОВЫЙ КОД** создаёт новый код и обновляет installer command.
+Для нового компьютера используется **➕ ДОБАВИТЬ ПК**. Pairing-код одноразовый; если он истёк или уже использован, **🔁 НОВЫЙ КОД** выдаёт новый код и обновлённую installer command.
 
-Карточка существующего ПК показывает состояние агента, доступ, SSH transport, публичный endpoint и telemetry. Действия применяются только к выбранному устройству:
+Карточка существующего ПК разделяет heartbeat, desired access, SSH transport, endpoint и telemetry. Основные действия:
 
 ```text
 🟢 ON / 🔴 OFF          включить или отключить RDP access
@@ -95,17 +95,19 @@ Hermes tunnel sshd отделён от административного SSH с
 🗑 DELETE                отозвать устройство и освободить endpoint
 ```
 
-Fresh pairing и Repair намеренно разделены. Repair не создаёт новый Device ID и не выполняет повторную регистрацию.
+Fresh pairing и Repair намеренно разделены. Repair не создаёт новый Device ID и не выполняет скрытый re-pair/rekey.
 
 ## Порты по умолчанию
 
 | Назначение | Порт |
 |---|---:|
-| OpenSSH tunnel | `7000/tcp` |
+| Administrative SSH | `22/tcp` |
+| Hermes OpenSSH tunnel | `7000/tcp` |
 | HTTPS API | `7443/tcp` |
 | RDP endpoints | `53389–53420/tcp` |
+| ACME HTTP-01 | `80/tcp` только для trusted certificate lifecycle |
 
-Стандартный пул содержит 32 endpoint и расширяется параметрами server installer.
+Стандартный RDP-пул содержит 32 endpoint и расширяется параметрами server installer.
 
 ## Требования
 
@@ -115,7 +117,9 @@ Fresh pairing и Repair намеренно разделены. Repair не со�
 
 Windows Home не является штатным RDP host и не поддерживается.
 
-## Быстрый старт v1.2.1
+Для trusted public-IP RDP certificate нужен глобально маршрутизируемый публичный IPv4 и доступный TCP `80` для ACME HTTP-01.
+
+## Быстрый старт stable v1.2.1
 
 ### 1. Установить сервер
 
@@ -154,9 +158,11 @@ mstsc.exe /v:SERVER_IP_OR_DOMAIN:53389
 
 Первый свободный endpoint обычно начинается с `53389`, следующий получает `53390` и так далее.
 
+> Trusted RDP certificate lifecycle из текущего `main` ещё не относится к immutable tag `v1.2.1`. До следующего release используйте его только с отдельно проверенным immutable commit.
+
 ## Обновление
 
-Server:
+Stable server:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.2.1/scripts/update-server.sh -o /tmp/update-hermes-rdp.sh
@@ -164,7 +170,7 @@ sudo env HERMES_RDP_REF=v1.2.1 bash /tmp/update-hermes-rdp.sh
 rm -f /tmp/update-hermes-rdp.sh
 ```
 
-Windows:
+Stable Windows:
 
 ```powershell
 $u='https://raw.githubusercontent.com/bakunity/RDP/v1.2.1/scripts/update-client.ps1'
@@ -172,15 +178,15 @@ $s=(irm $u).TrimStart([char]0xFEFF)
 & ([scriptblock]::Create($s)) -RepositoryRef 'v1.2.1'
 ```
 
-Оба updater-а сохраняют рабочее состояние до runtime mutation и имеют автоматический rollback при ошибке после изменения.
+Текущий `main` расширяет Windows Update: основной Agent и certificate lifecycle setup разрешаются в один immutable SHA, а certificate sub-operation завершается до финального `UPDATE=PASS`.
 
-## Repair
+## Repair и Uninstall
 
-Для уже зарегистрированного компьютера откройте его карточку в Telegram и нажмите **🛠 ВОССТАНОВИТЬ КЛИЕНТ**.
+Для уже зарегистрированного компьютера используйте **🛠 ВОССТАНОВИТЬ КЛИЕНТ**. Repair сохраняет Device ID, API-token, Ed25519 keypair, `known_hosts` и назначенный RDP-порт.
 
-Repair может восстановить Hermes Agent и Scheduled Task, сохраняя существующие Device ID, API-token, Ed25519 keypair, `known_hosts` и назначенный RDP-порт.
+В текущем `main` Repair также восстанавливает certificate rotation companion. Потеря обязательной local identity по-прежнему останавливает Repair вместо скрытого re-pair/rekey.
 
-Если потеряны `device.json`, private key или `known_hosts`, обычный Repair намеренно останавливается без автоматического re-pair/rekey.
+Normal uninstall останавливает и unregister-ит основной Agent и certificate rotation task, завершает Hermes runtime и архивирует активный `C:\ProgramData\HermesRDP`. После локального uninstall удалите устройство в Telegram для server-side revoke и освобождения порта.
 
 ## Безопасность
 
@@ -193,15 +199,20 @@ Repair может восстановить Hermes Agent и Scheduled Task, со�
 - у каждого устройства отдельный API-token, сервер хранит только hash;
 - Telegram control ограничен заданным owner user/chat ID;
 - admin SSH `:22` и Hermes tunnel sshd `:7000` разделены;
-- Hermes не добавляет Defender exclusions.
+- Hermes не добавляет Defender exclusions;
+- trusted RDP lifecycle не смешивает API TLS и Windows RDP listener TLS.
 
-**RDP boundary:** Hermes защищает регистрацию, control plane и tunnel, но конечный endpoint остаётся Windows RDP listener. Используйте сильные Windows credentials, NLA, обновления ОС и firewall restrictions там, где это возможно.
+**RDP boundary:** Hermes защищает регистрацию, control plane, tunnel и, при включённом trusted lifecycle, TLS identity listener. Windows credentials, NLA, обновления ОС и Windows authorization остаются отдельной границей безопасности.
 
 Подробнее: [docs/SECURITY.md](docs/SECURITY.md).
 
 ## Что проверено
 
-В реальной эксплуатации подтверждены multi-device endpoints, внешний RDP, Windows/Linux reboot recovery, `OFF/ON/RESTART`, Windows 10 x64 из 32-bit PowerShell через Sysnative, Windows Server 2019, Microsoft Defender real-time protection, delete/revocation/port reuse, updater success/rollback и Repair success/rollback.
+В реальной эксплуатации подтверждены multi-device endpoints, внешний RDP, Windows/Linux reboot recovery, `OFF/ON/RESTART`, Win10 x64 из 32-bit PowerShell через Sysnative, Windows Server 2019, Defender coexistence, delete/revocation/port reuse, transactional update/rollback и Repair/rollback.
+
+Для текущего `main` также live-приняты: публично доверенный RDP certificate, rollback/reapply, automatic drift recovery, LocalSystem rotation worker, certificate lifecycle в Update/Repair, чистый Fresh Install, внешний trusted RDP и normal Uninstall.
+
+Отдельно отложено только наблюдение следующей **естественной** certificate renewal; форсировать production issuance ради него не требуется.
 
 Полный acceptance без secret material: [docs/VALIDATED_SCENARIOS.md](docs/VALIDATED_SCENARIOS.md).
 
@@ -222,7 +233,7 @@ Windows diagnostics:
 
 ```powershell
 Get-ScheduledTask -TaskName 'Hermes RDP Agent'
-Get-ScheduledTaskInfo -TaskName 'Hermes RDP Agent'
+Get-ScheduledTask -TaskName 'Hermes RDP Certificate Rotation' -ErrorAction SilentlyContinue
 Get-Content 'C:\ProgramData\HermesRDP\agent.log' -Tail 100
 Get-Process ssh -ErrorAction SilentlyContinue
 ```
@@ -232,15 +243,15 @@ Get-Process ssh -ErrorAction SilentlyContinue
 | Документ | Для чего |
 |---|---|
 | [Быстрый старт](docs/QUICKSTART.md) | Развернуть Hermes и подключить первый ПК |
-| [Установка сервера](docs/INSTALL_SERVER.md) | Server setup, порты и параметры |
-| [Установка Windows](docs/INSTALL_WINDOWS.md) | Fresh pairing и Windows compatibility |
-| [Архитектура](docs/ARCHITECTURE.md) | Компоненты и data flow |
+| [Установка сервера](docs/INSTALL_SERVER.md) | Server setup, порты и trusted certificate option |
+| [Установка Windows](docs/INSTALL_WINDOWS.md) | Fresh pairing, compatibility и certificate lifecycle |
+| [Архитектура](docs/ARCHITECTURE.md) | Компоненты, data flow и TLS boundaries |
 | [API](docs/API.md) | Pairing, telemetry и command contracts |
-| [Эксплуатация](docs/OPERATIONS.md) | Backup, update, delete и recovery |
+| [Эксплуатация](docs/OPERATIONS.md) | Backup, update, Repair, renewal и uninstall |
 | [Диагностика](docs/TROUBLESHOOTING.md) | Поиск проблем по симптомам |
 | [Безопасность](docs/SECURITY.md) | TLS, identity, SSH restrictions и RDP boundary |
 | [Проверенные сценарии](docs/VALIDATED_SCENARIOS.md) | Реально пройденный acceptance |
-| [Тестирование от А до Я](docs/TESTING_A_TO_Z.md) | Полная процедура проверки |
+| [Тестирование от А до Я](docs/TESTING_A_TO_Z.md) | Regression-bounded проверка |
 | [Разработка](docs/DEVELOPMENT.md) | Структура проекта и developer rules |
 | [Релизный процесс](docs/RELEASE.md) | Versioning, CI и GitHub Release |
 
@@ -251,7 +262,8 @@ Get-Process ssh -ErrorAction SilentlyContinue
 - [Последний релиз](https://github.com/bakunity/RDP/releases/latest)
 - [Hermes RDP v1.2.1](https://github.com/bakunity/RDP/releases/tag/v1.2.1)
 - [Release notes v1.2.1](docs/releases/v1.2.1.md)
-- [Предыдущий v1.2.0](https://github.com/bakunity/RDP/releases/tag/v1.2.0)
+- [Полная история v1.2.1](docs/releases/history/v1.2.1-full.md)
+- [Следующий релиз — rolling ledger](docs/releases/UNRELEASED.md)
 - [История изменений](CHANGELOG.md)
 
 Для production используйте конкретный release tag или другой заранее проверенный immutable ref. `main` предназначен для дальнейшей разработки.
