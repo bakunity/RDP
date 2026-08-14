@@ -1,6 +1,6 @@
 # Hermes RDP — Evidence Ledger
 
-Updated: 2026-08-13
+Updated: 2026-08-14
 
 Purpose: durable project evidence that survives chat compression. This file records demonstrated facts, confirmed failures/root causes, and explicit revalidation obligations. It is not a transcript.
 
@@ -87,7 +87,7 @@ Win10 x64 + PowerShell x86 / WOW64 / Sysnative acceptance is **COMPLETE**. Do no
 | SV-004 | MIPC updated to `586e944...` without identity loss | PASS | Task Running; device ID/config/private-key/port preserved; one Hermes `ssh.exe`. |
 | SV-005 | MIPC updated to fast-path head `c51ed8fa...` without identity loss | PASS | Identity/config/key/port preserved; expected fast-path markers present; one Hermes SSH process. |
 | SV-006 | Windows Server updated to `c51ed8fa...` without identity loss | PASS | Identity/config/key/port preserved; one Hermes SSH process; subsequent real RDP succeeded. |
-| SV-007 | PR #20 head `2a170b0f...` server deploy | PASS | Immutable updater returned both services active and backup `/var/backups/hermes-rdp/update-20260812T082204Z`. |
+| SV-007 | PR #20 head `2a170b0f...` server deploy | PASS | Immutable updater returned both Hermes services active and backup `/var/backups/hermes-rdp/update-20260812T082204Z`. |
 | SV-008 | MIPC agent updated to PR #20 control-first agent `2a170b0f...` | PASS | Task Running; DeviceId/port/config/key unchanged; one Hermes SSH process; control-first/desired-sync/transport-split markers present. |
 | SV-009 | Final PR #20 server/controller head `77240e2d...` deployed without restarting sshd | PASS | Controller changed and stayed active; `/healthz` OK; configured repository ref exact; dedicated sshd PID stayed unchanged; rollback `/var/backups/hermes-rdp/controller-20260812T095505Z`. |
 
@@ -159,6 +159,17 @@ Windows reboot recovery remains historical PASS (`TR-003`) and is not duplicated
 | CP-001 | One stalled TLS connection blocks global HTTPS API acceptance | RESOLVED / LIVE-ACCEPTED | Pre-fix: service active/listener present but local health timed out; backlog saturated; API thread blocked in socket receive; telemetry stopped globally while SSH endpoints stayed alive. Fix moved TLS handshake into per-connection worker with timeout. Bounded live acceptance passed five parallel health requests while a silent raw TCP client remained connected. |
 | CL-001 | Desired OFF + local ON deadlocks heartbeat/control delivery | RESOLVED / LIVE-ACCEPTED | Pre-fix OSIO: desired OFF, old local ON, SSH auth rejected, transport-first loop prevented telemetry and pending OFF delivery. Fix makes control poll independent and returns durable desired state. Direct MIPC test with unchanged command seq converged OFF then restored ON automatically. |
 | CU-001 | Pending command shown as executing indefinitely | RESOLVED / LIVE-ACCEPTED | Pre-fix OSIO OFF seq stayed pending for hours. Fix adds deterministic timeout preserving desired state and rejects late stale results. Existing live OSIO command timed out correctly with endpoint still closed. |
+
+## Trusted public-IP certificate lifecycle
+
+| ID | Scenario | Status | Evidence / boundary |
+|---|---|---|---|
+| CERT-003 | Public TCP 80 / HTTP-01 reachability | PASS | UFW explicit `80/tcp` allow; five independent external probes returned HTTP 200 from temporary listener with matching server access-log requests. |
+| CERT-004 | Let’s Encrypt staging public-IP issuance | PASS | Certbot standalone HTTP-01 + `shortlived` succeeded; critical SAN contains the public IPv4 identifier; EKU Server Authentication; RSA 2048. |
+| CERT-005 | Staging key/fullchain/renewal mechanics | PASS | Certificate/private-key public keys matched; fullchain parsed; `certbot renew --dry-run` succeeded; TCP 80 free before/after. Scheduler existence not proven by this test. |
+| CERT-006 | Let’s Encrypt production public-IP issuance | PASS | Staging lineage safely removed; production issuance succeeded; production issuer `YR1`; IP SAN and Server Authentication EKU confirmed; key match PASS; local trust verification OK; renewal config uses production ACME, standalone, RSA 2048, `shortlived`; TCP 80 free after issuance. |
+
+CERT-006 proves server-side trusted issuance only. Windows RDP listener binding remains unchanged. Automatic renewal scheduling and deploy/rotation remain required before Windows rollout.
 
 ## Update triggers
 
