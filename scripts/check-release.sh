@@ -27,6 +27,8 @@ setup = Path('scripts/setup-trusted-rdp-cert.sh').read_text(encoding='utf-8')
 renew = Path('server/bin/hermes-rdp-cert-renew.sh').read_text(encoding='utf-8')
 service = Path('server/systemd/hermes-rdp-cert-renew.service').read_text(encoding='utf-8')
 timer = Path('server/systemd/hermes-rdp-cert-renew.timer').read_text(encoding='utf-8')
+installer = Path('scripts/install-server.sh').read_text(encoding='utf-8')
+uninstaller = Path('scripts/uninstall-server.sh').read_text(encoding='utf-8')
 
 for marker in [
     '--staging',
@@ -63,6 +65,29 @@ for marker in [
 ]:
     if marker not in timer:
         raise SystemExit(f'renewal timer missing required marker: {marker}')
+
+for marker in [
+    '--trusted-rdp-cert',
+    'TRUSTED_RDP_CERT=1',
+    'setup-trusted-rdp-cert.sh',
+    'trusted_rdp_certificate=',
+]:
+    if marker not in installer:
+        raise SystemExit(f'installer missing trusted certificate wiring: {marker}')
+
+for marker in [
+    'hermes-rdp-cert-renew.timer',
+    'hermes-rdp-cert-renew.service',
+    '/usr/local/sbin/hermes-rdp-cert-renew',
+    'ACME certificate lineage were preserved',
+]:
+    if marker not in uninstaller:
+        raise SystemExit(f'uninstaller missing trusted certificate lifecycle handling: {marker}')
+
+if '/etc/letsencrypt' in '\n'.join(
+    line for line in uninstaller.splitlines() if line.lstrip().startswith('rm ')
+):
+    raise SystemExit('uninstaller must not delete the ACME certificate lineage')
 
 print('trusted-rdp-cert-lifecycle=OK')
 PY
