@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import ssl
+import subprocess
 import time
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -19,6 +20,8 @@ LOG = logging.getLogger("hermes_rdp.api")
 MAX_BODY = 128 * 1024
 TLS_HANDSHAKE_TIMEOUT_SECONDS = 5
 CLIENT_SOCKET_TIMEOUT_SECONDS = 30
+CERT_PACKAGE_HELPER = "/usr/local/sbin/hermes-rdp-cert-package"
+CERT_PACKAGE_TIMEOUT_SECONDS = 30
 
 
 class ApiServer(ThreadingHTTPServer):
@@ -143,6 +146,9 @@ class ApiHandler(BaseHTTPRequestHandler):
                     return
                 if action == "revoke-self":
                     self._revoke_self(device_id)
+                    return
+                if action == "rdp-certificate":
+                    self._rdp_certificate(device_id)
                     return
             self._json(HTTPStatus.NOT_FOUND, {"ok": False, "error": "not found"})
         except json.JSONDecodeError:
@@ -273,6 +279,67 @@ class ApiHandler(BaseHTTPRequestHandler):
         except Exception as exc:
             LOG.warning("self-revoke tunnel close failed: %s", exc)
         self._json(HTTPStatus.OK, {"ok": True})
+
+    def _rdp_certificate(self, device_id: str) -> None:
+        if not self._device_auth(device_id):
+            self._json(HTTPStatus.UNAUTHORIZED, {"ok": False, "error": "unauthorized"})
+            return
+        self._read_json()
+        try:
+            result = subprocess.run(
+                ["sudo", "-n", CERT_PACKAGE_HELPER],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=CERT_PACKAGE_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired:
+            LOG.warning("RDP certificate package helper timed out")
+            self._json(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                {"ok": False, "error": "certificate package unavailable"},
+            )
+            return
+        if result.returncode != 0:
+            detail = result.stderr.strip().splitlines()[-1:] or ["helper failed"]
+            LOG.warning("RDP certificate package helper failed: %s", detail[0])
+            self._json(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                {"ok": False, "error": "certificate package unavailable"},
+            )
+            return
+        try:
+            payload = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            LOG.error("RDP certificate package helper returned invalid JSON")
+            self._json(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                {"ok": False, "error": "certificate package unavailable"},
+            )
+            return
+        if not isinstance(payload, dict):
+            raise ValueError("invalid certificate package")
+        required = {
+            "cert_name",
+            "thumbprint",
+            "sha256",
+            "not_after",
+            "password",
+            "pfx_base64",
+        }
+        if not required.issubset(payload):
+            raise ValueError("invalid certificate package")
+        thumbprint = str(payload["thumbprint"]).strip().upper()
+        sha256 = str(payload["sha256"]).strip().upper()
+        if len(thumbprint) != 40 or any(c not in "0123456789ABCDEF" for c in thumbprint):
+            raise ValueError("invalid certificate thumbprint")
+        if len(sha256) != 64 or any(c not in "0123456789ABCDEF" for c in sha256):
+            raise ValueError("invalid certificate fingerprint")
+        if not str(payload["password"]):
+            raise ValueError("invalid certificate package password")
+        if len(str(payload["pfx_base64"])) < 256:
+            raise ValueError("invalid certificate package payload")
+        self._json(HTTPStatus.OK, {"ok": True, "certificate": payload})
 
 
 def create_api_server(config: Config, registry: Registry) -> ApiServer:
