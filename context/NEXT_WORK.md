@@ -14,35 +14,39 @@ Ship a stable self-hosted product where a user can install Hermes on Debian/Ubun
 
 ## Immediate work
 
-### 1. CERT-013 — integrate trusted certificate rotation into normal Windows lifecycle
+### 1. CERT-013 final gate
 
-CERT-001 through CERT-012 bounded acceptance is complete. PR #31 automatic rotation is merged as `bd25db552aae8303356953fe2807a7bd855cba95`.
+PR #32 head: `29c19182ef99497b4cc314e3b4e9b6598ad95516`.
+CI #363: Linux full release checks PASS + Windows PowerShell 5.1 PASS.
 
-Remaining product gap: the accepted rotation worker currently has a dedicated setup script; normal users should not need to run that step separately.
+Already live accepted on `SEC005 TEST`:
 
-Implement and test:
+- transactional Update automatically manages certificate lifecycle while preserving identity, keys, known_hosts, Device ID, RDP port, main Agent/tunnel and trusted listener;
+- targeted Repair recreates missing certificate rotation worker/task while preserving identity, port, tunnel and trusted RDP binding.
 
-1. fresh install installs/starts the rotation companion after device config exists;
-2. transactional update stages/parses/updates worker + sync companion and restores them/task on failure;
-3. Repair restores missing/disabled/broken rotation task/files without re-pairing or key rotation;
-4. uninstall removes Hermes-owned rotation task/files cleanly;
-5. preserve LocalSystem SID validation, mutex ACL behavior and immutable repository SHA;
-6. preserve Windows PowerShell 5.1 and Win10 x64 + x86 PowerShell/Sysnative compatibility;
-7. keep certificate work outside the 3-second main agent loop;
-8. add CI regression coverage and then perform bounded live acceptance on `SEC005 TEST`.
+Do not repeat those tests without regression evidence. Do not uninstall `SEC005 TEST` for acceptance.
 
-Do not reopen already accepted certificate issuance/binding/rollback/drift tests unless lifecycle integration changes those exact paths.
+Remaining merge gate requires a separate disposable supported Windows test fixture:
+
+1. fresh install from exact PR #32 head;
+2. verify pairing, OpenSSH tunnel and external RDP;
+3. verify certificate rotation worker/task are created automatically without manual certificate setup and run as LocalSystem SID `S-1-5-18`;
+4. verify trusted CUSTOM listener and TCP 3389;
+5. run normal uninstall;
+6. verify both Hermes tasks/processes are removed and the active client directory is archived according to current uninstall behavior.
+
+If no disposable fixture is available, keep PR #32 draft instead of risking the accepted `SEC005 TEST` state.
 
 ### 2. Natural renewal observation — deferred/non-blocking
 
-When the existing short-lived production certificate renews naturally:
+When the current short-lived production certificate renews naturally:
 
 - capture old/new server thumbprints;
 - confirm server non-secret state refreshes;
 - confirm Windows worker detects the changed thumbprint and rotates automatically;
 - confirm fresh Microsoft RDP remains trusted.
 
-Do **not** force unnecessary production issuance solely to satisfy this observation.
+Do **not** force unnecessary production issuance solely for this observation.
 
 ### 3. Release automation hardening
 

@@ -7,10 +7,10 @@ Updated: 2026-08-14
 - Repository: `bakunity/RDP`.
 - Stable published release: **v1.2.1**.
 - PR #30 authenticated Windows trusted-certificate delivery/binding: merged as `a03e406aaafeb5833bc720d3eef62cca60818118` after full CERT-011 live acceptance.
-- PR #31 automatic trusted RDP certificate rotation: **merged** as `bd25db552aae8303356953fe2807a7bd855cba95` after full bounded CERT-012 live acceptance.
-- Final tested PR #31 head: `14da128328589dfae6c8e3b6819977120be16739`; CI #353 Linux full release checks PASS + Windows PowerShell 5.1 PASS.
-- Linux production runtime is deployed on earlier compatible PR #31 server head `79cab42d43e4d9cdca12b8a1380574f7d40460f6`; later PR #31 changes were Windows worker/setup/test fixes.
-- `SEC005 TEST` currently has the final PR #31 Windows rotation worker and trusted CUSTOM RDP binding active.
+- PR #31 automatic trusted RDP certificate rotation: merged as `bd25db552aae8303356953fe2807a7bd855cba95` after full bounded CERT-012 live acceptance.
+- PR #32 CERT-013 Windows lifecycle integration is **OPEN / DRAFT** on tested code head `29c19182ef99497b4cc314e3b4e9b6598ad95516`.
+- PR #32 CI #363: Linux full release checks PASS + Windows PowerShell 5.1 PASS.
+- `SEC005 TEST` has live-accepted CERT-013 transactional Update and Repair lifecycle behavior from exact tested code head `29c19182...`.
 
 ## Stable architecture
 
@@ -42,7 +42,7 @@ PFX sync only on thumbprint change / local drift
 Windows RDP CUSTOM trusted certificate
 ```
 
-The certificate worker is deliberately separate from the performance-sensitive 3-second main agent loop.
+Certificate work remains outside the performance-sensitive 3-second main agent loop.
 
 ## Accepted baseline — do not repeat without regression evidence
 
@@ -56,44 +56,64 @@ The certificate worker is deliberately separate from the performance-sensitive 3
 - transactional Linux and Windows updater rollback;
 - bounded Windows Repair success/rollback;
 - Defender coexistence;
-- trusted public-IP certificate CERT-001 through CERT-012 bounded acceptance.
+- trusted public-IP certificate CERT-001 through CERT-012 bounded acceptance;
+- CERT-013 Update and targeted Repair lifecycle acceptance on `SEC005 TEST`.
 
 SEC-004 remains intentionally fixture-unavailable. RL-006 remains PARTIAL PASS only for its optional deferred exact-Windows one-process observation.
 
-## Trusted public-IP RDP certificate — COMPLETE bounded acceptance
+## CERT-013 — normal Windows lifecycle integration
 
-User decision: keep the current public-IP Let’s Encrypt certificate representation as-is; no domain/CN cosmetic work is pending.
+Goal: no separate manual certificate-rotation setup in normal product use.
 
-CERT-011 and CERT-012 are live accepted on non-critical `SEC005 TEST`:
+### Code / CI
 
-- authenticated trusted certificate package delivery/import/binding PASS;
-- correct type-aware rollback to Windows default self-signed PASS;
-- fixed trusted reapply PASS;
-- server non-secret certificate status/renewal path PASS;
-- separate LocalSystem rotation task PASS (`S-1-5-18`), including Russian localized `СИСТЕМА` identity handling;
-- global mutex upgrade bug reproduced, rollback succeeded, fix CI/live accepted;
-- controlled self-signed drift was detected by the scheduled worker;
-- worker invoked sync itself, logged `CERT_ROTATION=UPDATED`, restored the expected CUSTOM trusted binding, kept TCP 3389 listening and remained Running;
-- a fresh external Microsoft Remote Desktop connection after automatic recovery succeeded as protected/trusted with no self-signed warning.
+PR #32 tested code head `29c19182ef99497b4cc314e3b4e9b6598ad95516`:
 
-Natural renewal-driven thumbprint rotation remains **post-merge observation only**. Do not force extra production issuance solely to test it.
+- fresh install stages/parses Agent + certificate setup from one immutable SHA before pairing/runtime mutation;
+- transactional Update composes certificate setup as a nested transactional sub-operation before final `UPDATE=PASS`;
+- previously accepted Repair implementation is preserved byte-for-byte as `repair-client-core.ps1`; public `repair-client.ps1` wraps it with certificate lifecycle management and outer Agent/task snapshot rollback;
+- uninstall stops/unregisters both Hermes Agent and certificate-rotation tasks/processes;
+- historical Repair assertions remain attached to the unchanged core; new CERT-013 tests cover wrapper/lifecycle composition;
+- CI #363: Linux full release checks PASS + Windows PowerShell 5.1 PASS.
 
-## Active work — CERT-013 normal Windows lifecycle integration
+### Live acceptance on `SEC005 TEST`
 
-Goal: remove the manual `setup-client-cert-rotation.ps1` step from normal product use.
+**Transactional Update = FULL PASS**:
 
-Next implementation must integrate the already accepted certificate companion into the ordinary Windows lifecycle:
+- certificate worker returned `CERT_ROTATION=UNCHANGED` and `CERT-012_SETUP=PASS`;
+- `UPDATE=PASS` + `CertificateRotation: managed`;
+- `device.json`, private/public SSH keys, `known_hosts`, Device ID and RDP port unchanged;
+- main task Running, exactly one Agent and one Hermes `ssh.exe`;
+- rotation task Running as LocalSystem SID `S-1-5-18`;
+- trusted CUSTOM RDP binding and TCP 3389 preserved;
+- final `CERT-013_UPDATE=PASS`.
 
-1. fresh install: after device identity/config exists, install/update the certificate rotation worker transactionally and allow its initial check to bind trusted cert when the server enables it;
-2. transactional update: update worker + sync companion with the same immutable SHA and rollback them/task together with the main client update;
-3. Repair: restore missing/broken rotation files/task without rotating device identity or weakening Defender;
-4. uninstall: remove Hermes-owned rotation task/files while preserving only data that current uninstall policy intentionally preserves;
-5. preserve Win10 PowerShell 5.1 and x86 -> Sysnative compatibility;
-6. keep certificate work outside the 3-second main agent loop;
-7. add Linux/static + Windows PowerShell 5.1 regression gates before live acceptance.
+**Repair lifecycle = FULL PASS**:
 
-## Exact next action
+- test removed only rotation Scheduled Task + worker file; identity, RDP binding and device registration stayed intact;
+- public Repair returned core `REPAIR=PASS` and wrapper `CERT-013_REPAIR=PASS`;
+- identity/config/SSH keys/known_hosts/RDP port unchanged;
+- main Agent/tunnel healthy after Repair;
+- rotation worker + task recreated; task runs as LocalSystem SID `S-1-5-18`;
+- trusted CUSTOM RDP binding unchanged; TCP 3389 stayed listening;
+- final `CERT-013_REPAIR_LIVE=PASS`.
 
-Create a new branch from current `main` for CERT-013, inspect `install-client.ps1`, `update-client.ps1`, `repair-client.ps1` and `uninstall-client.ps1`, then implement lifecycle integration without changing already accepted transport/control behavior.
+Do not destructively test uninstall/fresh install on `SEC005 TEST`.
 
-Do not expose PFX content/passwords, private keys, pairing codes, API tokens or other secret-bearing material in chat/context.
+## Remaining CERT-013 merge gate
+
+Run **fresh install -> verify -> uninstall** only on a separate disposable supported Windows test fixture/VM.
+
+Required acceptance:
+
+1. ordinary installer completes pairing and OpenSSH tunnel;
+2. installer automatically creates/starts certificate rotation companion without manual certificate setup;
+3. rotation task is LocalSystem SID `S-1-5-18` and trusted CUSTOM RDP listener/TCP3389 are healthy;
+4. external Microsoft RDP works;
+5. normal uninstall removes both Hermes tasks/processes and archives/removes active Hermes client directory according to current behavior.
+
+If no disposable fixture is available, leave PR #32 draft rather than risk `SEC005 TEST`.
+
+Natural renewal-driven thumbprint rotation remains a deferred observation; do not force extra production issuance solely for evidence.
+
+Never put private keys, PFX passwords, API/device tokens, pairing codes or other secrets into context/chat.

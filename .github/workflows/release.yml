@@ -1,6 +1,7 @@
 name: Publish release
 
-# Release tags always point to the commit that last changed VERSION.
+# Release tags point to the exact validated main commit that triggered this workflow.
+# Versioned docs/releases/vX.Y.Z.md files are the GitHub Release body source of truth.
 on:
   push:
     branches: [main]
@@ -49,7 +50,7 @@ jobs:
           VERSION="$(tr -d '\r\n' < VERSION)"
           TAG="v$VERSION"
           NOTES="docs/releases/$TAG.md"
-          RELEASE_SHA="$(git log -1 --format=%H -- VERSION)"
+          RELEASE_SHA="$(git rev-parse HEAD)"
           test -s "$NOTES"
           test -n "$RELEASE_SHA"
           git cat-file -e "$RELEASE_SHA^{commit}"
@@ -74,7 +75,7 @@ jobs:
           git tag -a "$TAG" -m "Hermes RDP $TAG" "$RELEASE_SHA"
           git push origin "$TAG"
 
-      - name: Publish GitHub Release
+      - name: Publish or synchronize current GitHub Release
         working-directory: repo
         shell: bash
         run: |
@@ -82,7 +83,11 @@ jobs:
           TAG='${{ steps.version.outputs.tag }}'
           NOTES='${{ steps.version.outputs.notes }}'
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "Release $TAG already exists; leaving it unchanged."
+            gh release edit "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Hermes RDP $TAG" \
+              --notes-file "$NOTES"
+            echo "Release $TAG synchronized from $NOTES."
             exit 0
           fi
           gh release create "$TAG" \
@@ -90,3 +95,50 @@ jobs:
             --title "Hermes RDP $TAG" \
             --notes-file "$NOTES" \
             --verify-tag
+
+      - name: Synchronize changed historical release notes
+        if: github.event_name == 'push'
+        working-directory: repo
+        shell: bash
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          CURRENT_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -Eeuo pipefail
+          if [[ -z "$BEFORE_SHA" || "$BEFORE_SHA" =~ ^0+$ ]]; then
+            echo 'No usable previous push SHA; skipping historical release-note sync.'
+            exit 0
+          fi
+
+          if ! git cat-file -e "$BEFORE_SHA^{commit}" 2>/dev/null; then
+            git fetch --depth=100 origin "$BEFORE_SHA"
+          fi
+          git cat-file -e "$BEFORE_SHA^{commit}"
+
+          mapfile -t CHANGED_NOTES < <(
+            git diff --name-only "$BEFORE_SHA" HEAD -- 'docs/releases/v*.md'
+          )
+
+          if (( ${#CHANGED_NOTES[@]} == 0 )); then
+            echo 'No changed versioned historical release notes.'
+            exit 0
+          fi
+
+          for NOTES in "${CHANGED_NOTES[@]}"; do
+            TAG="$(basename "$NOTES" .md)"
+            if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              continue
+            fi
+            if [[ "$TAG" == "$CURRENT_TAG" ]]; then
+              continue
+            fi
+            if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              gh release edit "$TAG" \
+                --repo "$GITHUB_REPOSITORY" \
+                --title "Hermes RDP $TAG" \
+                --notes-file "$NOTES"
+              echo "Historical release $TAG synchronized from $NOTES."
+            else
+              echo "No published GitHub Release for $TAG; leaving notes file only."
+            fi
+          done
