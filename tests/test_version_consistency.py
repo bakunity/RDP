@@ -49,6 +49,36 @@ class VersionConsistencyTests(unittest.TestCase):
         self.assertIn("from . import __version__", api_text)
         self.assertIn('"version": __version__', api_text)
 
+    def test_release_workflow_tags_validated_head(self) -> None:
+        workflow = (ROOT / ".github/workflows/release.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('RELEASE_SHA="$(git rev-parse HEAD)"', workflow)
+        self.assertNotIn("git log -1 --format=%H -- VERSION", workflow)
+
+    def test_release_notes_are_source_of_truth_and_existing_releases_sync(self) -> None:
+        workflow = (ROOT / ".github/workflows/release.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('NOTES="docs/releases/$TAG.md"', workflow)
+        self.assertIn('gh release edit "$TAG"', workflow)
+        self.assertIn(
+            "git diff --name-only \"$BEFORE_SHA\" HEAD -- 'docs/releases/v*.md'",
+            workflow,
+        )
+        self.assertIn("Synchronize changed historical release notes", workflow)
+
+    def test_release_history_protocol_exists(self) -> None:
+        release_dir = ROOT / "docs/releases"
+        for name in ("README.md", "UNRELEASED.md", "_TEMPLATE.md"):
+            path = release_dir / name
+            self.assertTrue(path.is_file(), path)
+            self.assertGreater(len(path.read_text(encoding="utf-8").strip()), 100)
+
+        protocol = (release_dir / "README.md").read_text(encoding="utf-8")
+        self.assertIn("Do not wait until release day", protocol)
+        self.assertIn("GitHub Release descriptions", protocol)
+
 
 if __name__ == "__main__":
     unittest.main()
