@@ -1,6 +1,6 @@
 # Hermes RDP — Milestone History
 
-Updated: 2026-08-08
+Updated: 2026-08-14
 
 Compact project milestones only. Detailed evidence belongs in `EVIDENCE_LEDGER.md`; current work belongs in `ACTIVE_WORK.md`; deep historical reasoning belongs in Git history/archive.
 
@@ -96,4 +96,38 @@ The memory system was completed with long-term hygiene rules:
 - batched context checkpoints where tooling permits;
 - feature-branch/base drift must be reconciled before merge.
 
-The design goal is now stronger than cross-chat handoff: **losing the current chat, accumulating months of history, or changing implementation should not make current project truth ambiguous.**
+The design goal is stronger than cross-chat handoff: losing the current chat, accumulating months of history, or changing implementation should not make current project truth ambiguous.
+
+## 2026-08-13 — v1.2 stabilization acceptance completed
+
+The stabilization cycle closed the major runtime reliability and lifecycle work:
+
+- control-plane deadlock/stale-state fixes;
+- Win10 x64 + x86 PowerShell/Sysnative support;
+- Windows Server 2019 acceptance;
+- reboot/reconnect and multi-device isolation;
+- device security/revocation/port reuse;
+- transactional server and Windows updates with automatic rollback;
+- bounded existing-device Repair with rollback;
+- Telegram Repair and new pairing-code UX.
+
+## 2026-08-13 — v1.2.1 published after release packaging hotfix
+
+The first `v1.2.0` publication exposed a release-workflow packaging flaw: tag resolution followed the commit that changed `VERSION`, not the complete release tree. The published `v1.2.0` tag was left immutable.
+
+`v1.2.1` was then published as the stable patch release with synchronized version metadata, full release tree and restored rich product README. The full README again includes badges/links, product architecture, quick start, update/repair and security sections.
+
+A follow-up branch prepares release tagging against the exact validated workflow `HEAD` so future releases cannot repeat this failure mode.
+
+## 2026-08-14 — Trusted RDP certificate phase begins
+
+The next product phase targets removing the Microsoft Remote Desktop trust warning without adding a domain solely for appearance.
+
+Current direction:
+
+- use a publicly trusted certificate matching the existing public IP if practical;
+- keep HTTPS/API TLS separate from the Windows RDP listener certificate;
+- validate issuance server-side first;
+- bind/test first on a non-critical Windows fixture with rollback.
+
+Initial certificate-host inventory passed and Certbot 5.7.0 was installed successfully. No RDP listener certificate has been changed yet.
