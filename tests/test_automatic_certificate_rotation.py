@@ -107,6 +107,38 @@ class AutomaticCertificateRotationTests(unittest.TestCase):
         ):
             self.assertIn(marker, setup)
 
+    def test_server_update_and_uninstall_manage_state_helper_transactionally(self) -> None:
+        updater = (ROOT / "scripts/update-server.sh").read_text(encoding="utf-8")
+        uninstall = (ROOT / "scripts/uninstall-server.sh").read_text(encoding="utf-8")
+
+        for marker in (
+            "server/bin/hermes-rdp-cert-renew.sh",
+            "server/bin/hermes-rdp-cert-state-refresh.sh",
+            "/usr/local/sbin/hermes-rdp-cert-renew",
+            "/usr/local/sbin/hermes-rdp-cert-state-refresh",
+            "/etc/hermes-rdp/trusted-rdp-cert-state.json",
+        ):
+            self.assertIn(marker, updater)
+
+        self.assertIn(
+            "restore_optional_file /usr/local/sbin/hermes-rdp-cert-renew",
+            updater,
+        )
+        self.assertIn(
+            "restore_optional_file /usr/local/sbin/hermes-rdp-cert-state-refresh",
+            updater,
+        )
+        self.assertIn(
+            "restore_optional_file /etc/hermes-rdp/trusted-rdp-cert-state.json",
+            updater,
+        )
+        self.assertIn(
+            "/usr/local/sbin/hermes-rdp-cert-state-refresh >/dev/null",
+            updater,
+        )
+        self.assertIn("/usr/local/sbin/hermes-rdp-cert-state-refresh", uninstall)
+        self.assertIn("Data, configuration and ACME certificate lineage were preserved", uninstall)
+
 
 if __name__ == "__main__":
     unittest.main()
