@@ -63,18 +63,22 @@ SEC-004 remains intentionally fixture-unavailable. RL-006 remains PARTIAL PASS o
 | CERT-011D | Default-self-signed rollback root cause/fix | RESOLVED / LIVE-ACCEPTED | Original type `1` had no explicit custom registry binding. Removing the binding restored exact original self-signed thumbprint/type and TCP 3389; external warning returned. |
 | CERT-011E | Fixed trusted reapply | PASS | Fixed sync restored CUSTOM trusted thumbprint; fresh external Microsoft RDP was trusted again. |
 | CERT-011F | PR #30 merge | PASS | PR #30 merged after complete live acceptance as `a03e406aaafeb5833bc720d3eef62cca60818118`. |
-| CERT-012A | Automatic rotation code/CI | PASS | Draft PR #31 immutable head `79cab42d43e4d9cdca12b8a1380574f7d40460f6`; CI #344 Linux full release checks PASS + Windows PowerShell 5.1 PASS. |
+| CERT-012A | Automatic rotation implementation/final CI | PASS | Final PR #31 head `14da128328589dfae6c8e3b6819977120be16739`; CI #353 Linux full release checks PASS + Windows PowerShell 5.1 PASS. Earlier CI #341/#344/#350 also passed bounded implementation stages. |
 | CERT-012B | Server non-secret certificate state deploy | PASS | Transactional deploy `UPDATE=PASS`; production cert serial unchanged; state helper installed; state file `root:hermes-rdp` mode `0640`; thumbprint matched current cert; payload limited to expected non-secret fields. |
 | CERT-012C | Renewal/status server path | PASS | Authenticated certificate-status endpoint installed; renewal service smoke PASS; controller/sshd/timer active; TCP 80 free after smoke. |
-| CERT-012D | Windows rotation worker unchanged-state setup | PENDING | Must install SYSTEM worker on `SEC005 TEST` and prove current trusted CUSTOM binding returns `CERT_ROTATION=UNCHANGED` without full PFX sync. |
-| CERT-012E | Automatic local-drift recovery | PENDING | After accepted self-signed rollback, worker must restore trusted CUSTOM binding automatically with no manual reapply. |
-| CERT-012F | Natural renewal-driven rotation | PENDING / DEFERRED | Observe a real future renewal thumbprint change; do not force unnecessary production issuance solely for testing. |
+| CERT-012D | Windows worker unchanged-state setup | PASS | `SEC005 TEST` returned `CERT_ROTATION=UNCHANGED`; task Running; LocalSystem identity verified by SID `S-1-5-18`; Russian localized `СИСТЕМА` correctly resolved to that SID. |
+| CERT-012E | Rotation setup upgrade global mutex ACL | FAIL / CONFIRMED BUG | Updating while old SYSTEM worker owned `Global\HermesRdpCertificateRotation` caused administrator preflight `Access denied`; transactional setup rollback returned PASS. |
+| CERT-012F | Rotation setup mutex fix | RESOLVED / LIVE-ACCEPTED | Fixed setup stops existing worker with bounded wait before preflight; mutex ACL permits only LocalSystem + Builtin Administrators; CI #353 PASS; fixed immutable setup live returned `CERT_ROTATION=UNCHANGED`, `ROTATION_TASK_SID=S-1-5-18`, task Running and `CERT-012_SETUP=PASS`. |
+| CERT-012G | Automatic local self-signed drift recovery | PASS | Controlled rollback created hash type `1`; scheduled worker detected drift, invoked sync itself, logged `CERT_ROTATION=UPDATED`, restored expected CUSTOM trusted thumbprint, kept TCP 3389 listening and remained Running. Final output included `CERT-012_DRIFT_RECOVERY=PASS`. |
+| CERT-012H | External trust after automatic recovery | PASS | Fresh Microsoft Remote Desktop connection after worker recovery succeeded as a protected/trusted connection with no self-signed warning. |
+| CERT-012I | PR #31 merge | PASS | PR #31 merged after bounded live acceptance as `bd25db552aae8303356953fe2807a7bd855cba95`. |
+| CERT-012J | Natural renewal-driven rotation | PENDING / DEFERRED | Observe a real future renewal thumbprint change and automatic Windows rotation. Do not force unnecessary production issuance solely for testing. |
 
 ## Current exact acceptance boundary
 
-CERT-001 through CERT-011 are complete and should not be repeated without a concrete regression reason. CERT-012 server side is accepted on immutable PR #31 head `79cab42d...`.
+CERT-001 through CERT-012 bounded behavior is complete and should not be repeated without a concrete regression reason. Natural renewal-driven rotation is a future observation, not a merge blocker.
 
-Immediate next proof: install the separate SYSTEM rotation worker on `SEC005 TEST`. With the currently correct trusted listener it must report `CERT_ROTATION=UNCHANGED`, keep the listener unchanged, and leave the rotation task Running. Then intentionally create only the already-accepted local self-signed drift and let the worker repair it automatically.
+Current product gap is lifecycle integration: the accepted certificate companion must become part of ordinary Windows fresh install, transactional update, Repair and uninstall flows. That work begins as CERT-013 and creates a new revalidation obligation only for the lifecycle paths it changes.
 
 ## Update triggers
 
