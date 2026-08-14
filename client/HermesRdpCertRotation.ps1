@@ -14,6 +14,7 @@ $SyncPath = Join-Path $BaseDir 'sync-rdp-certificate.ps1'
 $LogPath = Join-Path $BaseDir 'cert-rotation.log'
 $RdpNamespace = 'root/cimv2/TerminalServices'
 $RdpFilter = "TerminalName='RDP-tcp'"
+$RotationMutexName = 'Global\HermesRdpCertificateRotation'
 
 if ($IntervalSeconds -lt 60) {
     $IntervalSeconds = 60
@@ -168,6 +169,33 @@ function Get-NativePowerShellPath {
     return Join-Path $System32 'WindowsPowerShell\v1.0\powershell.exe'
 }
 
+function New-RotationMutex {
+    $Security = New-Object System.Security.AccessControl.MutexSecurity
+    $Rights = (
+        [System.Security.AccessControl.MutexRights]::Synchronize -bor
+        [System.Security.AccessControl.MutexRights]::Modify
+    )
+    $Allow = [System.Security.AccessControl.AccessControlType]::Allow
+
+    foreach ($SidValue in @('S-1-5-18', 'S-1-5-32-544')) {
+        $Sid = New-Object System.Security.Principal.SecurityIdentifier($SidValue)
+        $Rule = New-Object System.Security.AccessControl.MutexAccessRule(
+            $Sid,
+            $Rights,
+            $Allow
+        )
+        $Security.AddAccessRule($Rule)
+    }
+
+    $CreatedNew = $false
+    return New-Object System.Threading.Mutex(
+        $false,
+        $RotationMutexName,
+        [ref]$CreatedNew,
+        $Security
+    )
+}
+
 function Invoke-CertificateSync {
     if (-not (Test-Path -LiteralPath $SyncPath)) {
         throw "Hermes certificate sync script is missing: $SyncPath"
@@ -270,10 +298,7 @@ function Invoke-RotationCheck {
     if ($Once) { Write-Host 'CERT_ROTATION=UPDATED' }
 }
 
-$Mutex = New-Object System.Threading.Mutex(
-    $false,
-    'Global\HermesRdpCertificateRotation'
-)
+$Mutex = New-RotationMutex
 $HasMutex = $false
 try {
     $HasMutex = $Mutex.WaitOne(0)
