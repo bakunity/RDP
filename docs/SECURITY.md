@@ -4,6 +4,7 @@
 
 - Telegram bot token;
 - API certificate private key;
+- trusted RDP certificate private key / PFX package;
 - Windows Ed25519 private keys;
 - device API-tokens;
 - pairing-коды;
@@ -31,8 +32,42 @@ Tunnel-user не получает:
 1. HTTPS API проверяется по SHA-256 fingerprint.
 2. SSH host key приходит через уже закреплённый API.
 3. `StrictHostKeyChecking` запрещает незаметную замену сервера.
-4. Private key остаётся на Windows.
-5. Secret files получают ACL только для `SYSTEM` и Administrators.
+4. Private Ed25519 key остаётся на Windows.
+5. Secret client files получают ACL только для `SYSTEM` и Administrators.
+
+## HTTPS TLS и RDP TLS — разные границы
+
+Сертификат HTTPS API и сертификат Windows RDP listener решают разные задачи.
+
+**API certificate** используется installer/Agent для pinned HTTPS control plane.
+
+**RDP listener certificate** предъявляется Microsoft Remote Desktop при подключении к публичному Hermes endpoint. При включённом trusted RDP lifecycle Hermes получает публично доверенный certificate для публичного IPv4 сервера, доставляет его только authenticated зарегистрированному устройству и привязывает к Windows `RDP-Tcp` как CUSTOM certificate.
+
+Добавление домена или изменение HTTPS certificate само по себе не убирает RDP warning: доверенным должен быть именно сертификат Windows RDP listener, соответствующий адресу подключения.
+
+## Trusted RDP certificate lifecycle
+
+Опциональный server-side lifecycle:
+
+- принимает только глобально маршрутизируемый public IPv4;
+- использует ACME HTTP-01 через TCP `80`;
+- выполняет staging validation до первой production issuance;
+- использует Let’s Encrypt short-lived IP certificate;
+- обновляется отдельным Hermes systemd timer/service;
+- публикует Windows только non-secret desired state для обычных rotation checks.
+
+Windows lifecycle:
+
+- отдельный Scheduled Task `Hermes RDP Certificate Rotation` работает от LocalSystem;
+- полный PFX package запрашивается только при новом thumbprint или local listener drift;
+- импорт выполняется в `LocalMachine\My` без штатного exportable-флага;
+- private key получает необходимый Read для `NETWORK SERVICE`, под которым работает TermService;
+- listener переводится в CUSTOM binding только после успешной проверки;
+- setup/sync имеют rollback boundary.
+
+`Non-exportable` снижает риск обычного API-export, но не является защитой от полностью скомпрометированного Windows Administrator/SYSTEM endpoint. Компрометация привилегированного Windows-хоста остаётся отдельной security boundary.
+
+Certificate worker вынесен из основного 3-секундного Agent loop и использует отдельный global mutex с доступом только для LocalSystem и Builtin Administrators.
 
 ## Pairing
 
@@ -46,7 +81,7 @@ Tunnel-user не получает:
 
 ## RDP boundary
 
-Hermes защищает регистрацию, ключи и путь до Windows, но не заменяет безопасность самой RDP-сессии.
+Hermes защищает регистрацию, ключи, control plane, tunnel и при включённом trusted lifecycle — проверяемость TLS identity Windows RDP listener. Но Hermes не заменяет Windows authentication/authorization самой RDP-сессии.
 
 Внешний endpoint доступен как TCP-порт сервера. Обязательны:
 
@@ -68,13 +103,17 @@ DELETE должен:
 - завершить listener;
 - освободить порт.
 
-Украденный старый key после отзыва не должен аутентифицироваться.
+Украденный старый SSH key после отзыва не должен аутентифицироваться.
+
+Локальный uninstall отдельно удаляет Hermes Agent и certificate rotation runtime. После uninstall всё равно выполните DELETE в Telegram для server-side revoke.
 
 ## Backup и restore
 
 Backup содержит чувствительные данные. Храните его с mode `0700`, не загружайте в публичные облака без шифрования и не прикладывайте к issue.
 
-После restore проверьте permissions, `doctor`, SSH host key и существующие устройства.
+Если включён trusted RDP lifecycle, server backup/restore также требует аккуратно обращаться с `/etc/letsencrypt` и Hermes certificate configuration/state. Не публикуйте ACME private keys или PFX packages.
+
+После restore проверьте permissions, `doctor`, SSH host key, certificate renewal timer/state и существующие устройства.
 
 ## Что не публиковать
 
@@ -83,7 +122,8 @@ Backup содержит чувствительные данные. Хранит�
 - bot token;
 - pairing-код;
 - TLS fingerprint вместе с готовой командой установки;
-- private key;
+- private SSH key;
+- certificate private key или PFX/password;
 - `device.json`;
 - полный agent log;
 - реальные IP и Telegram IDs из production без необходимости.

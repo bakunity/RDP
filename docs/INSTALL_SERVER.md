@@ -9,11 +9,12 @@ Debian/Ubuntu, root или sudo, systemd, OpenSSH Server, UFW и Python 3.11+.
 - `22/tcp` — административный SSH сервера, установщик его не меняет;
 - `7000/tcp` — отдельный Hermes OpenSSH daemon;
 - `7443/tcp` — HTTPS API;
-- `53389–53420/tcp` — RDP endpoints.
+- `53389–53420/tcp` — RDP endpoints;
+- `80/tcp` — нужен только при включённом trusted RDP certificate lifecycle для ACME HTTP-01.
 
 ## Чистая установка
 
-До публикации официального release tag используйте проверенный source ref.
+До публикации следующего release tag используйте проверенный immutable source ref, а не изменяемый `main`.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/REF/scripts/install-server.sh -o /tmp/install-hermes-rdp.sh
@@ -30,7 +31,41 @@ unset TG_TOKEN
 rm -f /tmp/install-hermes-rdp.sh
 ```
 
+## Trusted RDP certificate
+
+Hermes умеет отдельно от HTTPS API управлять публично доверенным сертификатом **Windows RDP listener**. Это нужно, чтобы стандартный Microsoft Remote Desktop не показывал предупреждение о self-signed сертификате при подключении к публичному endpoint.
+
+Для этого server install запускается с дополнительным флагом:
+
+```bash
+sudo env HERMES_RDP_REF=REF bash /tmp/install-hermes-rdp.sh \
+  --host PUBLIC_IPV4 \
+  --telegram-token "$TG_TOKEN" \
+  --telegram-chat-id TELEGRAM_USER_ID \
+  --trusted-rdp-cert
+```
+
+Требования этого режима:
+
+- `--host` должен быть глобально маршрутизируемым публичным IPv4;
+- TCP `80` должен быть свободен локально и доступен извне для ACME HTTP-01;
+- сервер должен иметь доступ к Let’s Encrypt;
+- не запускайте второй HTTP service на `:80` во время standalone ACME issuance/renewal.
+
+При включении lifecycle Hermes:
+
+- устанавливает изолированный Certbot в `/opt/certbot`;
+- сначала выполняет staging validation;
+- получает production short-lived Let’s Encrypt IP certificate;
+- создаёт `hermes-rdp-cert-renew.service` и `hermes-rdp-cert-renew.timer`;
+- хранит non-secret certificate state для Windows rotation checks;
+- предоставляет authenticated device path для передачи certificate package зарегистрированному Windows-клиенту.
+
+HTTPS API certificate и Windows RDP listener certificate — **разные trust boundaries**. Trusted RDP lifecycle не заменяет API fingerprint pinning.
+
 ## Что создаётся
+
+Базовая установка:
 
 - `/opt/hermes-rdp/app`;
 - `/etc/hermes-rdp/config.json`;
@@ -40,6 +75,8 @@ rm -f /tmp/install-hermes-rdp.sh
 - `hermes-rdp.service`;
 - `hermes-rdp-sshd.service`;
 - системные пользователи `hermes-rdp` и `hermes-tunnel`.
+
+При `--trusted-rdp-cert` дополнительно создаются Hermes certificate helpers/state и systemd renewal service/timer.
 
 ## Проверка
 
@@ -60,6 +97,16 @@ api: LISTEN 7443
 ssh-config: OK
 ```
 
+Если включён trusted RDP certificate lifecycle:
+
+```bash
+sudo systemctl is-enabled hermes-rdp-cert-renew.timer
+sudo systemctl is-active hermes-rdp-cert-renew.timer
+sudo cat /etc/hermes-rdp/trusted-rdp-cert-state.json
+```
+
+Timer должен быть enabled/active, а state-файл — существовать и содержать только non-secret certificate metadata.
+
 До подключения первого ПК RDP-порты должны быть закрыты. Порт появляется только после успешного reverse-туннеля.
 
 ## Backup
@@ -75,4 +122,5 @@ ssh-config: OK
 1. Отправьте `/start` Telegram-боту.
 2. Убедитесь, что панель показывает OpenSSH port `7000`.
 3. Добавьте первый Windows-ПК.
-4. Проверьте endpoint из другой сети.
+4. Если включён trusted certificate lifecycle, дождитесь автоматического применения сертификата на Windows.
+5. Проверьте endpoint из другой сети стандартным Microsoft Remote Desktop.
