@@ -24,7 +24,7 @@ Merged work includes:
 
 ### Certificate lifecycle live acceptance
 
-Bounded live acceptance on a non-critical Windows fixture proved:
+Bounded live acceptance proved:
 
 - production public-IP certificate issuance and chain/key validation;
 - Hermes renewal service/timer and non-secret state refresh;
@@ -47,37 +47,36 @@ Real Windows acceptance found two important integration issues:
 
 Both fixes passed Linux/Windows PowerShell 5.1 CI and live revalidation.
 
+### CERT-013 — certificate rotation in ordinary Windows lifecycle
+
+PR #32 merged as `c23c168a7719a31b4958a4eee555828858d0507c` after complete bounded live acceptance.
+
+Normal Windows lifecycle now manages the trusted-certificate companion automatically:
+
+- Fresh Install stages and validates Agent + certificate setup from one immutable SHA, brings up the OpenSSH runtime, then applies certificate lifecycle before reporting final success;
+- transactional Update composes certificate setup before `UPDATE=PASS` while preserving outer rollback;
+- Repair preserves the previously accepted core behavior and adds certificate lifecycle management with outer Agent/task snapshot rollback;
+- Uninstall removes both main Agent and certificate-rotation runtime.
+
+Live acceptance included:
+
+- Update on `SEC005 TEST` with identity/config/SSH keys/known_hosts/Device ID/RDP port preserved;
+- targeted Repair recreating deliberately removed rotation task/worker while preserving trusted RDP binding;
+- clean Windows 10 Pro 19045 x64 / PowerShell 5.1 / Defender-enabled Fresh Install with automatic LocalSystem rotation task and no Defender exclusion;
+- real external Microsoft Remote Desktop through `SERVER_IP_OR_DOMAIN:53394` with trusted certificate and no self-signed warning;
+- normal Uninstall removing both tasks/processes and archiving/removing the active client directory while Defender stayed enabled.
+
+Accepted product/test code head: `e11cf89ed26d551ca92b4010034d6e6792a9266b`; CI #381 PASS. Final evidence/privacy head `f868d8b554e4a6e1cb4a07d0625118696e946cda`; CI #410 PASS.
+
 ### Release-process hardening
 
-Release documentation now follows a durable source-of-truth model:
+Release documentation follows a durable source-of-truth model:
 
 - compact public GitHub Release notes live in `docs/releases/vX.Y.Z.md`;
 - long-form engineering history lives in `docs/releases/history/vX.Y.Z-full.md`;
 - `UNRELEASED.md` accumulates work continuously;
 - release workflow tags the validated workflow HEAD rather than the commit that last touched `VERSION`;
 - existing GitHub Release descriptions synchronize from the corresponding versioned release-note file without rewriting historical tags.
-
-## Accepted / pending merge
-
-### CERT-013 — certificate rotation in ordinary Windows lifecycle
-
-PR #32 has completed all bounded live gates and is ready to merge. Exact accepted head: `e11cf89ed26d551ca92b4010034d6e6792a9266b`.
-
-CI #381:
-
-- Linux full release checks PASS;
-- Windows PowerShell 5.1 validation PASS.
-
-Live acceptance:
-
-- transactional Update on `SEC005 TEST` automatically managed certificate rotation while preserving `device.json`, SSH identity, `known_hosts`, Device ID, RDP port, main Agent/tunnel and trusted listener;
-- targeted Repair recreated deliberately removed rotation task/worker without changing identity, port, tunnel or trusted RDP binding;
-- a separate clean Windows 10 Pro 19045 x64 / PowerShell 5.1 VM with Defender enabled passed fresh install from the exact accepted head;
-- fresh install created one main Agent, one Hermes SSH tunnel and a LocalSystem rotation task (`S-1-5-18`), applied the trusted CUSTOM RDP certificate, kept TCP 3389 listening and required no Defender exclusion;
-- real external Microsoft Remote Desktop to the disposable fixture worked through `SERVER_IP_OR_DOMAIN:53394` with the trusted certificate and no self-signed warning;
-- normal uninstall removed both Hermes tasks/processes, stopped the Hermes SSH tunnel, removed the active `C:\ProgramData\HermesRDP` directory by archiving it, and left Defender real-time protection enabled.
-
-After PR #32 merges, move this section into the merged/current-main boundary and keep the evidence in context rather than reconstructing it later.
 
 ## Deferred observation / not a blocker
 

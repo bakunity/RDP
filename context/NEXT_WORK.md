@@ -14,31 +14,34 @@ Ship a stable self-hosted product where a user can install Hermes on Debian/Ubun
 
 ## Immediate work
 
-### 1. Merge CERT-013
+### 1. Disposable fixture cleanup
 
-PR #32 has completed all bounded live acceptance.
+PR #32 / CERT-013 is merged and fully live accepted.
 
-Accepted product/test code head: `e11cf89ed26d551ca92b4010034d6e6792a9266b`.
-Reconcile CI #381: Linux full release checks PASS + Windows PowerShell 5.1 PASS.
+Delete `CERT013 FRESH` in Telegram so its device token/SSH key are revoked and test port `53394` is freed. The local disposable VM client has already been successfully uninstalled.
 
-Accepted live paths:
+### 2. Post-CERT-013 documentation/product reconciliation
 
-- transactional Update on `SEC005 TEST`;
-- targeted Repair on `SEC005 TEST`;
-- clean Fresh Install on disposable Win10 Pro 19045 x64 fixture `DESKTOP-T9N368F` with Defender enabled;
-- real external Microsoft RDP to `SERVER_IP_OR_DOMAIN:53394` with trusted certificate/no self-signed warning;
-- normal Uninstall removing both Hermes tasks/processes and archiving/removing the active client directory while Defender stayed enabled.
+The runtime now automatically manages trusted RDP certificate rotation through normal Fresh Install, Update and Repair, and removes the companion on Uninstall.
 
-Do not repeat those tests without regression evidence.
+Audit and reconcile:
 
-Next actions:
+- README product/architecture/quick-start text;
+- `docs/INSTALL_WINDOWS.md`;
+- update/Repair/uninstall documentation;
+- security/trusted-certificate explanation;
+- validated scenarios/testing docs;
+- website copy and architecture explanation.
 
-1. wait for CI on evidence-only PR head;
-2. mark PR #32 ready and merge with exact-head guard;
-3. delete the disposable `CERT013 FRESH` Telegram registration so its API token/SSH key are revoked and port `53394` is freed;
-4. checkpoint merged SHA and move to the next product gap.
+Do not reopen already accepted runtime tests merely for documentation changes.
 
-### 2. Natural renewal observation — deferred/non-blocking
+### 3. Next release boundary
+
+Use `docs/releases/UNRELEASED.md` as the source of truth and decide whether the accumulated trusted-certificate + CERT-013 work should ship as the next patch or minor release.
+
+Do not publish automatically. Before a release cut, prepare compact public release notes plus full engineering history according to `docs/releases/README.md`.
+
+### 4. Natural renewal observation — deferred/non-blocking
 
 When the current short-lived production certificate renews naturally:
 
@@ -48,16 +51,6 @@ When the current short-lived production certificate renews naturally:
 - confirm fresh Microsoft RDP remains trusted.
 
 Do **not** force unnecessary production issuance solely for this observation.
-
-### 3. Next release / docs
-
-Release-process hardening is already complete: exact validated HEAD tagging, compact public release notes, long-form history files and rolling `UNRELEASED.md` are in `main`.
-
-After CERT-013 merge:
-
-- reconcile README/website/docs with the now-shipped automatic certificate lifecycle;
-- decide next patch/minor release boundary from `UNRELEASED.md`;
-- continue website v2 without reopening completed runtime acceptance.
 
 ## Optional deferred item
 

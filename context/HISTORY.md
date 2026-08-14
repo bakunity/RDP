@@ -146,4 +146,19 @@ The certificate phase reached bounded end-to-end acceptance:
 
 Two live bugs were caught and resolved during acceptance: default-self-signed rollback must remove the explicit custom binding, and rotation-worker upgrades must handle cross-context global mutex ACLs. PR #30 and PR #31 were merged after CI and live acceptance.
 
-The next gap is product lifecycle integration so fresh install/update/Repair/uninstall manage the accepted rotation companion automatically.
+The next gap was product lifecycle integration so fresh install/update/Repair/uninstall manage the accepted rotation companion automatically.
+
+## 2026-08-14 — CERT-013 full Windows lifecycle integration merged
+
+PR #32 merged as `c23c168a7719a31b4958a4eee555828858d0507c` after full bounded live acceptance.
+
+The accepted certificate-rotation companion is now part of ordinary Windows lifecycle behavior:
+
+- Fresh Install automatically stages/validates and applies certificate lifecycle after the OpenSSH runtime becomes healthy;
+- transactional Update manages certificate lifecycle before final success while retaining rollback boundaries;
+- Repair preserves the previously accepted core identity/recovery logic and recreates missing rotation scaffolding automatically;
+- Uninstall removes both the main Hermes runtime and certificate-rotation runtime.
+
+Live gates covered Update and Repair on the established fixture plus a clean Windows 10 Pro 19045 x64 / PowerShell 5.1 / Defender-enabled disposable fixture for Fresh Install, real external Microsoft RDP trust and normal Uninstall. Defender remained enabled and no Hermes exclusion was required.
+
+Accepted product/test code head was `e11cf89ed26d551ca92b4010034d6e6792a9266b` with CI #381 PASS; final evidence/privacy head `f868d8b554e4a6e1cb4a07d0625118696e946cda` passed CI #410 before merge.

@@ -78,21 +78,20 @@ SEC-004 remains intentionally fixture-unavailable. RL-006 remains PARTIAL PASS o
 
 | ID | Scenario | Status | Evidence / boundary |
 |---|---|---|---|
-| CERT-013A | Lifecycle implementation + CI | PASS | PR #32 accepted product/test code head `e11cf89ed26d551ca92b4010034d6e6792a9266b`; reconcile CI #381 Linux full release checks PASS + Windows PowerShell 5.1 PASS. Later evidence-only commits do not change CERT-013 product/test files. |
+| CERT-013A | Lifecycle implementation + CI | PASS | Accepted product/test code head `e11cf89ed26d551ca92b4010034d6e6792a9266b`; reconcile CI #381 Linux full release checks PASS + Windows PowerShell 5.1 PASS. Later evidence-only commits did not change CERT-013 product/test files. |
 | CERT-013B | Transactional Update integrates certificate companion | PASS | Live `SEC005 TEST`: `CERT_ROTATION=UNCHANGED`, `CERT-012_SETUP=PASS`, `UPDATE=PASS`, `CertificateRotation: managed`, identity/keys/known_hosts/device ID/RDP port unchanged, one Agent + one Hermes SSH process, rotation task Running as SID `S-1-5-18`, CUSTOM listener + TCP 3389 preserved, final `CERT-013_UPDATE=PASS`. |
 | CERT-013C | Repair restores missing rotation scaffolding | PASS | Live `SEC005 TEST`: only rotation task + worker removed; public Repair returned `REPAIR=PASS` + `CERT-013_REPAIR=PASS`; identity/port/tunnel/trusted binding unchanged; worker/task recreated as LocalSystem; TCP 3389 preserved; final `CERT-013_REPAIR_LIVE=PASS`. |
 | CERT-013D | Clean disposable fixture preflight | PASS | `DESKTOP-T9N368F`: Windows 10 Pro build 19045 x64, PowerShell 5.1 x64, Defender AV + real-time protection True, OpenSSH Client Installed, Hermes base/task/process state absent; final `CERT-013_CLEAN_FIXTURE=PASS`. |
 | CERT-013E | Fresh install manages certificate lifecycle automatically | PASS | Exact accepted head `e11cf89e...`; `CERT_ROTATION=UPDATED`, `CERT-012_SETUP=PASS`; device `CERT013 FRESH`, endpoint `SERVER_IP_OR_DOMAIN:53394`; main task/one Agent/one Hermes SSH healthy; rotation task LocalSystem SID `S-1-5-18`; CUSTOM trusted thumbprint `2E170C609B47E0D34F16238503998509EDDDC79C`; TCP 3389; Defender remained enabled with no Hermes exclusion; final `CERT-013_FRESH_INSTALL=PASS`. |
 | CERT-013F | Fresh-install external trusted RDP | PASS | User connected through `SERVER_IP_OR_DOMAIN:53394`; Microsoft RDP worked and certificate was trusted with no warning. |
-| CERT-013G | Normal uninstall removes full client runtime | PASS | Disposable fixture: both Hermes tasks absent; Agent/rotation/SSH counts all zero; active `C:\ProgramData\HermesRDP` absent; archive `C:\ProgramData\HermesRDP.removed.20260814-132332` validated; Defender real-time protection remained True; final `CERT-013_UNINSTALL=PASS`. |
+| CERT-013G | Normal uninstall removes full client runtime | PASS | Disposable fixture: both Hermes tasks absent; Agent/rotation/SSH counts all zero; active `C:\ProgramData\HermesRDP` absent; removal archive validated; Defender real-time protection remained True; final `CERT-013_UNINSTALL=PASS`. |
+| CERT-013H | PR #32 final evidence CI + merge | PASS | Final evidence/privacy head `f868d8b554e4a6e1cb4a07d0625118696e946cda`; CI #410 success; PR #32 merged as `c23c168a7719a31b4958a4eee555828858d0507c`. |
 
 ## Current exact acceptance boundary
 
-CERT-001 through CERT-012 bounded behavior is complete. CERT-013 Update, Repair, clean Fresh Install, external trusted RDP and Uninstall are fully live proven on PR #32 accepted product/test code head `e11cf89ed26d551ca92b4010034d6e6792a9266b`.
+CERT-001 through CERT-013 bounded behavior is complete and merged into `main`. No CERT-013 live product gate remains. Do not repeat Update/Repair/Fresh Install/external RDP/Uninstall acceptance without concrete regression evidence.
 
-PR #32 has no remaining live product gate. Evidence-only context/release commits after `e11cf89e...` do not invalidate the accepted code boundary. The next repository action is final CI on the evidence head, ready-for-review transition and exact-head merge.
-
-Natural renewal-driven rotation remains a future observation, not a merge blocker.
+Natural renewal-driven rotation remains a future observation, not a blocker.
 
 ## Update triggers
 

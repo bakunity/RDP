@@ -8,10 +8,9 @@ Updated: 2026-08-14
 - Stable published release: **v1.2.1**.
 - PR #30 authenticated Windows trusted-certificate delivery/binding: merged as `a03e406aaafeb5833bc720d3eef62cca60818118` after full CERT-011 live acceptance.
 - PR #31 automatic trusted RDP certificate rotation: merged as `bd25db552aae8303356953fe2807a7bd855cba95` after full bounded CERT-012 live acceptance.
-- PR #32 CERT-013 Windows lifecycle integration has completed all bounded live gates. Accepted code head before evidence-only commits: `e11cf89ed26d551ca92b4010034d6e6792a9266b`.
-- PR #32 reconcile CI #381: Linux full release checks PASS + Windows PowerShell 5.1 PASS.
-- `SEC005 TEST` has live-accepted CERT-013 transactional Update and Repair lifecycle behavior.
-- Disposable Win10 fixture `DESKTOP-T9N368F` has live-accepted clean Fresh Install, external trusted RDP and normal Uninstall.
+- PR #32 CERT-013 normal Windows lifecycle integration: **MERGED** as `c23c168a7719a31b4958a4eee555828858d0507c` after complete bounded live acceptance.
+- Accepted CERT-013 product/test code head before evidence-only commits: `e11cf89ed26d551ca92b4010034d6e6792a9266b`.
+- Reconcile CI #381 PASS; final evidence/privacy head CI #410 PASS (Linux full release checks + Windows PowerShell 5.1).
 
 ## Stable architecture
 
@@ -43,7 +42,7 @@ PFX sync only on thumbprint change / local drift
 Windows RDP CUSTOM trusted certificate
 ```
 
-Certificate work remains outside the performance-sensitive 3-second main agent loop.
+Certificate work remains outside the performance-sensitive 3-second main Agent loop.
 
 ## Accepted baseline — do not repeat without regression evidence
 
@@ -58,82 +57,25 @@ Certificate work remains outside the performance-sensitive 3-second main agent l
 - bounded Windows Repair success/rollback;
 - Defender coexistence;
 - trusted public-IP certificate CERT-001 through CERT-012 bounded acceptance;
-- CERT-013 Update, Repair, Fresh Install, external trusted RDP and Uninstall lifecycle acceptance.
+- CERT-013 Update, Repair, clean Fresh Install, external trusted RDP and Uninstall lifecycle acceptance.
 
 SEC-004 remains intentionally fixture-unavailable. RL-006 remains PARTIAL PASS only for its optional deferred exact-Windows one-process observation.
 
-## CERT-013 — normal Windows lifecycle integration
+## CERT-013 — CLOSED / MERGED
 
-Goal: no separate manual certificate-rotation setup in normal product use.
+Live acceptance covered:
 
-### Code / CI
-
-PR #32 accepted code head `e11cf89ed26d551ca92b4010034d6e6792a9266b`:
-
-- fresh install stages/parses Agent + certificate setup from one immutable SHA before pairing/runtime mutation;
-- transactional Update composes certificate setup as a nested transactional sub-operation before final `UPDATE=PASS`;
-- previously accepted Repair implementation is preserved byte-for-byte as `repair-client-core.ps1`; public `repair-client.ps1` wraps it with certificate lifecycle management and outer Agent/task snapshot rollback;
-- uninstall stops/unregisters both Hermes Agent and certificate-rotation tasks/processes;
-- historical Repair assertions remain attached to the unchanged core; new CERT-013 tests cover wrapper/lifecycle composition;
-- reconcile with current `main` touched only release/context/workflow files outside the eight CERT-013 product/test files;
-- CI #381: Linux full release checks PASS + Windows PowerShell 5.1 PASS.
-
-### Live acceptance on `SEC005 TEST`
-
-**Transactional Update = FULL PASS**:
-
-- certificate worker returned `CERT_ROTATION=UNCHANGED` and `CERT-012_SETUP=PASS`;
-- `UPDATE=PASS` + `CertificateRotation: managed`;
-- `device.json`, private/public SSH keys, `known_hosts`, Device ID and RDP port unchanged;
-- main task Running, exactly one Agent and one Hermes `ssh.exe`;
-- rotation task Running as LocalSystem SID `S-1-5-18`;
-- trusted CUSTOM RDP binding and TCP 3389 preserved;
-- final `CERT-013_UPDATE=PASS`.
-
-**Repair lifecycle = FULL PASS**:
-
-- test removed only rotation Scheduled Task + worker file; identity, RDP binding and device registration stayed intact;
-- public Repair returned core `REPAIR=PASS` and wrapper `CERT-013_REPAIR=PASS`;
-- identity/config/SSH keys/known_hosts/RDP port unchanged;
-- main Agent/tunnel healthy after Repair;
-- rotation worker + task recreated; task runs as LocalSystem SID `S-1-5-18`;
-- trusted CUSTOM RDP binding unchanged; TCP 3389 stayed listening;
-- final `CERT-013_REPAIR_LIVE=PASS`.
-
-### Disposable clean fixture acceptance
-
-Fixture: `DESKTOP-T9N368F`, Windows 10 Pro build 19045 x64, Windows PowerShell 5.1 x64, Defender AV + real-time protection enabled, Hermes absent before test, OpenSSH Client already installed.
-
-**Fresh Install = FULL PASS** from exact accepted code head `e11cf89e...`:
-
-- `CERT_ROTATION=UPDATED`, `CERT-012_SETUP=PASS`;
-- device `CERT013 FRESH` registered on endpoint `SERVER_IP_OR_DOMAIN:53394`;
-- main Agent Running, exactly one Agent + one Hermes SSH process;
-- rotation task Running as LocalSystem SID `S-1-5-18`;
-- trusted CUSTOM RDP thumbprint `2E170C609B47E0D34F16238503998509EDDDC79C` bound; TCP 3389 listening;
-- Defender stayed enabled with no Hermes exclusion;
-- final `CERT-013_FRESH_INSTALL=PASS`.
-
-**External Microsoft RDP = PASS**:
-
-- real external connection to `SERVER_IP_OR_DOMAIN:53394` succeeded;
-- trusted certificate accepted with no self-signed warning.
-
-**Uninstall = FULL PASS**:
-
-- both Hermes tasks absent;
-- main Agent, rotation worker and Hermes SSH process counts all zero;
-- active `C:\ProgramData\HermesRDP` absent;
-- archive created at `C:\ProgramData\HermesRDP.removed.20260814-132332` and validated;
-- Defender real-time protection stayed enabled;
-- final `CERT-013_UNINSTALL=PASS`.
+- **Update FULL PASS** on `SEC005 TEST`: identity/config/keys/known_hosts/Device ID/RDP port unchanged; Agent/tunnel/rotation task/trusted listener healthy; final `CERT-013_UPDATE=PASS`.
+- **Repair FULL PASS** on `SEC005 TEST`: only rotation task/worker removed; public Repair recreated them without changing identity/port/tunnel/trusted binding; final `CERT-013_REPAIR_LIVE=PASS`.
+- **Clean Fresh Install FULL PASS** on disposable Win10 Pro 19045 x64 / PowerShell 5.1 / Defender-enabled fixture `DESKTOP-T9N368F`: automatic certificate lifecycle, LocalSystem rotation task SID `S-1-5-18`, trusted CUSTOM listener, one Agent + one Hermes SSH, no Defender exclusion; final `CERT-013_FRESH_INSTALL=PASS`.
+- **External Microsoft RDP PASS** through `SERVER_IP_OR_DOMAIN:53394`: connection worked and trusted certificate produced no self-signed warning.
+- **Uninstall FULL PASS**: both Hermes tasks absent; Agent/rotation/SSH counts zero; active client directory archived/removed; Defender stayed enabled; final `CERT-013_UNINSTALL=PASS`.
 
 ## Immediate next step
 
-1. Let final evidence-only PR head CI finish green.
-2. Mark PR #32 ready and merge with exact-head guard.
-3. Delete disposable `CERT013 FRESH` device in Telegram to revoke its token/key and free port `53394`.
-4. Update context to the merged commit and move to the next product gap.
+1. Delete disposable `CERT013 FRESH` in Telegram to revoke its device token/SSH key and free port `53394`.
+2. Begin post-CERT-013 docs/product reconciliation: README/Windows install/update/Repair/website must describe the now-shipped automatic trusted-certificate lifecycle.
+3. Decide the next patch/minor release boundary from `docs/releases/UNRELEASED.md`; do not publish automatically.
 
 Natural renewal-driven thumbprint rotation remains a deferred observation; do not force extra production issuance solely for evidence.
 
