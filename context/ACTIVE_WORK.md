@@ -10,8 +10,8 @@ Updated: 2026-08-14
 - PR #31 automatic trusted RDP certificate rotation: merged as `bd25db552aae8303356953fe2807a7bd855cba95` after full bounded CERT-012 live acceptance.
 - PR #32 CERT-013 Windows lifecycle integration has completed all bounded live gates. Accepted code head before evidence-only commits: `e11cf89ed26d551ca92b4010034d6e6792a9266b`.
 - PR #32 reconcile CI #381: Linux full release checks PASS + Windows PowerShell 5.1 PASS.
-- CERT-013 Update + Repair were live accepted on `SEC005 TEST`.
-- CERT-013 clean Fresh Install + external trusted RDP + Uninstall were live accepted on disposable Win10 fixture `DESKTOP-T9N368F`.
+- `SEC005 TEST` has live-accepted CERT-013 transactional Update and Repair lifecycle behavior.
+- Disposable Win10 fixture `DESKTOP-T9N368F` has live-accepted clean Fresh Install, external trusted RDP and normal Uninstall.
 
 ## Stable architecture
 
@@ -107,7 +107,7 @@ Fixture: `DESKTOP-T9N368F`, Windows 10 Pro build 19045 x64, Windows PowerShell 5
 **Fresh Install = FULL PASS** from exact accepted code head `e11cf89e...`:
 
 - `CERT_ROTATION=UPDATED`, `CERT-012_SETUP=PASS`;
-- device `CERT013 FRESH` registered on endpoint `150.241.94.110:53394`;
+- device `CERT013 FRESH` registered on endpoint `SERVER_IP_OR_DOMAIN:53394`;
 - main Agent Running, exactly one Agent + one Hermes SSH process;
 - rotation task Running as LocalSystem SID `S-1-5-18`;
 - trusted CUSTOM RDP thumbprint `2E170C609B47E0D34F16238503998509EDDDC79C` bound; TCP 3389 listening;
@@ -116,7 +116,7 @@ Fixture: `DESKTOP-T9N368F`, Windows 10 Pro build 19045 x64, Windows PowerShell 5
 
 **External Microsoft RDP = PASS**:
 
-- real external connection to `150.241.94.110:53394` succeeded;
+- real external connection to `SERVER_IP_OR_DOMAIN:53394` succeeded;
 - trusted certificate accepted with no self-signed warning.
 
 **Uninstall = FULL PASS**:
