@@ -16,13 +16,15 @@ class ClientUpdateRecoveryTests(unittest.TestCase):
 
     def test_candidate_is_staged_and_parsed_before_runtime_stop(self) -> None:
         text = self.text
-        download = text.index("Invoke-WebRequest")
-        candidate_parse = text.index("ParseFile(\n        $CandidatePath")
+        download = text.index("-OutFile $CandidatePath")
+        candidate_parse = text.index("Assert-PowerShellFile -Path $CandidatePath")
         stop_task = text.index("Stop-ScheduledTask", candidate_parse)
         self.assertLess(download, candidate_parse)
         self.assertLess(candidate_parse, stop_task)
         self.assertIn("$CandidatePath", text)
-        self.assertIn("Candidate parse error", text)
+        self.assertIn("function Assert-PowerShellFile", text)
+        self.assertIn("Management.Automation.Language.Parser]::ParseFile", text)
+        self.assertIn("PowerShell parse error", text)
 
     def test_requested_ref_resolves_to_immutable_sha(self) -> None:
         text = self.text
@@ -75,6 +77,7 @@ class ClientUpdateRecoveryTests(unittest.TestCase):
         text = self.text
         self.assertIn("finally {", text)
         self.assertIn("-LiteralPath $CandidatePath", text)
+        self.assertIn("$CertSetupCandidate", text)
         self.assertIn("-ErrorAction SilentlyContinue", text)
 
 
