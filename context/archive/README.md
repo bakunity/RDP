@@ -1,14 +1,60 @@
-# Hermes RDP Context Archive
+# Hermes RDP — Context Archive
 
-Archive contains historical full audits and long-form snapshots that are useful for provenance but are not the immediate execution plan.
+This directory stores **historical/superseded material that is useful to retain but must not participate in normal current-state reasoning**.
 
-Current authoritative execution context is in the parent `context/` files:
+Read current context first:
 
-- `ACTIVE_WORK.md`
-- `CURRENT_STATE.md`
-- `NEXT_WORK.md`
-- `EVIDENCE_LEDGER.md`
+1. `../README.md`
+2. `../ACTIVE_WORK.md`
+3. `../EVIDENCE_LEDGER.md`
+4. `../CURRENT_STATE.md`
 
-Latest major accepted delta after the archived 2026-08-07 audit: trusted public-IP certificate lifecycle through CERT-012 and full CERT-013 Windows lifecycle integration (Update, Repair, clean Fresh Install, external trusted RDP, Uninstall) are bounded live-accepted. See parent context files for exact SHAs and current merge state.
+Only enter this archive when old reasoning/evidence is specifically needed.
 
-Do not copy secrets into archive material.
+## Archive rules
+
+Every new archive snapshot should make its status obvious near the top:
+
+```text
+Status: HISTORICAL / SUPERSEDED
+Captured: YYYY-MM-DD
+Superseded by: <current file / decision / release>
+Reason retained: <why this history may still matter>
+```
+
+Archive material never overrides current runtime evidence or current context.
+
+## What belongs here
+
+- deep audits replaced by newer audits;
+- release evidence snapshots after ledger compaction;
+- major architecture/migration rationale that was superseded;
+- incident/root-cause reports worth preserving;
+- unusually valuable full reasoning snapshots.
+
+## What does not belong here
+
+- every chat;
+- every terminal command;
+- temporary debug output;
+- routine completed TODOs;
+- duplicate copies of current context;
+- secrets or production-sensitive values.
+
+Git history is the normal way to recover ordinary previous versions of active context files.
+
+## Naming
+
+Prefer:
+
+```text
+YYYY-MM-DD-<topic>-audit.md
+YYYY-MM-DD-<topic>-incident.md
+releases/vX.Y.Z-evidence.md
+```
+
+## Current known snapshots
+
+- `2026-08-07-full-product-audit.md` — historical full product audit from the initial long stabilization analysis. Some TODOs in it were later resolved; do not treat its status matrix as current.
+
+Update this short index when a deliberately retained archive snapshot is added. Do not turn the index into another history log.
