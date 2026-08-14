@@ -67,6 +67,21 @@ class WindowsRdpCertificateRotationTests(unittest.TestCase):
         self.assertNotIn("-Exportable", text)
         self.assertEqual(text.count("=== CERT-011 ==="), 1)
 
+    def test_windows_sync_restores_default_and_custom_bindings_differently(self) -> None:
+        text = (ROOT / "scripts/sync-rdp-certificate.ps1").read_text(
+            encoding="utf-8-sig"
+        )
+        self.assertIn("function Restore-RdpBinding", text)
+        self.assertIn("if ($HashType -eq 1)", text)
+        self.assertIn("Remove-ItemProperty", text)
+        self.assertIn("-Name SSLCertificateSHA1Hash", text)
+        self.assertIn("SSLCertificateSHA1HashType -ne 1", text)
+        self.assertIn("if ($HashType -eq 3)", text)
+        self.assertIn("Set-RdpThumbprint -Thumbprint $Clean", text)
+        self.assertIn("previous_hash_type = $PreviousHashType", text)
+        self.assertIn("Restore-RdpBinding `", text)
+        self.assertNotIn("Restore-FunctionalBinding", text)
+
     def test_setup_updater_and_uninstall_manage_helper_transactionally(self) -> None:
         setup = (ROOT / "scripts/setup-trusted-rdp-cert.sh").read_text(
             encoding="utf-8"
