@@ -70,18 +70,20 @@ Live server evidence:
 - Debian GNU/Linux 13 (trixie);
 - Certbot installation completed successfully; current version **5.7.0**;
 - CERT-003 external HTTP-01 reachability is **PASS** and UFW explicitly allows `80/tcp`;
-- CERT-004 Let’s Encrypt staging IP issuance is **PASS**;
-- staging leaf identifies the public IPv4 address in a critical IP SAN;
-- staging leaf uses RSA 2048 and EKU `TLS Web Server Authentication`;
-- staging validity is the expected short-lived IP-certificate lifetime of roughly 160 hours;
-- current issuer is a Let’s Encrypt staging CA, so this artifact is intentionally untrusted and is not for Windows deployment;
-- TCP `80` returned to free state after standalone issuance;
+- CERT-004 Let’s Encrypt staging public-IP issuance is **PASS** using standalone HTTP-01 and `shortlived`;
+- staging leaf SAN contains the public IPv4 identifier and EKU is TLS Web Server Authentication;
+- CERT-005 certificate/private-key match and staging `fullchain` inspection are **PASS**;
+- staging `certbot renew --dry-run` is **PASS**, proving renewal mechanics;
+- automatic scheduling through systemd/cron has not yet been verified for this pip/venv Certbot install;
+- no production-trusted public-IP certificate has been issued yet;
 - no Windows RDP certificate binding has been changed yet.
 
 The target warning is controlled by the certificate presented by the Windows RDP listener. Installing a certificate only on the Hermes Linux/API endpoint is insufficient.
 
 ## Exact next step
 
-Run **CERT-005**: inspect staging chain/lineage and safe renewal metadata, verify certificate/private-key consistency without displaying private-key material, then proceed to one bounded production issuance only if those checks pass.
+Run **CERT-006**: safely remove the staging-only certificate lineage after checking it has no service references, then obtain the real publicly trusted Let’s Encrypt public-IP certificate using the same proven standalone HTTP-01, `shortlived`, RSA configuration. Do not manually remove files under `/etc/letsencrypt`.
+
+After production issuance, inspect the new production chain and then verify/configure automatic scheduling plus the secure Windows delivery/rotation path before touching the RDP listener.
 
 First Windows acceptance target remains the non-critical `SEC005 TEST` device with rollback to its existing RDP listener certificate/state.
