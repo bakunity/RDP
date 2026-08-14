@@ -121,13 +121,29 @@ A follow-up branch prepares release tagging against the exact validated workflow
 
 ## 2026-08-14 — Trusted RDP certificate phase begins
 
-The next product phase targets removing the Microsoft Remote Desktop trust warning without adding a domain solely for appearance.
+The next product phase targeted removing the Microsoft Remote Desktop trust warning without adding a domain solely for appearance.
 
-Current direction:
+Direction:
 
-- use a publicly trusted certificate matching the existing public IP if practical;
+- use a publicly trusted certificate matching the existing public IP;
 - keep HTTPS/API TLS separate from the Windows RDP listener certificate;
-- validate issuance server-side first;
+- issue and renew server-side;
 - bind/test first on a non-critical Windows fixture with rollback.
 
-Initial certificate-host inventory passed and Certbot 5.7.0 was installed successfully. No RDP listener certificate has been changed yet.
+## 2026-08-14 — Trusted public-IP RDP + automatic rotation live accepted
+
+The certificate phase reached bounded end-to-end acceptance:
+
+- Let’s Encrypt short-lived public-IP certificate issuance and Hermes-owned renewal lifecycle;
+- authenticated certificate package delivery to Windows;
+- non-exportable Windows private key and `NETWORK SERVICE` ACL;
+- trusted CUSTOM RDP listener with Microsoft Remote Desktop trust warning removed;
+- correct rollback to Windows default self-signed state and fixed reapply;
+- non-secret server certificate-status path;
+- separate low-frequency LocalSystem rotation worker outside the main 3-second agent loop;
+- automatic recovery from deliberate local self-signed certificate drift;
+- external Microsoft RDP remained trusted after automatic recovery.
+
+Two live bugs were caught and resolved during acceptance: default-self-signed rollback must remove the explicit custom binding, and rotation-worker upgrades must handle cross-context global mutex ACLs. PR #30 and PR #31 were merged after CI and live acceptance.
+
+The next gap is product lifecycle integration so fresh install/update/Repair/uninstall manage the accepted rotation companion automatically.
