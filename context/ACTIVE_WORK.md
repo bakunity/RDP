@@ -35,7 +35,7 @@ Already accepted and must not be repeated without regression evidence:
 - PR #29 productized server lifecycle immutable live acceptance and merge;
 - CERT-010 Windows 10 Pro x64 / PowerShell 5.1 x64 RDP listener inventory on `SEC005 TEST`, including default self-signed baseline and rollback thumbprint.
 
-### CERT-011 — authenticated Windows certificate delivery/binding — CORE PASS, rollback/reapply gate active
+### CERT-011 — authenticated Windows certificate delivery/binding — CORE PASS, reapply gate active
 
 Draft PR **#30**: `feat: add authenticated Windows RDP certificate rotation`.
 Branch: `feat/windows-rdp-cert-rotation`.
@@ -63,7 +63,7 @@ Live Windows trusted binding on `SEC005 TEST`:
 - TCP 3389 remained listening;
 - rollback metadata preserved.
 
-External Microsoft Remote Desktop acceptance:
+External Microsoft Remote Desktop trusted acceptance:
 
 - a fresh Hermes RDP connection succeeded;
 - the client reported that remote-computer authenticity was verified with the server certificate rather than showing the prior untrusted warning;
@@ -71,40 +71,33 @@ External Microsoft Remote Desktop acceptance:
 
 Therefore the core trusted public-IP RDP objective is live PASS.
 
-### CERT-011 rollback bug — CONFIRMED / FIXED IN PR
+### CERT-011 rollback bug — RESOLVED / LIVE-ACCEPTED
 
-The first explicit rollback attempt failed with `Set-CimInstance` / `HRESULT 0x80041008`.
+The first explicit rollback attempt failed with `Set-CimInstance` / `HRESULT 0x80041008` because the original Windows default self-signed listener was hash type `1` with no explicit registry `SSLCertificateSHA1Hash`. Restoring that state as a CUSTOM binding is invalid.
 
-Root cause was live-confirmed on Windows 10:
+Correct rollback behavior was live-proven on Windows 10:
 
-- original Windows default self-signed state had `SSLCertificateSHA1HashType=1`;
-- no explicit registry `SSLCertificateSHA1Hash` existed in that baseline;
-- trying to restore that self-signed thumbprint as a CUSTOM CIM binding is invalid;
-- removing the custom registry binding returned hash type from `3` to `1`, restored the exact original self-signed thumbprint and kept TCP 3389 listening.
+- remove the explicit custom registry binding;
+- hash type returns `3 -> 1`;
+- exact original self-signed thumbprint returns;
+- TCP 3389 remains listening;
+- a fresh external Microsoft Remote Desktop connection succeeds again and the expected self-signed/untrusted certificate warning returns.
 
-Live corrected rollback result:
-
-- `REGISTRY_BINDING_REMOVED=True`;
-- `AFTER_HASH_TYPE=1`;
-- original self-signed thumbprint restored exactly;
-- `ROLLBACK_THUMBPRINT_MATCH=PASS`;
-- `RDP_3389=LISTEN`;
-- `CERT-011_ROLLBACK=PASS`.
-
-PR #30 head `83e1b0b...` now uses type-aware rollback in both explicit and automatic failure paths:
+PR #30 head `83e1b0b...` implements type-aware rollback in both explicit and automatic failure paths:
 
 - previous type `1`: remove explicit custom binding and verify Windows default self-signed state returns;
 - previous type `3`: restore the previous custom thumbprint through CIM;
 - other hash types are rejected rather than guessed.
 
+CI #333 validates the rollback fix on Linux and Windows PowerShell 5.1.
+
 ## Exact resume action
 
-Current `SEC005 TEST` listener is intentionally back on the Windows default self-signed certificate after the corrected live rollback.
+`SEC005 TEST` is intentionally in the restored Windows default self-signed state after the fully accepted rollback.
 
-1. From a separate Microsoft Remote Desktop client, open one fresh connection to the normal Hermes endpoint and confirm RDP still connects in the rolled-back state (the old certificate warning is expected to return).
-2. Reapply trusted binding using PR #30 fixed head `83e1b0b...`.
-3. Confirm local CUSTOM/3389 state and one fresh external trusted RDP connection again.
-4. Then PR #30 can become merge-ready.
-5. After merge, integrate periodic certificate sync into the normal Hermes Windows agent and live-test a real renewal-driven rotation cycle.
+1. Reapply trusted binding using PR #30 fixed head `83e1b0b5d89b2728646a8eb518026ba9d1cf575a`.
+2. Confirm local CUSTOM binding / TCP 3389 and one fresh external trusted RDP connection again.
+3. Then PR #30 can become merge-ready and merge.
+4. After merge, integrate periodic certificate sync into the normal Hermes Windows agent and live-test a real renewal-driven rotation cycle.
 
 Do not expose PFX content/passwords, private keys, pairing codes, API tokens or other secret-bearing material in chat/context.
