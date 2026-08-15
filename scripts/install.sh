@@ -141,7 +141,8 @@ pass "Public IPv4: $PUBLIC_IPV4"
 
 telegram_call() {
   local method="$1"
-  local payload="${2:-{}}"
+  local payload="${2:-}"
+  [[ -n "$payload" ]] || payload='{}'
   python3 - "$method" "$payload" 3<<<"$TG_TOKEN" <<'PY'
 import json
 import os
