@@ -112,11 +112,14 @@ PY
 }
 
 detect_public_ipv4() {
-  local candidate=""
-  candidate="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") {print $(i+1); exit}}' || true)"
-  if [[ -n "$candidate" ]] && is_global_ipv4 "$candidate"; then
-    printf '%s\n' "$candidate"
-    return 0
+  local candidate="" iface=""
+  iface="$(ip -4 route show default 2>/dev/null | awk '/default/ {for(i=1;i<=NF;i++) if($i=="dev") {print $(i+1); exit}}' || true)"
+  if [[ -n "$iface" ]]; then
+    candidate="$(ip -4 addr show dev "$iface" scope global 2>/dev/null | awk '/inet / {sub(/\/.*/, "", $2); print $2; exit}' || true)"
+    if [[ -n "$candidate" ]] && is_global_ipv4 "$candidate"; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
   fi
   local endpoint
   for endpoint in \
