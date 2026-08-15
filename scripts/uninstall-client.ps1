@@ -1,4 +1,4 @@
-param([switch]$Force)
+﻿param([switch]$Force)
 
 #Requires -RunAsAdministrator
 $ErrorActionPreference = 'Stop'
