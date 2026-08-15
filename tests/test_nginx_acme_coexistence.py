@@ -21,7 +21,7 @@ class NginxAcmeCoexistenceTests(unittest.TestCase):
             "/etc/nginx/sites-enabled/hermes-rdp-acme.conf",
             "server_name $HOST;",
             "location ^~ /.well-known/acme-challenge/",
-            "root $ACME_WEBROOT;",
+            "alias $ACME_WEBROOT/.well-known/acme-challenge/;",
             'systemctl reload nginx',
             '-H "Host: $HOST"',
             '"${AUTH_ARGS[@]}"',
@@ -30,6 +30,7 @@ class NginxAcmeCoexistenceTests(unittest.TestCase):
         ):
             self.assertIn(marker, self.setup)
 
+        self.assertNotIn("try_files \\$uri =404;", self.setup)
         self.assertNotIn("systemctl stop nginx", self.setup)
         self.assertNotIn("systemctl restart nginx", self.setup)
 
