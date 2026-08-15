@@ -2,70 +2,115 @@
 
 ## Поддерживаемая среда
 
-Debian/Ubuntu, root или sudo, systemd, OpenSSH Server, UFW и Python 3.11+.
+Debian/Ubuntu, root или sudo, systemd, публичный IPv4 и доступ к GitHub/Telegram API.
 
 ## Порты
 
-- `22/tcp` — административный SSH сервера, установщик его не меняет;
+- `22/tcp` — административный SSH сервера, Hermes его не меняет;
 - `7000/tcp` — отдельный Hermes OpenSSH daemon;
 - `7443/tcp` — HTTPS API;
 - `53389–53420/tcp` — RDP endpoints;
-- `80/tcp` — нужен только при включённом trusted RDP certificate lifecycle для ACME HTTP-01.
+- `80/tcp` — используется автоматически для trusted RDP certificate lifecycle через ACME HTTP-01.
 
-## Чистая установка
+## Рекомендуемая установка
 
-До публикации следующего release tag используйте проверенный immutable source ref, а не изменяемый `main`.
+Для обычного нового сервера используйте одну команду:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/REF/scripts/install-server.sh -o /tmp/install-hermes-rdp.sh
-read -rsp 'Telegram bot token: ' TG_TOKEN; echo
-sudo env HERMES_RDP_REF=REF bash /tmp/install-hermes-rdp.sh \
-  --host SERVER_IP_OR_DOMAIN \
-  --telegram-token "$TG_TOKEN" \
+curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/main/scripts/install.sh | sudo bash
+```
+
+Zero-config bootstrap предназначен для интерактивной установки человеком. Он сам выполняет preflight, определяет public IPv4, привязывает владельца Telegram и запускает основной Hermes installer.
+
+### Что происходит по шагам
+
+1. Проверяется Debian/Ubuntu, root и systemd.
+2. Выполняется `apt-get update` до установки Hermes.
+3. Для известного stale Debian source на `archive.debian.org` bootstrap может выполнить узкое автоматическое исправление только после проверки, что текущий codename опубликован на `deb.debian.org`; перед изменением source-файлы сохраняются в `/var/backups/hermes-rdp/apt-sources-*`.
+4. Определяется глобальный public IPv4.
+5. Bot token вводится скрыто через `/dev/tty` и проверяется Telegram `getMe`.
+6. Installer проверяет, что бот не занят существующим webhook.
+7. Генерируется одноразовый `/claim XXXXXXXX`.
+8. Владелец отправляет claim-код боту в private chat. Installer принимает только сообщение, где `chat.id == from.id`, после чего использует этот Telegram ID как постоянный owner ID Hermes.
+9. Запускается основной `install-server.sh` с уже определённым host и подтверждённым owner ID.
+10. После успешного core install автоматически запускается trusted RDP certificate setup.
+
+Bot token не выводится в терминал. Claim code существует только во время bootstrap-run и не становится постоянным credential.
+
+## APT preflight
+
+Hermes не должен начинать собственное развёртывание на системе с нерабочим package manager.
+
+Если `apt-get update` падает, installer сначала показывает понятную диагностику. Известный случай:
+
+```text
+E: The repository 'http://archive.debian.org/debian trixie Release' does not have a Release file.
+```
+
+обрабатывается специально: если текущий Debian codename доступен на официальном live mirror, bootstrap делает backup соответствующих source-файлов, заменяет только stale `archive.debian.org` URL на актуальные Debian endpoints и снова проверяет APT.
+
+Если повторная проверка не проходит, source-файлы восстанавливаются. Hermes при этом ещё не устанавливается.
+
+## Telegram owner claim
+
+Числовой Telegram ID больше не требуется заранее искать и вручную подставлять в основную пользовательскую команду.
+
+После проверки bot token терминал покажет, например:
+
+```text
+Привязка владельца Telegram
+1. Откройте @my_hermes_bot в Telegram.
+2. Отправьте боту ровно эту команду:
+
+   /claim 12345678
+```
+
+Bootstrap ждёт подтверждение ограниченное время. Первый случайный `/start` **не** становится владельцем. Нужен именно неизвестный заранее одноразовый claim code, показанный только в терминале сервера.
+
+После успешного claim в постоянный Hermes config записывается уже подтверждённый Telegram owner ID, поэтому штатная authorization model Telegram controller не ослабляется.
+
+## Trusted RDP certificate — automatic
+
+Обычному пользователю не нужно выбирать «установка с сертификатом» или «без сертификата».
+
+После успешного core install bootstrap автоматически пытается включить публично доверенный сертификат **Windows RDP listener** для обнаруженного public IPv4.
+
+Если ACME доступен:
+
+```text
+Trusted RDP TLS: active
+```
+
+Hermes устанавливает Certbot lifecycle, renewal timer, non-secret certificate state и authenticated Windows delivery path.
+
+Если TCP `80` занят, недоступен извне или ACME временно не проходит, setup сертификата может завершиться ошибкой, но **core Hermes уже установлен и остаётся рабочим**:
+
+```text
+Trusted RDP TLS: unavailable
+```
+
+После исправления сети certificate lifecycle можно включить отдельно. HTTPS API certificate pinning не зависит от этого и остаётся отдельной trust boundary.
+
+## Advanced / automation interface
+
+`scripts/install-server.sh` сохраняется как низкоуровневый интерфейс для CI, кастомного DNS/NAT, нестандартных портов, migration и полностью scripted deployments:
+
+```bash
+scripts/install-server.sh \
+  --host HOST \
+  --telegram-token TOKEN \
   --telegram-chat-id TELEGRAM_USER_ID \
   --api-port 7443 \
   --ssh-port 7000 \
   --port-start 53389 \
   --port-end 53420
-unset TG_TOKEN
-rm -f /tmp/install-hermes-rdp.sh
 ```
 
-## Trusted RDP certificate
-
-Hermes умеет отдельно от HTTPS API управлять публично доверенным сертификатом **Windows RDP listener**. Это нужно, чтобы стандартный Microsoft Remote Desktop не показывал предупреждение о self-signed сертификате при подключении к публичному endpoint.
-
-Для этого server install запускается с дополнительным флагом:
-
-```bash
-sudo env HERMES_RDP_REF=REF bash /tmp/install-hermes-rdp.sh \
-  --host PUBLIC_IPV4 \
-  --telegram-token "$TG_TOKEN" \
-  --telegram-chat-id TELEGRAM_USER_ID \
-  --trusted-rdp-cert
-```
-
-Требования этого режима:
-
-- `--host` должен быть глобально маршрутизируемым публичным IPv4;
-- TCP `80` должен быть свободен локально и доступен извне для ACME HTTP-01;
-- сервер должен иметь доступ к Let’s Encrypt;
-- не запускайте второй HTTP service на `:80` во время standalone ACME issuance/renewal.
-
-При включении lifecycle Hermes:
-
-- устанавливает изолированный Certbot в `/opt/certbot`;
-- сначала выполняет staging validation;
-- получает production short-lived Let’s Encrypt IP certificate;
-- создаёт `hermes-rdp-cert-renew.service` и `hermes-rdp-cert-renew.timer`;
-- хранит non-secret certificate state для Windows rotation checks;
-- предоставляет authenticated device path для передачи certificate package зарегистрированному Windows-клиенту.
-
-HTTPS API certificate и Windows RDP listener certificate — **разные trust boundaries**. Trusted RDP lifecycle не заменяет API fingerprint pinning.
+Строгий `--trusted-rdp-cert` также остаётся доступен здесь. В advanced mode failure certificate setup считается failure всей команды, что удобно для automation, где trusted TLS является обязательным контрактом.
 
 ## Что создаётся
 
-Базовая установка:
+Core Hermes:
 
 - `/opt/hermes-rdp/app`;
 - `/etc/hermes-rdp/config.json`;
@@ -76,7 +121,7 @@ HTTPS API certificate и Windows RDP listener certificate — **разные tru
 - `hermes-rdp-sshd.service`;
 - системные пользователи `hermes-rdp` и `hermes-tunnel`.
 
-При `--trusted-rdp-cert` дополнительно создаются Hermes certificate helpers/state и systemd renewal service/timer.
+При успешном automatic trusted TLS дополнительно создаются Hermes certificate helpers/state и systemd renewal service/timer.
 
 ## Проверка
 
@@ -97,7 +142,7 @@ api: LISTEN 7443
 ssh-config: OK
 ```
 
-Если включён trusted RDP certificate lifecycle:
+При active trusted lifecycle:
 
 ```bash
 sudo systemctl is-enabled hermes-rdp-cert-renew.timer
@@ -105,22 +150,18 @@ sudo systemctl is-active hermes-rdp-cert-renew.timer
 sudo cat /etc/hermes-rdp/trusted-rdp-cert-state.json
 ```
 
-Timer должен быть enabled/active, а state-файл — существовать и содержать только non-secret certificate metadata.
-
 До подключения первого ПК RDP-порты должны быть закрыты. Порт появляется только после успешного reverse-туннеля.
 
 ## Backup
 
-Каждый запуск создаёт каталог в `/var/backups/hermes-rdp/`. Не удаляйте backup до прохождения внешнего RDP-теста.
+Основной server installer создаёт backup в `/var/backups/hermes-rdp/`. APT source auto-repair, если понадобился, хранит отдельный backup в `/var/backups/hermes-rdp/apt-sources-*`.
 
-## Повторная установка
-
-Переход с `v1.0.x`/FRP требует явного `--migrate`. Чистой OpenSSH-установке этот флаг не нужен.
+Не удаляйте backup до прохождения внешнего RDP-теста.
 
 ## После установки
 
 1. Отправьте `/start` Telegram-боту.
-2. Убедитесь, что панель показывает OpenSSH port `7000`.
-3. Добавьте первый Windows-ПК.
-4. Если включён trusted certificate lifecycle, дождитесь автоматического применения сертификата на Windows.
-5. Проверьте endpoint из другой сети стандартным Microsoft Remote Desktop.
+2. Добавьте первый Windows-ПК через **➕ ДОБАВИТЬ ПК**.
+3. Вставьте выданную ботом PowerShell-команду на Windows.
+4. Проверьте endpoint из другой сети стандартным Microsoft Remote Desktop.
+5. Если `Trusted RDP TLS: active`, Microsoft Remote Desktop должен принимать listener certificate без прежнего self-signed warning.
