@@ -34,6 +34,15 @@ class NginxAcmeCoexistenceTests(unittest.TestCase):
         self.assertNotIn("systemctl stop nginx", self.setup)
         self.assertNotIn("systemctl restart nginx", self.setup)
 
+    def test_nginx_reload_waits_for_acme_route_readiness(self) -> None:
+        reload_pos = self.setup.index("systemctl reload nginx")
+        retry_pos = self.setup.index("for attempt in {1..20}")
+        probe_pos = self.setup.index('http://127.0.0.1/.well-known/acme-challenge/$probe')
+        self.assertLess(reload_pos, retry_pos)
+        self.assertLess(retry_pos, probe_pos)
+        self.assertIn("sleep 0.25", self.setup)
+        self.assertIn("readiness probe failed after bounded retries", self.setup)
+
     def test_free_port_keeps_standalone_and_other_listeners_fail_closed(self) -> None:
         self.assertIn('ACME_MODE="standalone"', self.setup)
         self.assertIn("TCP 80 is already occupied by a non-nginx service", self.setup)
