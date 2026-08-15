@@ -118,7 +118,7 @@ class CertificateRotationLifecycleTests(unittest.TestCase):
         )
 
     def test_uninstall_stops_rotation_task_and_worker(self) -> None:
-        script = read_ps("scripts/uninstall-client.ps1")
+        script = read_ps("scripts/uninstall-client-core.ps1")
         for marker in (
             "$RotationTaskName = 'Hermes RDP Certificate Rotation'",
             "$RotationPath = Join-Path $BaseDir 'HermesRdpCertRotation.ps1'",
