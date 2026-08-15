@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -21,6 +22,24 @@ class ZeroConfigServerInstallerTests(unittest.TestCase):
         self.assertIn("telegram_call getWebhookInfo", self.bootstrap)
         self.assertNotIn("echo $TG_TOKEN", self.bootstrap)
         self.assertNotIn("printf '%s' \"$TG_TOKEN\"", self.bootstrap)
+
+    def test_telegram_json_payload_shell_default_is_exact(self) -> None:
+        self.assertNotIn('local payload="${2:-{}}"', self.bootstrap)
+        self.assertIn('local payload="${2:-}"', self.bootstrap)
+        self.assertIn("[[ -n \"$payload\" ]] || payload='{}'", self.bootstrap)
+        command = (
+            "set -- getMe '{}'; "
+            "payload=\"${2:-}\"; "
+            "[[ -n \"$payload\" ]] || payload='{}'; "
+            "printf '%s' \"$payload\""
+        )
+        result = subprocess.run(
+            ["bash", "-c", command],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.stdout, "{}")
 
     def test_owner_is_claimed_before_core_install(self) -> None:
         claim = self.bootstrap.index("/claim $CLAIM_CODE")
