@@ -203,17 +203,20 @@ EOF
   nginx -t
   systemctl reload nginx
 
-  local probe body
+  local probe body attempt
   probe="hermes-$(openssl rand -hex 12)"
   printf '%s\n' "$probe" >"$ACME_WEBROOT/.well-known/acme-challenge/$probe"
-  body="$(curl -fsS --max-time 5 -H "Host: $HOST" "http://127.0.0.1/.well-known/acme-challenge/$probe")" || {
-    rm -f "$ACME_WEBROOT/.well-known/acme-challenge/$probe"
-    echo "nginx ACME webroot probe failed." >&2
-    return 1
-  }
+  body=""
+  for attempt in {1..20}; do
+    body="$(curl -fsS --max-time 2 -H "Host: $HOST" "http://127.0.0.1/.well-known/acme-challenge/$probe" 2>/dev/null || true)"
+    if [[ "$body" == "$probe" ]]; then
+      break
+    fi
+    sleep 0.25
+  done
   rm -f "$ACME_WEBROOT/.well-known/acme-challenge/$probe"
   [[ "$body" == "$probe" ]] || {
-    echo "nginx ACME webroot returned unexpected probe content." >&2
+    echo "nginx ACME webroot readiness probe failed after bounded retries." >&2
     return 1
   }
 
