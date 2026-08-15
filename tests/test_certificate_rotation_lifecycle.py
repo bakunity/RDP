@@ -20,7 +20,7 @@ def git_blob_sha(path: Path) -> str:
 
 class CertificateRotationLifecycleTests(unittest.TestCase):
     def test_fresh_install_stages_same_immutable_cert_lifecycle_before_pairing(self) -> None:
-        script = read_ps("scripts/install-client.ps1")
+        script = read_ps("scripts/install-client-core.ps1")
         for marker in (
             "Resolve-RepositorySha",
             "$ResolvedSha/client/HermesRdpAgent.ps1",
