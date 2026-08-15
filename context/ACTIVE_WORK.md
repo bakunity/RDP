@@ -1,16 +1,16 @@
 # Hermes RDP — Active Work
 
-Updated: 2026-08-14
+Updated: 2026-08-15
 
 ## Repository / release
 
 - Repository: `bakunity/RDP`.
-- Stable published release: **v1.3.0**.
-- PR #35 merged as `a51e942afbd17997a8100d554f8a0b2e50d4baa7` after final exact-head CI #426 PASS.
-- Annotated tag `v1.3.0` points to that exact merge commit.
-- Release workflow run #30 completed successfully and published `Hermes RDP v1.3.0`.
-- GitHub `releases/latest` resolves to `v1.3.0`.
-- No active product PR is currently required for the release.
+- Stable published release: **v1.3.0**; historical tag/history remain immutable.
+- Active product PR: **#37 `feat: add zero-config server installer`**.
+- PR #37 is **ready for review** and remains unmerged.
+- Runtime-accepted product-code boundary: `056bf7473ff851157f4c749f233fb0fb8b57a133`; CI #459 PASS on Linux full release checks and Windows PowerShell 5.1.
+- Acceptance/context cleanup commit `ff264100b231c3f90269c3e8fa17bda5e4d2aab2` removed the temporary clean-reinstall helper and passed CI #460.
+- Merge requires explicit user approval plus a green check on the current exact head.
 
 ## Stable architecture
 
@@ -28,49 +28,47 @@ Windows RDP :3389
 persistent endpoint per device
 ```
 
-Trusted-RDP certificate side path:
-
-```text
-Hermes cert renew timer
-      |
-non-secret cert state/status
-      |
-authenticated Windows SYSTEM rotation worker
-      |
-PFX sync only on thumbprint change / local drift
-      |
-Windows RDP CUSTOM trusted certificate
-```
-
-Certificate work remains outside the performance-sensitive 3-second main Agent loop.
+Trusted-RDP certificate lifecycle remains a separate low-frequency path outside the 3-second Agent loop.
 
 ## Accepted baseline — do not repeat without regression evidence
 
 - external Microsoft RDP through Hermes;
-- multi-device simultaneous operation and failure isolation;
+- simultaneous multi-device operation and failure isolation;
 - Windows/Linux reboot recovery;
 - Windows Server 2019;
 - Win10 x64 + x86 PowerShell / Sysnative OpenSSH compatibility;
 - Telegram OFF/ON/RESTART and status UX;
 - transactional Linux and Windows updater rollback;
-- bounded existing-device Repair success/rollback;
+- existing-device Repair success/rollback;
 - Defender coexistence without exclusions/disablement;
-- trusted public-IP certificate lifecycle CERT-001 through CERT-013, including Fresh Install/Update/Repair/Uninstall integration and trusted external RDP.
+- trusted public-IP certificate lifecycle CERT-001 through CERT-013.
 
-Detailed v1.3.0 acceptance is frozen in `context/archive/releases/v1.3.0-evidence.md` and `docs/releases/history/v1.3.0-full.md`.
+## PR #37 zero-config server onboarding — accepted
 
-## Current work
+Normal-user flow:
 
-The v1.3.0 release cycle is closed. No release blocker remains.
+```text
+one curl command
+→ Debian/Ubuntu + APT preflight/repair
+→ public IPv4 detection
+→ masked Telegram bot-token input
+→ private one-time /claim owner binding
+→ immutable source resolution
+→ core Hermes install
+→ automatic trusted public-IP certificate lifecycle
+→ Telegram /start
+```
 
-Natural renewal-driven certificate rotation is a **deferred operational observation**, not a blocker. Do not force extra production issuance solely for evidence.
+Live Debian 13 Trixie acceptance confirms stale archive repair, semantic overlapping APT component normalization with rollback, masked token entry, secure Telegram claim, normal dashboard, exact source resolution, full clean-state reinstall, active Hermes sshd/controller, nginx coexistence, trusted certificate lifecycle and `=== HERMES RDP READY ===`.
 
-## Exact next step
+An interruption while waiting for the owner claim after a clean purge left no partially installed Hermes core; rerunning the normal installer succeeded because claim precedes core mutation.
 
-When the current short-lived production certificate renews naturally, capture only bounded non-secret evidence that server state updates, Windows rotates automatically and a fresh Microsoft RDP connection remains trusted.
+The temporary clean-reinstall acceptance helper is no longer shipped in the PR.
 
-If starting a new product feature before that natural event, select and scope the next workstream explicitly rather than reopening accepted v1.3.0 tests.
+## Exact next action
 
-SEC-004 remains fixture-unavailable. RL-006 remains PARTIAL only for its optional original-fixture one-process observation.
+Await explicit user merge approval. Before merging, verify PR #37 still points to the expected current head and its required CI is green. Then merge without rewriting historical release tags.
 
-Never put private keys, PFX passwords, API/device tokens, pairing codes or other secrets into context/chat.
+Natural renewal-driven certificate rotation remains a deferred operational observation, not a blocker. SEC-004 remains fixture-unavailable. RL-006 remains PARTIAL only for its optional original-fixture one-process observation.
+
+Never store bot tokens, private keys, PFX passwords, device/API tokens, one-time claim/pair codes, unnecessary production IPs, certificate package secrets or personal numeric IDs in context.

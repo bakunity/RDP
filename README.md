@@ -27,7 +27,7 @@ Hermes RDP публикует RDP нескольких Windows-компьюте�
 
 > **Главный принцип проекта:** все Windows-компьютеры равноправны. Для каждого используется один installer и один Hermes Agent. Специальным узлом является только Linux-сервер Hermes.
 
-> **Stable release:** [Hermes RDP v1.3.0](https://github.com/bakunity/RDP/releases/tag/v1.3.0). Для production используйте release tag или другой заранее проверенный immutable ref, а не изменяемый `main`.
+> **Stable release:** [Hermes RDP v1.3.0](https://github.com/bakunity/RDP/releases/tag/v1.3.0). Для production runtime используйте release tag или другой заранее проверенный immutable ref. Zero-config bootstrap развивается в `main` как frontend над проверенным server installer.
 
 ## Что умеет Hermes RDP
 
@@ -42,7 +42,8 @@ Hermes RDP публикует RDP нескольких Windows-компьюте�
 - transactional server/client update с backup и automatic rollback;
 - Repair существующего клиента без повторного pairing и смены identity/порта;
 - работа без Defender exclusions и без отключения Microsoft Defender;
-- автоматический trusted certificate lifecycle для Windows RDP listener: server renewal, Windows rotation и lifecycle integration.
+- автоматический trusted certificate lifecycle для Windows RDP listener: server renewal, Windows rotation и lifecycle integration;
+- zero-config server bootstrap: APT preflight, auto public-IP discovery, Telegram owner claim и automatic trusted TLS attempt.
 
 ## Схема
 
@@ -62,7 +63,7 @@ Microsoft Remote Desktop
 
 ## Trusted RDP certificate
 
-Опциональный `--trusted-rdp-cert` включает отдельный certificate lifecycle для **Windows RDP listener**:
+Для обычной интерактивной установки trusted lifecycle теперь определяется **автоматически** после успешного core install. Пользователю не нужно выбирать две разные команды установки.
 
 ```text
 Let’s Encrypt public-IP certificate
@@ -78,9 +79,11 @@ Microsoft Remote Desktop без прежнего self-signed warning
 
 Это отдельная trust boundary от HTTPS API certificate pinning. Сертификат API защищает control plane; сертификат Windows RDP listener видит Microsoft Remote Desktop.
 
-После включения server-side lifecycle normal Fresh Install, Update и Repair автоматически управляют rotation companion. Uninstall удаляет обе Hermes Scheduled Tasks и локальный runtime. Certificate work остаётся вне performance-sensitive 3-second Agent loop.
+Если public-IP ACME доступен, zero-config bootstrap включает trusted lifecycle автоматически. Если TCP `80` занят/закрыт или ACME временно недоступен, основной Hermes остаётся установленным и рабочим, а installer показывает `Trusted RDP TLS: unavailable`.
 
-Требования: глобально маршрутизируемый public IPv4, доступный TCP `80` для ACME HTTP-01 и доступ к Let’s Encrypt.
+Advanced `install-server.sh` по-прежнему поддерживает строгий `--trusted-rdp-cert`, когда certificate setup должен быть обязательным контрактом automation.
+
+После включения server-side lifecycle normal Fresh Install, Update и Repair автоматически управляют rotation companion. Uninstall удаляет обе Hermes Scheduled Tasks и локальный runtime. Certificate work остаётся вне performance-sensitive 3-second Agent loop.
 
 Подробнее: [INSTALL_SERVER](docs/INSTALL_SERVER.md), [INSTALL_WINDOWS](docs/INSTALL_WINDOWS.md), [SECURITY](docs/SECURITY.md).
 
@@ -109,42 +112,53 @@ Fresh pairing и Repair намеренно разделены. Repair не со�
 | RDP endpoints | `53389–53420/tcp` |
 | ACME HTTP-01 | `80/tcp` только для trusted certificate lifecycle |
 
-Стандартный RDP-пул содержит 32 endpoint и расширяется параметрами server installer.
+Стандартный RDP-пул содержит 32 endpoint и расширяется параметрами advanced server installer.
 
 ## Требования
 
-**Server:** Debian/Ubuntu, Python 3.11+, systemd, OpenSSH Server, root/sudo, публичный IPv4 или DNS и доступ к GitHub/Telegram API.
+**Server:** Debian/Ubuntu, systemd, root/sudo, глобальный публичный IPv4 и доступ к GitHub/Telegram API. Zero-config bootstrap сам проверяет APT и ставит необходимые зависимости.
 
 **Windows:** Windows 10/11 Pro, Enterprise или Education x64 либо поддерживаемый Windows Server, Windows PowerShell 5.1+, локальный Administrator и Microsoft OpenSSH Client.
 
 Windows Home не является штатным RDP host и не поддерживается.
 
-## Быстрый старт v1.3.0
+## Быстрый старт
 
 ### 1. Установить сервер
 
-Базовый OpenSSH gateway:
+Одна команда:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/v1.3.0/scripts/install-server.sh -o /tmp/install-hermes-rdp.sh
-read -rsp 'Telegram bot token: ' TG_TOKEN; echo
-sudo env HERMES_RDP_REF=v1.3.0 bash /tmp/install-hermes-rdp.sh \
-  --host SERVER_IP_OR_DOMAIN \
-  --telegram-token "$TG_TOKEN" \
-  --telegram-chat-id TELEGRAM_USER_ID
-unset TG_TOKEN
-rm -f /tmp/install-hermes-rdp.sh
+curl -fsSL https://raw.githubusercontent.com/bakunity/RDP/main/scripts/install.sh | sudo bash
 ```
 
-С trusted public-IP RDP certificate lifecycle добавьте `--trusted-rdp-cert` и используйте public IPv4 в `--host`:
+Дальше не нужно вручную подставлять `SERVER_IP_OR_DOMAIN`, искать Telegram numeric ID или выбирать установку «с сертификатом / без сертификата».
 
-```bash
-sudo env HERMES_RDP_REF=v1.3.0 bash /tmp/install-hermes-rdp.sh \
-  --host PUBLIC_IPV4 \
-  --telegram-token "$TG_TOKEN" \
-  --telegram-chat-id TELEGRAM_USER_ID \
-  --trusted-rdp-cert
+Bootstrap сам:
+
+```text
+preflight Debian/Ubuntu + APT
+        ↓
+auto public IPv4
+        ↓
+Telegram bot token
+        ↓
+/claim XXXXXXXX в private chat
+        ↓
+owner ID confirmed
+        ↓
+Hermes OpenSSH/API/controller
+        ↓
+automatic trusted RDP TLS attempt
+        ↓
+READY
 ```
+
+Bot token вводится скрыто. Первый случайный `/start` не становится владельцем: bootstrap принимает только одноразовый `/claim` code, показанный в текущем терминале.
+
+Известный stale Debian source вроде `archive.debian.org/debian trixie` проверяется до установки Hermes. Если codename ещё опубликован на live Debian mirror, bootstrap делает backup source-файлов и выполняет узкое исправление; если повторная APT-проверка не проходит, исходные source-файлы восстанавливаются и Hermes не устанавливается.
+
+Для CI, нестандартного DNS/NAT и scripted deployments остаётся [advanced installer](docs/INSTALL_SERVER.md).
 
 Проверка:
 
@@ -153,7 +167,7 @@ sudo hermes-rdpctl doctor
 sudo systemctl is-active hermes-rdp-sshd.service hermes-rdp.service
 ```
 
-При trusted lifecycle дополнительно:
+При `Trusted RDP TLS: active` дополнительно:
 
 ```bash
 sudo systemctl is-active hermes-rdp-cert-renew.timer
@@ -173,7 +187,7 @@ sudo systemctl is-active hermes-rdp-cert-renew.timer
 ### 3. Подключиться
 
 ```powershell
-mstsc.exe /v:SERVER_IP_OR_DOMAIN:53389
+mstsc.exe /v:SERVER_IP:53389
 ```
 
 Первый свободный endpoint обычно начинается с `53389`, следующий получает `53390` и так далее.
@@ -215,7 +229,7 @@ Normal uninstall останавливает и unregister-ит основной 
 - private SSH key остаётся на Windows;
 - `permitlisten` ограничивает device key одним назначенным endpoint;
 - у каждого устройства отдельный API-token, сервер хранит только hash;
-- Telegram control ограничен заданным owner user/chat ID;
+- Telegram owner при zero-config install подтверждается одноразовым `/claim` code в private chat, после чего штатный control ограничен этим user/chat ID;
 - admin SSH `:22` и Hermes tunnel sshd `:7000` разделены;
 - Hermes не добавляет Defender exclusions;
 - trusted RDP lifecycle не смешивает API TLS и Windows RDP listener TLS.
@@ -230,7 +244,9 @@ Normal uninstall останавливает и unregister-ит основной 
 
 Для v1.3.0 также live-приняты: публично доверенный RDP certificate, rollback/reapply, automatic drift recovery, LocalSystem rotation worker, certificate lifecycle в Update/Repair, чистый Fresh Install, внешний trusted RDP и normal Uninstall.
 
-Отдельно отложено только наблюдение следующей **естественной** certificate renewal; форсировать production issuance ради него не требуется.
+Zero-config server bootstrap после merge требует отдельного bounded live acceptance на чистом Debian/Ubuntu fixture; он не меняет уже принятый Windows runtime baseline.
+
+Отдельно отложено наблюдение следующей **естественной** certificate renewal; форсировать production issuance ради него не требуется.
 
 Полный acceptance без secret material: [docs/VALIDATED_SCENARIOS.md](docs/VALIDATED_SCENARIOS.md).
 
@@ -260,8 +276,8 @@ Get-Process ssh -ErrorAction SilentlyContinue
 
 | Документ | Для чего |
 |---|---|
-| [Быстрый старт](docs/QUICKSTART.md) | Развернуть Hermes и подключить первый ПК |
-| [Установка сервера](docs/INSTALL_SERVER.md) | Server setup, порты и trusted certificate option |
+| [Быстрый старт](docs/QUICKSTART.md) | Одна команда, Telegram claim и первый ПК |
+| [Установка сервера](docs/INSTALL_SERVER.md) | Zero-config bootstrap, APT preflight и advanced setup |
 | [Установка Windows](docs/INSTALL_WINDOWS.md) | Fresh pairing, compatibility и certificate lifecycle |
 | [Архитектура](docs/ARCHITECTURE.md) | Компоненты, data flow и TLS boundaries |
 | [API](docs/API.md) | Pairing, telemetry и command contracts |
@@ -285,7 +301,7 @@ Get-Process ssh -ErrorAction SilentlyContinue
 - [Следующий релиз — rolling ledger](docs/releases/UNRELEASED.md)
 - [История изменений](CHANGELOG.md)
 
-Для production используйте конкретный release tag или другой заранее проверенный immutable ref. `main` предназначен для дальнейшей разработки.
+Для production runtime используйте конкретный release tag или другой заранее проверенный immutable ref. `main` предназначен для дальнейшей разработки и содержит rolling zero-config bootstrap.
 
 ## Лицензия
 
