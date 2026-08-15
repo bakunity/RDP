@@ -1,16 +1,16 @@
 # Hermes RDP — Current State Snapshot
 
-Updated: 2026-08-14
+Updated: 2026-08-15
 
 For immediate operational truth read `ACTIVE_WORK.md`; for detailed current evidence read `EVIDENCE_LEDGER.md`; v1.3.0 release evidence is archived separately.
 
 ## Repository / release
 
 - Current stable published release: **v1.3.0**.
-- Release PR #35 merged as `a51e942afbd17997a8100d554f8a0b2e50d4baa7`.
-- Final pre-merge release candidate head `74834bd741b5b8794a4d0277976ea3650e35f6c2` passed CI #426 on Linux full release checks and Windows PowerShell 5.1.
-- Annotated tag `v1.3.0` points to merge commit `a51e942afbd17997a8100d554f8a0b2e50d4baa7`.
-- Release workflow run #30 succeeded; GitHub Release `Hermes RDP v1.3.0` is published and is the current latest release.
+- Release PR #35 merged as `a51e942afbd17997a8100d554f8a0b2e50d4baa7`; tag/release remain immutable.
+- Active development PR: **#37 `feat: add zero-config server installer`**.
+- PR #37 is draft and not merged.
+- Latest runtime-accepted code boundary before this context checkpoint: `0aa6bed193abcd6ef60673304695e7565d697011`; CI #453 Linux full release checks + Windows PowerShell 5.1 PASS.
 
 ## Runtime architecture
 
@@ -32,9 +32,44 @@ Certificate rotation is a separate low-frequency LocalSystem worker. It checks a
 
 Admin SSH remains independent. FRP is not active runtime. Each Windows client keeps its own Ed25519 identity.
 
-## v1.3.0 product boundary
+## Current development boundary — zero-config server install
 
-The trusted RDP certificate lifecycle is an optional backward-compatible capability:
+Normal-user onboarding in PR #37 is now designed as:
+
+```text
+curl installer
+→ validate/repair supported APT state
+→ detect public IPv4
+→ hidden Telegram bot token
+→ secure private one-time owner claim
+→ exact source archive
+→ core Hermes install
+→ automatic trusted RDP certificate setup
+→ Telegram /start
+```
+
+Live Debian 13 Trixie acceptance has confirmed:
+
+- bounded repair of the reported stale Debian archive source with backup;
+- public IPv4 discovery;
+- Telegram bot validation and secure private owner claim;
+- exact source archive resolution;
+- core Hermes install with dedicated sshd/controller active;
+- installer reaching `=== HERMES RDP READY ===`;
+- coexistence with an already-running nginx on TCP 80 without stop/restart;
+- dedicated nginx ACME challenge route using `/var/www/hermes-rdp-acme` and direct `alias`;
+- bounded readiness after nginx reload;
+- Let's Encrypt staging and production short-lived public-IP certificate issuance;
+- active/enabled Hermes certificate renewal timer;
+- renewal smoke `PASS_NOT_DUE`;
+- certificate package/state helpers ready;
+- `TRUSTED_RDP_CERT=PASS`.
+
+The live acceptance also found and resolved real bootstrap bugs in Telegram JSON payload handling, Git archive executable mode, nginx TCP-80 coexistence, ACME webroot location/mapping and nginx reload readiness.
+
+## Stable v1.3.0 product boundary
+
+The trusted RDP certificate lifecycle remains an optional backward-compatible capability:
 
 - server obtains/renews the public-IP certificate;
 - authenticated Windows devices can retrieve the certificate package;
@@ -43,7 +78,7 @@ The trusted RDP certificate lifecycle is an optional backward-compatible capabil
 - Uninstall removes both main and rotation runtime;
 - controlled local certificate drift recovers automatically.
 
-Trusted mode requires a globally routable public IPv4 and reachable TCP 80 for ACME HTTP-01.
+Trusted mode requires a globally routable public IPv4 and reachable TCP 80 for ACME HTTP-01. PR #37 adds safe nginx/webroot coexistence when nginx already owns that port.
 
 ## Accepted compatibility baseline
 
@@ -55,4 +90,4 @@ SEC-004 remains fixture-unavailable. RL-006 remains PARTIAL only for its optiona
 
 ## Exact next step
 
-Observe the next natural certificate renewal when it occurs, or explicitly choose the next product workstream. No v1.3.0 release work remains open.
+Confirm `/start` opens the normal Hermes dashboard for the newly claimed owner. Then clean the already-existing duplicate APT entries on that fixture and verify `apt-get update` is quiet. After those bounded checks, update evidence/context, run final CI and move PR #37 out of draft. Merge only after explicit user approval.

@@ -1,16 +1,15 @@
 # Hermes RDP — Active Work
 
-Updated: 2026-08-14
+Updated: 2026-08-15
 
 ## Repository / release
 
 - Repository: `bakunity/RDP`.
 - Stable published release: **v1.3.0**.
-- PR #35 merged as `a51e942afbd17997a8100d554f8a0b2e50d4baa7` after final exact-head CI #426 PASS.
-- Annotated tag `v1.3.0` points to that exact merge commit.
-- Release workflow run #30 completed successfully and published `Hermes RDP v1.3.0`.
-- GitHub `releases/latest` resolves to `v1.3.0`.
-- No active product PR is currently required for the release.
+- v1.3.0 release tag/history remain immutable and unchanged.
+- Active product PR: **#37 `feat: add zero-config server installer`**.
+- PR #37 is still draft and must not be merged before the remaining bounded live checks are closed.
+- Latest runtime-accepted code boundary before this context checkpoint: `0aa6bed193abcd6ef60673304695e7565d697011`; CI #453 PASS on Linux full release checks and Windows PowerShell 5.1.
 
 ## Stable architecture
 
@@ -59,18 +58,62 @@ Certificate work remains outside the performance-sensitive 3-second main Agent l
 
 Detailed v1.3.0 acceptance is frozen in `context/archive/releases/v1.3.0-evidence.md` and `docs/releases/history/v1.3.0-full.md`.
 
-## Current work
+## Current work — zero-config server onboarding
 
-The v1.3.0 release cycle is closed. No release blocker remains.
+PR #37 introduces the normal-user server path:
 
-Natural renewal-driven certificate rotation is a **deferred operational observation**, not a blocker. Do not force extra production issuance solely for evidence.
+```text
+one curl command
+→ Debian/Ubuntu + APT preflight
+→ public IPv4 detection
+→ hidden Telegram bot-token input
+→ private one-time /claim owner binding
+→ immutable source resolution
+→ core Hermes install
+→ automatic trusted public-IP certificate attempt
+→ ready for Telegram /start
+```
 
-## Exact next step
+### Live acceptance on Debian 13 Trixie
 
-When the current short-lived production certificate renews naturally, capture only bounded non-secret evidence that server state updates, Windows rotates automatically and a fresh Microsoft RDP connection remains trusted.
+- known stale `archive.debian.org` source detected and repaired with backup: **PASS**;
+- bootstrap dependencies: **PASS**;
+- public IPv4 discovery: **PASS**;
+- Telegram `getMe` and webhook-free validation: **PASS**;
+- secure private one-time `/claim` owner binding: **PASS**;
+- immutable GitHub source archive resolution: **PASS**;
+- core Hermes install: **PASS**;
+- dedicated Hermes sshd active: **PASS**;
+- controller active: **PASS**;
+- installer reached `=== HERMES RDP READY ===`: **PASS**;
+- existing nginx on TCP 80 preserved: **PASS**;
+- dedicated nginx ACME route and challenge `alias`: live HTTP 200 probe **PASS**;
+- Let's Encrypt staging short-lived public-IP issuance through nginx webroot: **PASS**;
+- Let's Encrypt production short-lived public-IP issuance through nginx webroot: **PASS**;
+- Hermes renewal timer active/enabled: **PASS**;
+- renewal smoke `PASS_NOT_DUE`: **PASS**;
+- certificate package/state helpers ready: **PASS**;
+- final `TRUSTED_RDP_CERT=PASS`: **PASS**.
 
-If starting a new product feature before that natural event, select and scope the next workstream explicitly rather than reopening accepted v1.3.0 tests.
+### Confirmed bugs found and resolved during live acceptance
+
+- Bash default Telegram JSON payload produced an extra `}`: resolved + regression test.
+- GitHub archive scripts were not executable: resolved by repository executable mode + regression test.
+- existing nginx on TCP 80 blocked standalone ACME: resolved with bounded nginx-webroot mode.
+- ACME webroot was initially placed under private Hermes state: resolved to `/var/www/hermes-rdp-acme`.
+- nginx `root + try_files` challenge mapping returned 404 on the live fixture: resolved to direct `alias`, live route/file probe PASS.
+- immediate probe after `systemctl reload nginx` raced old workers: resolved with bounded readiness retries; CI #453 PASS.
+- exact duplicate APT source lines produced warning spam: cleanup logic implemented with backup/revalidate/rollback and CI coverage.
+
+## Remaining bounded checks
+
+1. Send `/start` to the newly configured Telegram bot and confirm the normal Hermes dashboard opens for the claimed owner.
+2. Clean the already-existing duplicate APT entries on this fixture and confirm `apt-get update` no longer emits `configured multiple times`; do not rerun the whole Hermes install for this.
+3. Update evidence/context after those two checks and run final CI.
+4. Mark PR #37 ready only after the above checks pass. Merge only after explicit user approval and with expected-head protection.
+
+Natural renewal-driven certificate rotation remains a **deferred operational observation**, not a blocker. Do not force extra production issuance solely for evidence.
 
 SEC-004 remains fixture-unavailable. RL-006 remains PARTIAL only for its optional original-fixture one-process observation.
 
-Never put private keys, PFX passwords, API/device tokens, pairing codes or other secrets into context/chat.
+Never put private keys, PFX passwords, API/device tokens, pairing/claim codes, unnecessary production IPs or personal numeric IDs into context/chat.
