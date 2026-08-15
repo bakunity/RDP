@@ -1,47 +1,27 @@
-# Hermes RDP — Unreleased
+# Unreleased
 
-Base release: **v1.3.0**
+Detailed engineering ledger for changes after the current stable release.
 
-Status: rolling engineering release ledger. Update continuously; do not wait until version-cut day.
+## Added
 
-## Merged / current main since v1.3.0
+- Zero-config interactive server bootstrap for the normal install path: one public command, secure Telegram bot-token prompt, private one-time owner claim, automatic public IPv4 discovery, and automatic trusted RDP certificate attempt.
+- Server install preflight for Debian/Ubuntu APT health, including bounded repair of the known stale `archive.debian.org` Debian source case with a backup before mutation.
 
-### Vercel deployment filtering
+## Changed
 
-- Fixed the public-site Git integration creating Vercel deployments for unrelated product/runtime/context commits.
-- Vercel Git deployments are now disabled for every branch except `main`.
-- `main` uses `VERCEL_GIT_PREVIOUS_SHA` and only continues the website build when `index.html`, `assets/**`, `robots.txt` or `site.webmanifest` changed.
-- Existing Vercel security headers and redirects remain intact.
-- A regression assertion in `tests/test_site_openssh_content.py` guards the branch and path filters.
+- Public server installation UX now points normal users to `scripts/install.sh`; the existing `scripts/install-server.sh` remains the advanced/automation interface.
+- Required server-side shell entrypoints are stored executable so GitHub source archives preserve the bootstrap execution contract.
 
-## Deferred observation / not a blocker
+## Fixed
 
-### Natural certificate renewal rotation
+- Telegram API bootstrap payload handling no longer corrupts an explicit `{}` JSON body through Bash parameter expansion.
 
-Synthetic drift/recovery is already live accepted. When the current production short-lived certificate renews naturally, capture only bounded evidence that:
+## Validation
 
-- server state updates to the new thumbprint;
-- Windows worker detects the new desired certificate;
-- automatic rotation succeeds;
-- a fresh Microsoft RDP connection remains trusted.
-
-Do not force unnecessary production issuance solely to create this observation.
-
-## Compatibility requirements carried forward
-
-Do not regress:
-
-- Windows PowerShell 5.1;
-- Windows 10 x64 launched from x86/SysWOW64 PowerShell with Sysnative access to native OpenSSH;
-- Windows Server support;
-- Defender coexistence without exclusions/disablement;
-- per-device Ed25519 identities;
-- admin SSH isolation from Hermes tunnel sshd;
-- transactional server/client update rollback;
-- existing-device Repair identity boundary;
-- main Agent fast path without certificate work in the 3-second loop.
-
-## Known historical deferred items
-
-- `RL-006` remains PARTIAL only for an optional final Windows one-process observation after already-clean reconnect cycles; do not repeat the stress test.
-- `SEC-004` remains fixture-unavailable; do not reconstruct revoked credentials solely for artificial evidence.
+- Debian 13 Trixie live fixture with a stale `archive.debian.org` source: automatic APT repair PASS; backup created before mutation.
+- Public IPv4 discovery: PASS.
+- Telegram `getMe`, webhook-free validation, private one-time `/claim`, and owner binding: PASS.
+- Exact immutable source archive resolution after executable-mode correction: PASS.
+- Zero-config core server install: PASS; dedicated OpenSSH tunnel service and Hermes controller active; installer reached `=== HERMES RDP READY ===`.
+- Existing nginx listener on TCP 80 correctly prevented the current standalone ACME path from taking over the port; core install remained healthy and reported trusted TLS unavailable instead of rolling back.
+- Follow-up remaining before PR acceptance: nginx/webroot coexistence for automatic IP-certificate issuance and cleanup of duplicate APT source warnings produced by stale-source normalization.
