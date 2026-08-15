@@ -18,7 +18,8 @@ class NginxAcmeWebrootAccessTests(unittest.TestCase):
         self.assertIn('server_name $HOST;', setup)
         self.assertIn('alias $ACME_WEBROOT/.well-known/acme-challenge/;', setup)
         self.assertNotIn('try_files \\$uri =404;', setup)
-        self.assertIn('curl -fsS --max-time 5 -H "Host: $HOST"', setup)
+        self.assertIn('curl -fsS --max-time 2 -H "Host: $HOST"', setup)
+        self.assertIn('for attempt in {1..20}', setup)
 
 
 if __name__ == "__main__":
