@@ -16,8 +16,13 @@ class ZeroConfigServerInstallerTests(unittest.TestCase):
         self.readme = (ROOT / "README.md").read_text(encoding="utf-8")
 
     def test_bootstrap_is_interactive_but_token_safe(self) -> None:
-        self.assertIn("read -rsp 'Telegram bot token: '", self.bootstrap)
-        self.assertIn("</dev/tty", self.bootstrap)
+        self.assertIn("read_masked_telegram_token", self.bootstrap)
+        self.assertIn("read -r -s -n1 char </dev/tty", self.bootstrap)
+        self.assertIn("printf '*' >/dev/tty", self.bootstrap)
+        self.assertIn("for attempt in 1 2 3", self.bootstrap)
+        self.assertIn("Telegram bot token пустой. Попробуйте ещё раз", self.bootstrap)
+        self.assertIn("Telegram bot token не прошёл проверку getMe", self.bootstrap)
+        self.assertIn("Telegram bot token не удалось подтвердить после 3 попыток", self.bootstrap)
         self.assertIn("telegram_call getMe", self.bootstrap)
         self.assertIn("telegram_call getWebhookInfo", self.bootstrap)
         self.assertNotIn("echo $TG_TOKEN", self.bootstrap)
