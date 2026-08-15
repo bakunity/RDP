@@ -41,6 +41,14 @@ class ZeroConfigServerInstallerTests(unittest.TestCase):
         )
         self.assertEqual(result.stdout, "{}")
 
+    def test_source_archive_server_scripts_are_executable(self) -> None:
+        for relative in (
+            "scripts/install-server.sh",
+            "scripts/setup-trusted-rdp-cert.sh",
+        ):
+            mode = (ROOT / relative).stat().st_mode
+            self.assertTrue(mode & 0o111, f"{relative} must be executable in Git archives")
+
     def test_owner_is_claimed_before_core_install(self) -> None:
         claim = self.bootstrap.index("/claim $CLAIM_CODE")
         owner = self.bootstrap.index("Telegram owner confirmed")
