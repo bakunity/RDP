@@ -45,18 +45,49 @@ pass "OS: $OS_NAME"
 pass "Architecture: $(dpkg --print-architecture 2>/dev/null || uname -m)"
 pass "root/sudo"
 
-dedupe_exact_entries_in_file() {
+normalize_simple_apt_entries_in_file() {
   local file="$1" tmp
-  tmp="$(mktemp "$WORK_DIR/apt-dedupe.XXXXXX")"
+  tmp="$(mktemp "$WORK_DIR/apt-normalize.XXXXXX")"
   awk '
     {
-      key=$0
-      sub(/^[[:space:]]+/, "", key)
-      sub(/[[:space:]]+$/, "", key)
-      if (key ~ /^(deb|deb-src)[[:space:]]+/) {
-        if (seen[key]++) next
+      raw[NR]=$0
+      line=$0
+      sub(/^[[:space:]]+/, "", line)
+      sub(/[[:space:]]+$/, "", line)
+      if (line ~ /^(deb|deb-src)[[:space:]]+/ && line !~ /\[/ && line !~ /#/) {
+        n=split(line, part, /[[:space:]]+/)
+        if (n >= 4) {
+          key=part[1] SUBSEP part[2] SUBSEP part[3]
+          if (!(key in first)) {
+            first[key]=NR
+            line_key[NR]=key
+            type[key]=part[1]
+            uri[key]=part[2]
+            suite[key]=part[3]
+          } else {
+            skip[NR]=1
+          }
+          for (i=4; i<=n; i++) {
+            component_key=key SUBSEP part[i]
+            if (!(component_key in component_seen)) {
+              component_seen[component_key]=1
+              components[key]=(components[key] == "" ? part[i] : components[key] " " part[i])
+            }
+          }
+          next
+        }
       }
-      print
+    }
+    END {
+      for (i=1; i<=NR; i++) {
+        if (skip[i]) continue
+        if (i in line_key) {
+          key=line_key[i]
+          print type[key] " " uri[key] " " suite[key] " " components[key]
+        } else {
+          print raw[i]
+        }
+      }
     }
   ' "$file" >"$tmp"
   if cmp -s "$file" "$tmp"; then
@@ -85,7 +116,7 @@ repair_duplicate_apt_warnings() {
 
   for file in "${files[@]}"; do
     cp -a --parents "$file" "$backup/"
-    if dedupe_exact_entries_in_file "$file"; then
+    if normalize_simple_apt_entries_in_file "$file"; then
       changed=1
     fi
   done
@@ -95,8 +126,8 @@ repair_duplicate_apt_warnings() {
     return 1
   fi
 
-  if apt-get update -qq >"$APT_LOG" 2>&1; then
-    pass "APT repositories: removed exact duplicate entries"
+  if apt-get update -qq >"$APT_LOG" 2>&1 && ! grep -q 'is configured multiple times' "$APT_LOG"; then
+    pass "APT repositories: normalized overlapping deb/deb-src entries"
     say "  backup: $backup"
     return 0
   fi
@@ -131,10 +162,10 @@ repair_known_debian_archive_source() {
       -e 's#https?://archive\.debian\.org/debian-security#https://security.debian.org/debian-security#g' \
       -e 's#https?://archive\.debian\.org/debian#https://deb.debian.org/debian#g' \
       "$file"
-    dedupe_exact_entries_in_file "$file" || true
+    normalize_simple_apt_entries_in_file "$file" || true
   done
 
-  if apt-get update -qq >"$APT_LOG" 2>&1; then
+  if apt-get update -qq >"$APT_LOG" 2>&1 && ! grep -q 'is configured multiple times' "$APT_LOG"; then
     pass "APT repositories: repaired stale Debian archive source"
     say "  backup: $backup"
     return 0
@@ -148,7 +179,7 @@ repair_known_debian_archive_source() {
 export DEBIAN_FRONTEND=noninteractive
 if apt-get update -qq >"$APT_LOG" 2>&1; then
   if grep -q 'is configured multiple times' "$APT_LOG"; then
-    repair_duplicate_apt_warnings || pass "APT repositories"
+    repair_duplicate_apt_warnings || pass "APT repositories (duplicate warning left unchanged)"
   else
     pass "APT repositories"
   fi
@@ -239,12 +270,48 @@ print(json.dumps(body.get("result"), ensure_ascii=False))
 PY
 }
 
-say
-read -rsp 'Telegram bot token: ' TG_TOKEN </dev/tty
-echo
-[[ -n "$TG_TOKEN" ]] || die "Telegram bot token пустой."
+read_masked_telegram_token() {
+  local char
+  TG_TOKEN=""
+  printf 'Telegram bot token: ' >/dev/tty
+  while IFS= read -r -s -n1 char </dev/tty; do
+    if [[ -z "$char" ]]; then
+      printf '\n' >/dev/tty
+      return 0
+    fi
+    case "$char" in
+      $'\177'|$'\b')
+        if [[ -n "$TG_TOKEN" ]]; then
+          TG_TOKEN="${TG_TOKEN%?}"
+          printf '\b \b' >/dev/tty
+        fi
+        ;;
+      *)
+        TG_TOKEN+="$char"
+        printf '*' >/dev/tty
+        ;;
+    esac
+  done
+  printf '\n' >/dev/tty
+  return 1
+}
 
-BOT_INFO="$(telegram_call getMe '{}')" || die "Telegram bot token не прошёл проверку getMe."
+say
+BOT_INFO=""
+for attempt in 1 2 3; do
+  read_masked_telegram_token || die "Не удалось прочитать Telegram bot token из /dev/tty."
+  if [[ -z "$TG_TOKEN" ]]; then
+    warn "Telegram bot token пустой. Попробуйте ещё раз ($attempt/3)."
+    continue
+  fi
+  if BOT_INFO="$(telegram_call getMe '{}')"; then
+    break
+  fi
+  TG_TOKEN=""
+  warn "Telegram bot token не прошёл проверку getMe. Проверьте токен и повторите ($attempt/3)."
+done
+[[ -n "$BOT_INFO" ]] || die "Telegram bot token не удалось подтвердить после 3 попыток."
+
 BOT_USERNAME="$(printf '%s' "$BOT_INFO" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("username", ""))')"
 [[ -n "$BOT_USERNAME" ]] || die "Telegram getMe не вернул username бота."
 pass "Telegram bot: @$BOT_USERNAME"
