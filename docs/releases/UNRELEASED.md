@@ -16,7 +16,7 @@ Detailed engineering ledger for changes after the current stable release.
 - Trusted certificate setup now refuses non-nginx TCP 80 conflicts, validates a dedicated IP-only nginx challenge route before ACME, and preserves the existing nginx service without stop/restart.
 - nginx ACME challenge files use a dedicated readable webroot under `/var/www/hermes-rdp-acme` and a direct `alias` mapping rather than the previously failing `root + try_files` combination.
 - Hermes-managed nginx ACME configuration is backed up with server uninstall evidence and removed/reloaded on normal uninstall while certificate lineage remains preserved.
-- APT preflight removes only exact duplicate `deb`/`deb-src` entries after backup and re-validates `apt-get update`, restoring sources if normalization fails.
+- APT preflight cleanup remains transactional: backup before mutation, `apt-get update` validation after mutation, and rollback on failure.
 
 ## Fixed
 
@@ -31,7 +31,7 @@ Detailed engineering ledger for changes after the current stable release.
 
 - Debian 13 Trixie live fixture with a stale `archive.debian.org` source: automatic APT repair PASS; backup created before mutation.
 - Public IPv4 discovery: PASS.
-- Telegram `getMe`, webhook-free validation, private one-time `/claim`, and owner binding: PASS.
+- Telegram `getMe`, webhook-free validation, private one-time `/claim`, owner binding and normal `/start` dashboard: PASS.
 - Exact immutable source archive resolution after executable-mode correction: PASS.
 - Zero-config core server install: PASS; dedicated OpenSSH tunnel service and Hermes controller active; installer reached `=== HERMES RDP READY ===`.
 - Existing nginx listener on TCP 80 remained active with its pre-existing site configuration intact.
@@ -39,6 +39,6 @@ Detailed engineering ledger for changes after the current stable release.
 - Let's Encrypt staging short-lived public-IP certificate issuance through nginx webroot: PASS.
 - Let's Encrypt production short-lived public-IP certificate issuance through nginx webroot: PASS.
 - Hermes trusted-certificate lifecycle: `renewal_timer=active`, `renewal_enabled=enabled`, `renewal_smoke=PASS_NOT_DUE`, `acme_mode=nginx-webroot`, `tcp80=NGINX_WEBROOT`, `package_helper=READY`, `certificate_state=READY`, `TRUSTED_RDP_CERT=PASS`.
-- Exact code boundary `0aa6bed193abcd6ef60673304695e7565d697011`: CI #453 Linux full release checks PASS and Windows PowerShell 5.1 PASS.
-- Existing fixture still contains duplicate APT source entries created by the original provider image/repair combination. Cleanup logic is implemented and CI-covered; bounded live cleanup of that fixture remains before PR closure.
-- Final Telegram `/start` dashboard confirmation on this newly bootstrapped server remains before PR closure.
+- Exact code boundary `0aa6bed193abcd6ef60673304695e7565d697011`: CI #453 Linux full release checks PASS and Windows PowerShell 5.1 PASS. Evidence/context checkpoint CI #454 also PASS.
+- First live APT cleanup attempt failed safely and rolled back. Root cause is confirmed: two entries for the same `deb URI suite` overlap in components (`main contrib` versus `main contrib non-free non-free-firmware`), so APT reports duplicate targets although the source lines are not byte-identical.
+- Remaining acceptance: replace exact-line cleanup with bounded semantic component-union normalization, then perform one clean-room Hermes uninstall/reinstall on the fixture and run final CI before PR readiness.
