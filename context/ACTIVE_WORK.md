@@ -5,11 +5,11 @@ Updated: 2026-08-15
 ## Repository / release
 
 - Repository: `bakunity/RDP`.
-- Stable published release: **v1.3.0**.
-- v1.3.0 release tag/history remain immutable and unchanged.
+- Stable published release: **v1.3.0**; historical tag/history remain immutable.
 - Active product PR: **#37 `feat: add zero-config server installer`**.
-- PR #37 is still draft and must not be merged before the remaining bounded live checks are closed.
-- Latest runtime-accepted code boundary before this context checkpoint: `0aa6bed193abcd6ef60673304695e7565d697011`; CI #453 PASS on Linux full release checks and Windows PowerShell 5.1.
+- Runtime-accepted code boundary: `056bf7473ff851157f4c749f233fb0fb8b57a133`.
+- CI #459 on that exact head: Linux full release checks PASS and Windows PowerShell 5.1 PASS.
+- PR #37 must not be merged without explicit user approval.
 
 ## Stable architecture
 
@@ -27,93 +27,74 @@ Windows RDP :3389
 persistent endpoint per device
 ```
 
-Trusted-RDP certificate side path:
-
-```text
-Hermes cert renew timer
-      |
-non-secret cert state/status
-      |
-authenticated Windows SYSTEM rotation worker
-      |
-PFX sync only on thumbprint change / local drift
-      |
-Windows RDP CUSTOM trusted certificate
-```
-
-Certificate work remains outside the performance-sensitive 3-second main Agent loop.
+Trusted-RDP certificate lifecycle remains a separate low-frequency path and stays outside the 3-second Agent loop.
 
 ## Accepted baseline — do not repeat without regression evidence
 
 - external Microsoft RDP through Hermes;
-- multi-device simultaneous operation and failure isolation;
+- simultaneous multi-device operation and failure isolation;
 - Windows/Linux reboot recovery;
 - Windows Server 2019;
 - Win10 x64 + x86 PowerShell / Sysnative OpenSSH compatibility;
 - Telegram OFF/ON/RESTART and status UX;
 - transactional Linux and Windows updater rollback;
-- bounded existing-device Repair success/rollback;
+- existing-device Repair success/rollback;
 - Defender coexistence without exclusions/disablement;
-- trusted public-IP certificate lifecycle CERT-001 through CERT-013, including Fresh Install/Update/Repair/Uninstall integration and trusted external RDP.
+- trusted public-IP certificate lifecycle CERT-001 through CERT-013.
 
-Detailed v1.3.0 acceptance is frozen in `context/archive/releases/v1.3.0-evidence.md` and `docs/releases/history/v1.3.0-full.md`.
+## Current work — PR #37 zero-config server onboarding
 
-## Current work — zero-config server onboarding
-
-PR #37 introduces the normal-user server path:
+Normal-user flow:
 
 ```text
 one curl command
-→ Debian/Ubuntu + APT preflight
+→ Debian/Ubuntu + APT preflight/repair
 → public IPv4 detection
-→ hidden Telegram bot-token input
+→ masked Telegram bot-token input
 → private one-time /claim owner binding
 → immutable source resolution
 → core Hermes install
-→ automatic trusted public-IP certificate attempt
-→ ready for Telegram /start
+→ automatic trusted public-IP certificate lifecycle
+→ Telegram /start
 ```
 
 ### Live acceptance on Debian 13 Trixie
 
-- known stale `archive.debian.org` source detected and repaired with backup: **PASS**;
-- bootstrap dependencies: **PASS**;
-- public IPv4 discovery: **PASS**;
-- Telegram `getMe` and webhook-free validation: **PASS**;
-- secure private one-time `/claim` owner binding: **PASS**;
-- immutable GitHub source archive resolution: **PASS**;
-- core Hermes install: **PASS**;
-- dedicated Hermes sshd active: **PASS**;
-- controller active: **PASS**;
+- stale `archive.debian.org` repair with backup: **PASS**;
+- overlapping APT component cleanup with backup/revalidate/rollback: **PASS on the acceptance fixture**; subsequent install reports clean APT repositories;
+- bootstrap dependencies and public IPv4 discovery: **PASS**;
+- masked Telegram token display: **PASS**;
+- `getMe`, webhook-free validation and secure private owner claim: **PASS**;
+- normal `/start` dashboard: **PASS**;
+- immutable source archive resolution: **PASS**;
+- full clean-state reinstall from exact head `056bf7473ff851157f4c749f233fb0fb8b57a133`: **PASS**;
+- dedicated Hermes sshd active and controller active: **PASS**;
 - installer reached `=== HERMES RDP READY ===`: **PASS**;
 - existing nginx on TCP 80 preserved: **PASS**;
-- dedicated nginx ACME route and challenge `alias`: live HTTP 200 probe **PASS**;
-- Let's Encrypt staging short-lived public-IP issuance through nginx webroot: **PASS**;
-- Let's Encrypt production short-lived public-IP issuance through nginx webroot: **PASS**;
-- Hermes renewal timer active/enabled: **PASS**;
-- renewal smoke `PASS_NOT_DUE`: **PASS**;
-- certificate package/state helpers ready: **PASS**;
-- final `TRUSTED_RDP_CERT=PASS`: **PASS**.
+- nginx ACME route/direct `alias` live probes: **PASS**;
+- prior staging + production public-IP issuance through nginx webroot: **PASS**;
+- fresh reinstall reused valid preserved lineage and re-established lifecycle without forced issuance: **PASS**;
+- renewal timer active/enabled, smoke `PASS_NOT_DUE`, package/state helpers ready, `TRUSTED_RDP_CERT=PASS`: **PASS**.
 
-### Confirmed bugs found and resolved during live acceptance
+### Resolved bugs found during acceptance
 
-- Bash default Telegram JSON payload produced an extra `}`: resolved + regression test.
-- GitHub archive scripts were not executable: resolved by repository executable mode + regression test.
-- existing nginx on TCP 80 blocked standalone ACME: resolved with bounded nginx-webroot mode.
-- ACME webroot was initially placed under private Hermes state: resolved to `/var/www/hermes-rdp-acme`.
-- nginx `root + try_files` challenge mapping returned 404 on the live fixture: resolved to direct `alias`, live route/file probe PASS.
-- immediate probe after `systemctl reload nginx` raced old workers: resolved with bounded readiness retries; CI #453 PASS.
-- exact duplicate APT source lines produced warning spam: cleanup logic implemented with backup/revalidate/rollback and CI coverage.
+- Telegram JSON shell default corruption;
+- source-archive executable mode mismatch;
+- nginx TCP-80 coexistence;
+- inaccessible ACME webroot location;
+- live 404 from `root + try_files`, replaced by direct `alias`;
+- nginx reload readiness race;
+- overlapping APT component sets that produced duplicate-target warnings despite non-identical source lines;
+- invisible Telegram token entry and immediate abort on empty/invalid input. Token input is now masked; bounded retry is CI-covered.
 
-## Remaining bounded checks
+### Interruption behavior
 
-1. Send `/start` to the newly configured Telegram bot and confirm the normal Hermes dashboard opens for the claimed owner.
-2. Clean the already-existing duplicate APT entries on this fixture and confirm `apt-get update` no longer emits `configured multiple times`; do not rerun the whole Hermes install for this.
-3. Update evidence/context after those two checks and run final CI.
-4. Mark PR #37 ready only after the above checks pass. Merge only after explicit user approval and with expected-head protection.
+During the clean-room test the terminal was closed while waiting for the owner claim. Because claim occurs before core mutation, no partially installed Hermes core remained; rerunning the normal installer from the clean state succeeded. Treat this as accepted interruption behavior for that stage.
 
-Natural renewal-driven certificate rotation remains a **deferred operational observation**, not a blocker. Do not force extra production issuance solely for evidence.
+## Exact next action
 
-SEC-004 remains fixture-unavailable. RL-006 remains PARTIAL only for its optional original-fixture one-process observation.
+Remove the temporary clean-reinstall acceptance helper, checkpoint final evidence/context, run CI on the resulting exact head, then mark PR #37 ready for review. Merge only after explicit user approval and expected-head verification.
 
-Never put private keys, PFX passwords, API/device tokens, pairing/claim codes, unnecessary production IPs or personal numeric IDs into context/chat.
+Natural renewal-driven certificate rotation remains a deferred operational observation, not a blocker. SEC-004 remains fixture-unavailable. RL-006 remains PARTIAL only for its optional original-fixture one-process observation.
+
+Never store bot tokens, private keys, PFX passwords, device/API tokens, one-time claim/pair codes, unnecessary production IPs, certificate package secrets or personal numeric IDs in context.

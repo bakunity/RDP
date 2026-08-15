@@ -2,15 +2,15 @@
 
 Updated: 2026-08-15
 
-For immediate operational truth read `ACTIVE_WORK.md`; for detailed current evidence read `EVIDENCE_LEDGER.md`; v1.3.0 release evidence is archived separately.
+For immediate operational truth read `ACTIVE_WORK.md`; for detailed current evidence read `EVIDENCE_LEDGER.md`.
 
 ## Repository / release
 
-- Current stable published release: **v1.3.0**.
-- Release PR #35 merged as `a51e942afbd17997a8100d554f8a0b2e50d4baa7`; tag/release remain immutable.
+- Current stable published release: **v1.3.0**; tag/history remain immutable.
 - Active development PR: **#37 `feat: add zero-config server installer`**.
-- PR #37 is draft and not merged.
-- Latest runtime-accepted code boundary before this context checkpoint: `0aa6bed193abcd6ef60673304695e7565d697011`; CI #453 Linux full release checks + Windows PowerShell 5.1 PASS.
+- Runtime-accepted code boundary: `056bf7473ff851157f4c749f233fb0fb8b57a133`.
+- CI #459 on that exact head passed Linux full release checks and Windows PowerShell 5.1.
+- PR #37 is not merged; merge requires explicit user approval.
 
 ## Runtime architecture
 
@@ -28,66 +28,50 @@ Windows RDP :3389
 persistent endpoint per device
 ```
 
-Certificate rotation is a separate low-frequency LocalSystem worker. It checks authenticated non-secret server certificate status and invokes full certificate sync only on thumbprint change or local listener drift. Certificate work stays outside the 3-second main Agent loop.
+Admin SSH remains independent. FRP is not active runtime. Certificate rotation remains a separate low-frequency path outside the main Agent loop.
 
-Admin SSH remains independent. FRP is not active runtime. Each Windows client keeps its own Ed25519 identity.
+## Zero-config server onboarding boundary
 
-## Current development boundary — zero-config server install
-
-Normal-user onboarding in PR #37 is now designed as:
+PR #37 normal-user flow:
 
 ```text
 curl installer
 → validate/repair supported APT state
 → detect public IPv4
-→ hidden Telegram bot token
+→ masked Telegram bot token with bounded retry
 → secure private one-time owner claim
 → exact source archive
 → core Hermes install
-→ automatic trusted RDP certificate setup
+→ automatic trusted RDP certificate lifecycle
 → Telegram /start
 ```
 
-Live Debian 13 Trixie acceptance has confirmed:
+Live Debian 13 Trixie acceptance now confirms:
 
-- bounded repair of the reported stale Debian archive source with backup;
+- stale Debian archive repair with backup;
+- safe semantic normalization of overlapping simple APT source component sets, with rollback protection;
+- clean APT preflight on the subsequent install;
 - public IPv4 discovery;
-- Telegram bot validation and secure private owner claim;
+- masked Telegram token entry and successful bot validation;
+- secure private owner claim before core mutation;
+- normal `/start` dashboard;
 - exact source archive resolution;
-- core Hermes install with dedicated sshd/controller active;
-- installer reaching `=== HERMES RDP READY ===`;
-- coexistence with an already-running nginx on TCP 80 without stop/restart;
-- dedicated nginx ACME challenge route using `/var/www/hermes-rdp-acme` and direct `alias`;
-- bounded readiness after nginx reload;
-- Let's Encrypt staging and production short-lived public-IP certificate issuance;
-- active/enabled Hermes certificate renewal timer;
-- renewal smoke `PASS_NOT_DUE`;
-- certificate package/state helpers ready;
-- `TRUSTED_RDP_CERT=PASS`.
+- full clean-state Hermes reinstall from exact head `056bf7473ff851157f4c749f233fb0fb8b57a133`;
+- dedicated sshd/controller active and `=== HERMES RDP READY ===`;
+- safe coexistence with existing nginx on TCP 80;
+- direct ACME challenge `alias` and bounded reload readiness;
+- previously accepted staging + production short-lived public-IP issuance;
+- fresh reinstall reusing valid preserved certificate lineage without forced reissuance;
+- active/enabled Hermes renewal timer, smoke `PASS_NOT_DUE`, package/state helpers ready and `TRUSTED_RDP_CERT=PASS`.
 
-The live acceptance also found and resolved real bootstrap bugs in Telegram JSON payload handling, Git archive executable mode, nginx TCP-80 coexistence, ACME webroot location/mapping and nginx reload readiness.
-
-## Stable v1.3.0 product boundary
-
-The trusted RDP certificate lifecycle remains an optional backward-compatible capability:
-
-- server obtains/renews the public-IP certificate;
-- authenticated Windows devices can retrieve the certificate package;
-- Windows imports/binds a trusted CUSTOM RDP listener certificate;
-- Fresh Install, Update and Repair manage the rotation companion automatically;
-- Uninstall removes both main and rotation runtime;
-- controlled local certificate drift recovers automatically.
-
-Trusted mode requires a globally routable public IPv4 and reachable TCP 80 for ACME HTTP-01. PR #37 adds safe nginx/webroot coexistence when nginx already owns that port.
+An interruption while waiting for owner claim after a clean purge left no partially installed Hermes core; rerunning the normal installer succeeded because claim precedes core mutation.
 
 ## Accepted compatibility baseline
 
 Do not repeat without concrete regression evidence: external RDP, multi-device isolation, Windows/Linux reboot recovery, Windows Server 2019, Win10 x64 + x86 PowerShell/Sysnative, Telegram control/UI, transactional updater rollback, existing-device Repair, Defender coexistence, and CERT-001 through CERT-013.
 
-Natural renewal-driven thumbprint rotation remains deferred until the real next renewal; do not force extra issuance for evidence.
-
-SEC-004 remains fixture-unavailable. RL-006 remains PARTIAL only for its optional original-fixture final one-process observation.
+Natural renewal-driven thumbprint rotation remains deferred until the real next renewal. SEC-004 remains fixture-unavailable. RL-006 remains PARTIAL only for its optional original-fixture observation.
 
 ## Exact next step
 
-Confirm `/start` opens the normal Hermes dashboard for the newly claimed owner. Then clean the already-existing duplicate APT entries on that fixture and verify `apt-get update` is quiet. After those bounded checks, update evidence/context, run final CI and move PR #37 out of draft. Merge only after explicit user approval.
+Remove the temporary clean-reinstall acceptance helper, run final CI on the resulting exact head and mark PR #37 ready for review. Merge only after explicit user approval and expected-head verification.
