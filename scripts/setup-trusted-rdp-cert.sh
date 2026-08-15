@@ -188,9 +188,8 @@ server {
     server_name $HOST;
 
     location ^~ /.well-known/acme-challenge/ {
-        root $ACME_WEBROOT;
+        alias $ACME_WEBROOT/.well-known/acme-challenge/;
         default_type text/plain;
-        try_files \$uri =404;
     }
 
     location / {
