@@ -45,6 +45,68 @@ pass "OS: $OS_NAME"
 pass "Architecture: $(dpkg --print-architecture 2>/dev/null || uname -m)"
 pass "root/sudo"
 
+dedupe_exact_entries_in_file() {
+  local file="$1" tmp
+  tmp="$(mktemp "$WORK_DIR/apt-dedupe.XXXXXX")"
+  awk '
+    {
+      key=$0
+      sub(/^[[:space:]]+/, "", key)
+      sub(/[[:space:]]+$/, "", key)
+      if (key ~ /^(deb|deb-src)[[:space:]]+/) {
+        if (seen[key]++) next
+      }
+      print
+    }
+  ' "$file" >"$tmp"
+  if cmp -s "$file" "$tmp"; then
+    rm -f "$tmp"
+    return 1
+  fi
+  cat "$tmp" >"$file"
+  rm -f "$tmp"
+  return 0
+}
+
+repair_duplicate_apt_warnings() {
+  grep -q 'is configured multiple times' "$APT_LOG" || return 1
+
+  local stamp backup file changed=0
+  local -a files=()
+  [[ -f /etc/apt/sources.list ]] && files+=(/etc/apt/sources.list)
+  for file in /etc/apt/sources.list.d/*.list; do
+    [[ -f "$file" ]] && files+=("$file")
+  done
+  ((${#files[@]} > 0)) || return 1
+
+  stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+  backup="/var/backups/hermes-rdp/apt-sources-dedupe-$stamp"
+  install -d -m 0700 "$backup"
+
+  for file in "${files[@]}"; do
+    cp -a --parents "$file" "$backup/"
+    if dedupe_exact_entries_in_file "$file"; then
+      changed=1
+    fi
+  done
+
+  if ((changed == 0)); then
+    rm -rf "$backup"
+    return 1
+  fi
+
+  if apt-get update -qq >"$APT_LOG" 2>&1; then
+    pass "APT repositories: removed exact duplicate entries"
+    say "  backup: $backup"
+    return 0
+  fi
+
+  warn "Нормализация duplicate APT entries не прошла проверку; source-файлы восстановлены."
+  cp -a "$backup/etc/apt/." /etc/apt/
+  apt-get update -qq >"$APT_LOG" 2>&1 || true
+  return 1
+}
+
 repair_known_debian_archive_source() {
   [[ "$OS_ID" == "debian" && -n "$CODENAME" ]] || return 1
   command -v curl >/dev/null 2>&1 || return 1
@@ -69,6 +131,7 @@ repair_known_debian_archive_source() {
       -e 's#https?://archive\.debian\.org/debian-security#https://security.debian.org/debian-security#g' \
       -e 's#https?://archive\.debian\.org/debian#https://deb.debian.org/debian#g' \
       "$file"
+    dedupe_exact_entries_in_file "$file" || true
   done
 
   if apt-get update -qq >"$APT_LOG" 2>&1; then
@@ -84,7 +147,11 @@ repair_known_debian_archive_source() {
 
 export DEBIAN_FRONTEND=noninteractive
 if apt-get update -qq >"$APT_LOG" 2>&1; then
-  pass "APT repositories"
+  if grep -q 'is configured multiple times' "$APT_LOG"; then
+    repair_duplicate_apt_warnings || pass "APT repositories"
+  else
+    pass "APT repositories"
+  fi
 else
   warn "APT repositories не проходят проверку."
   if ! repair_known_debian_archive_source; then
