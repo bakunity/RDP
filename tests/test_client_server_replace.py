@@ -45,7 +45,8 @@ class ClientServerReplaceTests(unittest.TestCase):
     def test_same_server_keeps_existing_repair_update_guard(self) -> None:
         wrapper = read_ps("scripts/install-client.ps1")
         self.assertIn("$SameServer", wrapper)
-        self.assertIn("подключён к этому серверу", wrapper)
+        self.assertIn("подключён к этому ", wrapper)
+        self.assertIn("серверу (RDP-порт", wrapper)
         self.assertIn("repair/update", wrapper)
         same = wrapper.index("if ($SameServer)")
         prompt = wrapper.index("Введите REPLACE")
@@ -99,7 +100,8 @@ class ClientServerReplaceTests(unittest.TestCase):
     def test_old_revoke_failure_does_not_break_new_install(self) -> None:
         wrapper = read_ps("scripts/install-client.ps1")
         self.assertIn("Старый сервер недоступен", wrapper)
-        self.assertIn("Новый Hermes уже работает", wrapper)
+        self.assertIn("Новый Hermes ", wrapper)
+        self.assertIn("уже работает; удали", wrapper)
         self.assertIn("OLD_REGISTRATION=$OldRevoke", wrapper)
 
 
