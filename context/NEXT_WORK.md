@@ -6,24 +6,23 @@ For exact immediate action read `ACTIVE_WORK.md`. This file contains only remain
 
 ## North-star goal
 
-Ship a stable self-hosted product where a user can install Hermes on Debian/Ubuntu, add supported Windows devices through Telegram, receive persistent per-device endpoints, connect with standard Microsoft Remote Desktop, trust every displayed status, survive reboots/network failures automatically, and update safely without losing access.
+Ship a stable self-hosted product where a user can install Hermes on Debian/Ubuntu, add supported Windows devices through Telegram, receive persistent per-device endpoints, connect with standard Microsoft Remote Desktop, trust displayed status, survive reboots/network failures automatically, and update safely without losing access.
 
 ## Stable release
 
 **Hermes RDP v1.3.0** is the current published stable release. Historical tags are immutable.
 
-## Active workstream — PR #37 zero-config server onboarding
+## PR #37 zero-config server onboarding
 
-Runtime acceptance is complete on the Debian 13 Trixie fixture, including semantic APT cleanup, masked Telegram token entry, secure owner claim, full clean-state reinstall, nginx coexistence and trusted RDP certificate lifecycle.
+Runtime acceptance is complete. PR #37 is ready for review.
 
-Remaining before merge:
+Remaining:
 
-1. Remove the temporary clean-reinstall acceptance helper from the branch.
-2. Run final CI on the resulting exact head.
-3. Mark PR #37 ready for review.
-4. Merge only after explicit user approval and expected-head verification.
+1. Wait for explicit user approval to merge.
+2. Immediately before merge, verify the PR expected head is unchanged and required CI on that head is green.
+3. Merge without rewriting historical release tags.
 
-Do not repeat accepted zero-config runtime checks unless a relevant code change creates regression risk.
+Do not repeat accepted PR #37 runtime checks unless a relevant code change creates regression risk.
 
 ## Deferred / non-blocking
 

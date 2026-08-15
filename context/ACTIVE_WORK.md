@@ -7,9 +7,10 @@ Updated: 2026-08-15
 - Repository: `bakunity/RDP`.
 - Stable published release: **v1.3.0**; historical tag/history remain immutable.
 - Active product PR: **#37 `feat: add zero-config server installer`**.
-- Runtime-accepted code boundary: `056bf7473ff851157f4c749f233fb0fb8b57a133`.
-- CI #459 on that exact head: Linux full release checks PASS and Windows PowerShell 5.1 PASS.
-- PR #37 must not be merged without explicit user approval.
+- PR #37 is **ready for review** and remains unmerged.
+- Runtime-accepted product-code boundary: `056bf7473ff851157f4c749f233fb0fb8b57a133`; CI #459 PASS on Linux full release checks and Windows PowerShell 5.1.
+- Acceptance/context cleanup commit `ff264100b231c3f90269c3e8fa17bda5e4d2aab2` removed the temporary clean-reinstall helper and passed CI #460.
+- Merge requires explicit user approval plus a green check on the current exact head.
 
 ## Stable architecture
 
@@ -27,7 +28,7 @@ Windows RDP :3389
 persistent endpoint per device
 ```
 
-Trusted-RDP certificate lifecycle remains a separate low-frequency path and stays outside the 3-second Agent loop.
+Trusted-RDP certificate lifecycle remains a separate low-frequency path outside the 3-second Agent loop.
 
 ## Accepted baseline — do not repeat without regression evidence
 
@@ -42,7 +43,7 @@ Trusted-RDP certificate lifecycle remains a separate low-frequency path and stay
 - Defender coexistence without exclusions/disablement;
 - trusted public-IP certificate lifecycle CERT-001 through CERT-013.
 
-## Current work — PR #37 zero-config server onboarding
+## PR #37 zero-config server onboarding — accepted
 
 Normal-user flow:
 
@@ -58,42 +59,15 @@ one curl command
 → Telegram /start
 ```
 
-### Live acceptance on Debian 13 Trixie
+Live Debian 13 Trixie acceptance confirms stale archive repair, semantic overlapping APT component normalization with rollback, masked token entry, secure Telegram claim, normal dashboard, exact source resolution, full clean-state reinstall, active Hermes sshd/controller, nginx coexistence, trusted certificate lifecycle and `=== HERMES RDP READY ===`.
 
-- stale `archive.debian.org` repair with backup: **PASS**;
-- overlapping APT component cleanup with backup/revalidate/rollback: **PASS on the acceptance fixture**; subsequent install reports clean APT repositories;
-- bootstrap dependencies and public IPv4 discovery: **PASS**;
-- masked Telegram token display: **PASS**;
-- `getMe`, webhook-free validation and secure private owner claim: **PASS**;
-- normal `/start` dashboard: **PASS**;
-- immutable source archive resolution: **PASS**;
-- full clean-state reinstall from exact head `056bf7473ff851157f4c749f233fb0fb8b57a133`: **PASS**;
-- dedicated Hermes sshd active and controller active: **PASS**;
-- installer reached `=== HERMES RDP READY ===`: **PASS**;
-- existing nginx on TCP 80 preserved: **PASS**;
-- nginx ACME route/direct `alias` live probes: **PASS**;
-- prior staging + production public-IP issuance through nginx webroot: **PASS**;
-- fresh reinstall reused valid preserved lineage and re-established lifecycle without forced issuance: **PASS**;
-- renewal timer active/enabled, smoke `PASS_NOT_DUE`, package/state helpers ready, `TRUSTED_RDP_CERT=PASS`: **PASS**.
+An interruption while waiting for the owner claim after a clean purge left no partially installed Hermes core; rerunning the normal installer succeeded because claim precedes core mutation.
 
-### Resolved bugs found during acceptance
-
-- Telegram JSON shell default corruption;
-- source-archive executable mode mismatch;
-- nginx TCP-80 coexistence;
-- inaccessible ACME webroot location;
-- live 404 from `root + try_files`, replaced by direct `alias`;
-- nginx reload readiness race;
-- overlapping APT component sets that produced duplicate-target warnings despite non-identical source lines;
-- invisible Telegram token entry and immediate abort on empty/invalid input. Token input is now masked; bounded retry is CI-covered.
-
-### Interruption behavior
-
-During the clean-room test the terminal was closed while waiting for the owner claim. Because claim occurs before core mutation, no partially installed Hermes core remained; rerunning the normal installer from the clean state succeeded. Treat this as accepted interruption behavior for that stage.
+The temporary clean-reinstall acceptance helper is no longer shipped in the PR.
 
 ## Exact next action
 
-Remove the temporary clean-reinstall acceptance helper, checkpoint final evidence/context, run CI on the resulting exact head, then mark PR #37 ready for review. Merge only after explicit user approval and expected-head verification.
+Await explicit user merge approval. Before merging, verify PR #37 still points to the expected current head and its required CI is green. Then merge without rewriting historical release tags.
 
 Natural renewal-driven certificate rotation remains a deferred operational observation, not a blocker. SEC-004 remains fixture-unavailable. RL-006 remains PARTIAL only for its optional original-fixture one-process observation.
 
